@@ -101,8 +101,8 @@ Every GitHub commit can then create a Vercel deployment; pull requests can recei
 
 - [Product requirements](docs/PRD.md)
 - [Design direction](docs/DESIGN.md)
+- [Future ticket backlog](docs/ticket-backlog.md)
 - [Agent operating instructions](AGENTS.md)
-- `docs/ticket-backlog.md` is generated after the post-build product/engineering audit.
 
 ## Current boundary
 
