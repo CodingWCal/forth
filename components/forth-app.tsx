@@ -53,6 +53,18 @@ import {
 
 type View = "today" | "board" | "proof" | "settings";
 
+function getAuthFailureMessage(error: unknown) {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String(error.code)
+      : "unknown error";
+  if (code === "auth/popup-closed-by-user") return "Google sign-in was cancelled before it finished.";
+  if (code === "auth/popup-blocked") return "Allow popups for Forth, then try Google sign-in again.";
+  if (code === "auth/unauthorized-domain") return "This Forth domain is not authorized in Firebase Authentication.";
+  if (code === "auth/operation-not-allowed") return "Google sign-in is not enabled for this Firebase project.";
+  return `Google sign-in could not finish (${code}).`;
+}
+
 const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "today", label: "Today", icon: Gauge },
   { id: "board", label: "Work map", icon: LayoutGrid },
@@ -335,8 +347,9 @@ export function ForthApp() {
               try {
                 await signInWithGoogle();
                 announce("Welcome to the guild. Cloud save is active.");
-              } catch {
-                announce("Sign-in did not finish. Your local quests are still safe.");
+              } catch (error) {
+                console.error("Forth Google sign-in failed", error);
+                announce(getAuthFailureMessage(error));
               }
             }}
             onSignOut={async () => {
