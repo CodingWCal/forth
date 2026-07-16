@@ -25,6 +25,7 @@ import {
   Search,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import Image from "next/image";
 import { BrandMark } from "@/components/brand-mark";
 import { hasFirebaseConfig } from "@/lib/firebase/config";
 import type { User } from "firebase/auth";
@@ -66,16 +67,16 @@ function getAuthFailureMessage(error: unknown) {
 }
 
 const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge }> = [
-  { id: "today", label: "Today", icon: Gauge },
-  { id: "board", label: "Work map", icon: LayoutGrid },
-  { id: "proof", label: "Proof", icon: ListChecks },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "today", label: "Quest Log", icon: Gauge },
+  { id: "board", label: "Realm Map", icon: LayoutGrid },
+  { id: "proof", label: "Chronicle", icon: ListChecks },
+  { id: "settings", label: "Guild Hall", icon: Settings },
 ];
 
 const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
-  light: { label: "Light", hint: "Protect room to recover" },
-  steady: { label: "Steady", hint: "A grounded working day" },
-  full: { label: "Full", hint: "Extra room is available" },
+  light: { label: "Scout", hint: "A short expedition" },
+  steady: { label: "Venture", hint: "A grounded build day" },
+  full: { label: "Raid", hint: "Deep-work reserves ready" },
 };
 
 export function ForthApp() {
@@ -174,7 +175,7 @@ export function ForthApp() {
     if (!task) return;
     announce(
       status === "done"
-        ? `Quest complete: ${task.title} · +${task.weight * 10} gold`
+        ? `Quest shipped: ${task.title} · +${task.weight * 10} gold`
         : `${task.title} is now ${STATUS_LABELS[status].toLowerCase()}.`,
     );
   }
@@ -193,12 +194,12 @@ export function ForthApp() {
 
   const title =
     view === "today"
-      ? "Make today feel finishable."
+      ? "Choose today’s three quests."
       : view === "board"
-        ? "See the work without the weight."
+        ? "Survey the engineering realm."
         : view === "proof"
-        ? "The work has left a trail."
-        : "Keep the foundation honest.";
+        ? "Read what the guild has shipped."
+        : "Tend the guild hall.";
 
   function renameTask(task: Task) {
     const title = window.prompt("Rename this ticket", task.title)?.trim();
@@ -238,7 +239,7 @@ export function ForthApp() {
         </nav>
 
         <div className="rail-projects">
-          <p className="eyebrow">Open projects</p>
+          <p className="eyebrow">Active campaigns</p>
           {state.projects.map((project) => (
             <button
               key={project.id}
@@ -255,10 +256,10 @@ export function ForthApp() {
         </div>
 
         <div className="rail-foot">
-          <div className="avatar-stack" aria-label="Three workspace members">
-            <span>C</span><span>M</span><span>J</span>
+          <div className="rail-sprite" aria-hidden="true">
+            <Image src="/sprites/code-squire.png" alt="" width={54} height={54} unoptimized />
           </div>
-          <span className="rail-foot-copy">Small team<br />clear pace</span>
+          <span className="rail-foot-copy">Code guild<br />camp online</span>
         </div>
       </aside>
 
@@ -286,7 +287,7 @@ export function ForthApp() {
             <EnvironmentBadge />
             {view !== "settings" && (
               <button className="button button--primary" onClick={openAddDialog}>
-                <Plus size={17} /> Add a move
+                <Plus size={17} /> New quest
               </button>
             )}
           </div>
@@ -326,7 +327,7 @@ export function ForthApp() {
               const task = state.tasks.find((item) => item.id === taskId);
               dispatch({ type: "TOGGLE_FOCUS", taskId });
               if (task && !task.isFocus && before >= 3) {
-                announce("Today already has three moves. Land or remove one first.");
+                announce("Today’s quest pouch is full. Ship or remove one first.");
               } else if (task) {
                 announce(task.isFocus ? "Removed from today." : "Added to today.");
               }
@@ -386,7 +387,7 @@ export function ForthApp() {
         onSubmit={(input) => {
           dispatch({ type: "ADD_TASK", task: createTask(input) });
           dialogRef.current?.close();
-          announce(`Ready: ${input.title.trim()}`);
+          announce(`Quest logged: ${input.title.trim()}`);
         }}
       />
 
@@ -401,7 +402,7 @@ export function ForthApp() {
 function EnvironmentBadge() {
   return (
     <span className={hasFirebaseConfig ? "env-badge is-connected" : "env-badge"}>
-      <span /> {hasFirebaseConfig ? "Firebase ready" : "Local demo"}
+      <span /> {hasFirebaseConfig ? "Cloud rune active" : "Local camp"}
     </span>
   );
 }
@@ -442,12 +443,14 @@ function TodayView({
     <div className="today-layout">
       <div className="today-main">
         <section className="adventurer-hud" aria-label="Guild progress">
-          <div className="pixel-portrait" aria-hidden="true"><Sword size={25} /></div>
+          <div className="pixel-portrait" aria-hidden="true">
+            <Image src="/sprites/code-squire.png" alt="" width={76} height={76} unoptimized priority />
+          </div>
           <div className="adventurer-copy">
-            <p className="eyebrow">Guild adventurer · Level {level}</p>
-            <h2>The Questkeeper</h2>
+            <p className="eyebrow">Engineer class · Rank {level}</p>
+            <h2>Code Squire</h2>
             <div className="xp-track" role="progressbar" aria-label="Progress to next level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
-            <small>{100 - levelProgress} XP until the next guild rank</small>
+            <small>{100 - levelProgress} craft XP until the next rank</small>
           </div>
           <dl className="reward-stats">
             <div><dt><Coins size={14} /> Gold</dt><dd>{totalGold}</dd></div>
@@ -457,10 +460,10 @@ function TodayView({
         <section className="pace-panel" aria-labelledby="pace-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">01 · Set the conditions</p>
-              <h2 id="pace-title">What pace is honest today?</h2>
+              <p className="eyebrow">I · Choose provisions</p>
+              <h2 id="pace-title">How far can the party travel?</h2>
             </div>
-            <span className="capacity-number"><strong>{plannedWeight}</strong> / {capacity} stones</span>
+            <span className="capacity-number"><strong>{plannedWeight}</strong> / {capacity} energy</span>
           </div>
           <div className="pace-row">
             <div className="pace-options" role="radiogroup" aria-label="Today's pace">
@@ -490,8 +493,8 @@ function TodayView({
               </div>
               <p className={overPlan ? "capacity-note is-over" : "capacity-note"}>
                 {overPlan
-                  ? "The plan is carrying more than today’s pace. Remove one move or choose more room."
-                  : `${capacity - plannedWeight} ${capacity - plannedWeight === 1 ? "stone" : "stones"} remain. Enough room for the day to breathe.`}
+                  ? "The party is over-encumbered. Remove a quest or choose a larger expedition."
+                  : `${capacity - plannedWeight} energy remain. Keep some provisions for the unexpected.`}
               </p>
             </div>
           </div>
@@ -500,10 +503,10 @@ function TodayView({
         <section className="focus-panel" aria-labelledby="focus-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">02 · Make it real</p>
-              <h2 id="focus-title">Three meaningful moves</h2>
+              <p className="eyebrow">II · Ready the party</p>
+              <h2 id="focus-title">Today’s three quests</h2>
             </div>
-            <button className="text-button" onClick={onGoToBoard}>Open work map <ArrowRight size={15} /></button>
+            <button className="text-button" onClick={onGoToBoard}>Open realm map <ArrowRight size={15} /></button>
           </div>
 
           <div className="focus-list">
@@ -519,7 +522,7 @@ function TodayView({
             {focusTasks.length < 3 && (
               <button className="empty-focus" onClick={onOpenAdd}>
                 <Plus size={18} />
-                <span><strong>Leave room or add one move</strong><small>A shorter list can be the more honest plan.</small></span>
+                <span><strong>Take another quest</strong><small>Only three may travel in the active party.</small></span>
               </button>
             )}
           </div>
@@ -528,15 +531,15 @@ function TodayView({
         <section className="momentum-panel" aria-labelledby="momentum-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">03 · Notice the movement</p>
-              <h2 id="momentum-title">Seven-day trail</h2>
+              <p className="eyebrow">III · Read the campaign</p>
+              <h2 id="momentum-title">Seven-day expedition</h2>
             </div>
-            <span className="quiet-stat"><strong>{completedToday}</strong> {completedToday === 1 ? "stone" : "stones"} landed today</span>
+            <span className="quiet-stat"><strong>{completedToday}</strong> effort shipped today</span>
           </div>
           <div className="trail-chart">
             <div className="trail-copy">
-              <p>Momentum is not a streak to protect.</p>
-              <span>It is evidence you can return to the work.</span>
+              <p>No cursed streaks. No public leaderboard.</p>
+              <span>The chronicle simply proves the guild can return and ship.</span>
             </div>
             <div className="trail-bars" aria-label="Completed effort over the last seven days">
               {momentum.map((day, index) => (
@@ -555,12 +558,12 @@ function TodayView({
 
       <aside className="context-rail">
         <section className="signal-card">
-          <div className="card-kicker"><Target size={16} /><span>Project signal</span></div>
-          <p className="project-code">{activeProject.code} · ACTIVE</p>
+          <div className="card-kicker"><Target size={16} /><span>Campaign charter</span></div>
+          <p className="project-code">{activeProject.code} · QUESTING</p>
           <h2>{activeProject.title}</h2>
           <p className="outcome-copy">{activeProject.outcome}</p>
           <div className="project-progress">
-            <div><span>Ground covered</span><strong>{progress}%</strong></div>
+            <div><span>Map cleared</span><strong>{progress}%</strong></div>
             <div
               className="progress-track"
               role="progressbar"
@@ -578,15 +581,15 @@ function TodayView({
         </section>
 
         <section className="field-note-card">
-          <div className="card-kicker"><Leaf size={16} /><span>Field note</span></div>
-          <blockquote>“We finally stopped treating an honest pause like a broken plan.”</blockquote>
-          <div className="note-author"><span>MM</span><p><strong>Maya M.</strong><small>Design · 18 min ago</small></p></div>
+          <div className="card-kicker"><Leaf size={16} /><span>Tavern dispatch</span></div>
+          <blockquote>“The build failed at the gate, not in production. The wards held.”</blockquote>
+          <div className="note-author"><span>MM</span><p><strong>Maya M.</strong><small>Platform · 18 min ago</small></p></div>
         </section>
 
         <section className="principle-card">
           <BrandMark compact />
-          <p>Forth principle № 02</p>
-          <strong>Progress should feel like evidence, not pressure.</strong>
+          <p>Guild oath · II</p>
+          <strong>Ship proof, share context, leave no engineer cursed by hidden state.</strong>
         </section>
       </aside>
     </div>
@@ -606,14 +609,14 @@ function FocusTaskRow({
 }) {
   return (
     <article className={`focus-task focus-task--${task.status}`}>
-      <button className="land-button" onClick={() => onSetStatus(task.id, "done")} aria-label={`Land ${task.title}`}>
+      <button className="land-button" onClick={() => onSetStatus(task.id, "done")} aria-label={`Ship ${task.title}`}>
         <Check size={18} />
       </button>
       <span className="task-index">0{index + 1}</span>
       <div className="task-body">
         <div className="task-meta">
           <span className={`project-tag project-tag--${project.color}`}>{project.code}</span>
-          <span>{task.weight} {task.weight === 1 ? "stone" : "stones"}</span>
+          <span>{task.weight} energy</span>
           <span>{STATUS_LABELS[task.status]}</span>
         </div>
         <h3>{task.title}</h3>
@@ -678,19 +681,19 @@ function BoardView({
 
       <section className="board-intro">
         <div>
-          <p className="eyebrow">{activeProject.code} · Outcome</p>
+          <p className="eyebrow">{activeProject.code} · Campaign objective</p>
           <h2>{activeProject.outcome}</h2>
         </div>
         <div className="board-progress">
           <strong>{getProjectProgress(state, activeProject.id)}%</strong>
-          <span>ground covered</span>
+          <span>realm cleared</span>
         </div>
       </section>
 
       <div className="quest-tools">
         <Search size={16} aria-hidden="true" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search tickets" placeholder="Search this quest board…" />
-        <button className="button button--primary" onClick={onOpenAdd}><Plus size={15} /> New ticket</button>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search engineering quests" placeholder="Search quests, runes, and requirements…" />
+        <button className="button button--primary" onClick={onOpenAdd}><Plus size={15} /> Inscribe quest</button>
       </div>
 
       <section className="kanban" aria-label={`${activeProject.title} work map`}>
@@ -719,11 +722,11 @@ function BoardView({
                 {tasks.length === 0 && (
                   <div className="column-empty">
                     <MapIcon size={20} />
-                    <span>No work resting here.</span>
+                    <span>No quests in this province.</span>
                   </div>
                 )}
                 {status === "ready" && (
-                  <button className="column-add" onClick={onOpenAdd}><Plus size={15} /> Add a move</button>
+                  <button className="column-add" onClick={onOpenAdd}><Plus size={15} /> Inscribe quest</button>
                 )}
               </div>
             </div>
@@ -761,7 +764,7 @@ function BoardTaskCard({
   return (
     <article className="board-task">
       <div className="board-task-top">
-        <span>{task.weight} {task.weight === 1 ? "stone" : "stones"}</span>
+        <span>{task.weight} energy</span>
         {task.status !== "done" && (
           <button
             className={task.isFocus ? "bookmark-button is-active" : "bookmark-button"}
@@ -791,7 +794,7 @@ function BoardTaskCard({
         )}
         {next[task.status] && (
           <button className="move-forward" onClick={() => onSetStatus(task.id, next[task.status]!)}>
-            {task.status === "moving" ? "Land" : task.status === "paused" ? "Make ready" : "Move"}
+            {task.status === "moving" ? "Ship" : task.status === "paused" ? "Return" : "Forge"}
             <ArrowRight size={14} />
           </button>
         )}
@@ -816,24 +819,24 @@ function ProofView({ state }: { state: WorkspaceState }) {
       <section className="proof-summary">
         <div className="proof-symbol"><BrandMark /></div>
         <div>
-          <p className="eyebrow">Completion ledger</p>
-          <h2>Not a score. A record of what became real.</h2>
-          <p>Every landed move keeps its purpose attached, so progress remains meaningful after the checkbox disappears.</p>
+          <p className="eyebrow">Guild chronicle</p>
+          <h2>Every shipped quest becomes part of the record.</h2>
+          <p>The chronicle keeps the ticket, its purpose, and its builder together—evidence of engineering progress without a public score.</p>
         </div>
         <dl>
-          <div><dt>Landed</dt><dd>{completed.length}</dd></div>
-          <div><dt>Stones</dt><dd>{totalWeight}</dd></div>
-          <div><dt>Builders</dt><dd>{contributors}</dd></div>
+          <div><dt>Shipped</dt><dd>{completed.length}</dd></div>
+          <div><dt>Energy</dt><dd>{totalWeight}</dd></div>
+          <div><dt>Guildmates</dt><dd>{contributors}</dd></div>
         </dl>
       </section>
 
       <section className="proof-ledger" aria-labelledby="ledger-title">
         <div className="ledger-head">
-          <p className="eyebrow">The trail, newest first</p>
-          <h2 id="ledger-title">Proof of progress</h2>
+          <p className="eyebrow">Newest inscription first</p>
+          <h2 id="ledger-title">Release chronicle</h2>
         </div>
         {completed.length === 0 ? (
-          <div className="proof-empty"><BrandMark /><h3>The first mark is waiting.</h3><p>Land one meaningful move and its story will live here.</p></div>
+          <div className="proof-empty"><BrandMark /><h3>The first inscription awaits.</h3><p>Ship one engineering quest and its record will live here.</p></div>
         ) : (
           <div className="ledger-list">
             {completed.map((task, index) => {
@@ -850,7 +853,7 @@ function ProofView({ state }: { state: WorkspaceState }) {
                     <h3>{task.title}</h3>
                     <p>{task.meaning}</p>
                   </div>
-                  <div className="ledger-person"><span>{task.assignee.charAt(0)}</span><p>{task.assignee}<small>{task.weight} {task.weight === 1 ? "stone" : "stones"}</small></p></div>
+                  <div className="ledger-person"><span>{task.assignee.charAt(0)}</span><p>{task.assignee}<small>{task.weight} energy</small></p></div>
                 </article>
               );
             })}
@@ -879,15 +882,15 @@ function SettingsView({
   return (
     <div className="settings-view">
       <section className="settings-intro">
-        <p className="eyebrow">Guild hall</p>
-        <h2>Your save point and account.</h2>
-        <p>Play locally without an account, or sign in to keep the same quest board across devices. Your tickets are work data—not a public score.</p>
+        <p className="eyebrow">Guild hall · Save altar</p>
+        <h2>Account wards and cloud runes.</h2>
+        <p>Play from a local camp or sign in to carry the same engineering realm across devices. Ticket data stays private to your guild workspace.</p>
       </section>
 
       <section className="settings-card">
         <div className="settings-icon"><LockKeyhole size={22} /></div>
         <div>
-          <p className="eyebrow">Persistence</p>
+          <p className="eyebrow">Save ward</p>
           <h3>{user ? `Signed in as ${user.displayName ?? user.email}` : hasFirebaseConfig ? "Cloud save is available" : "Local browser save"}</h3>
           <p>{user ? `Save status: ${syncState}. Forth keeps a local fallback while your private Firestore workspace synchronizes.` : hasFirebaseConfig ? "Use Google sign-in to create your private guild save." : "Changes survive refreshes on this device but do not travel to another browser."}</p>
           {hasFirebaseConfig && (
@@ -902,20 +905,20 @@ function SettingsView({
       <section className="settings-card">
         <div className="settings-icon"><Target size={22} /></div>
         <div>
-          <p className="eyebrow">Adventure rules</p>
-          <h3>What the game layer rewards</h3>
+          <p className="eyebrow">Guild code</p>
+          <h3>What earns renown</h3>
           <ul>
-            <li>Finishing meaningful tickets earns gold equal to effort</li>
-            <li>Completed quests fill your guild rank</li>
-            <li>Proof remains a permanent adventure log</li>
+            <li>Shipping meaningful engineering tickets earns gold equal to effort</li>
+            <li>Completed quests advance your private guild rank</li>
+            <li>The release chronicle preserves the definition of value</li>
             <li>There are no penalties, broken streaks, or public rankings</li>
           </ul>
         </div>
       </section>
 
       <section className="reset-card">
-        <div><p className="eyebrow">Demo controls</p><h3>Return to the starting trail</h3><p>This removes local changes only. It cannot affect Firebase or another device.</p></div>
-        <button className="button button--danger" onClick={onReset}><RotateCcw size={16} /> Reset local demo</button>
+        <div><p className="eyebrow">Local camp controls</p><h3>Restore the starter campaign</h3><p>This replaces local browser data only. It cannot erase Firebase or another device.</p></div>
+        <button className="button button--danger" onClick={onReset}><RotateCcw size={16} /> Restore local seed</button>
       </section>
     </div>
   );
@@ -971,23 +974,23 @@ function AddTaskDialog({
     }}>
       <form onSubmit={submit}>
         <header className="dialog-head">
-          <div><p className="eyebrow">Accept a new quest</p><h2>What needs doing?</h2></div>
+          <div><p className="eyebrow">Guild registrar</p><h2>Inscribe an engineering quest</h2></div>
           <button type="button" className="icon-button" onClick={() => dialogRef.current?.close()} aria-label="Close dialog"><X size={19} /></button>
         </header>
 
         <label className="field">
-          <span>Ticket title</span>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={90} autoFocus placeholder="Describe a finishable outcome" />
-          <small>Use a verb and make the finish line visible.</small>
+          <span>Quest title</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={90} autoFocus placeholder="Add retry behavior to failed sync writes" />
+          <small>Lead with an engineering verb and expose the finish line.</small>
         </label>
 
         <label className="field">
           <span>Description <i>optional</i></span>
-          <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} rows={3} placeholder="Add context, requirements, or a definition of done" />
+          <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} rows={3} placeholder="Context, constraints, acceptance criteria, or definition of done" />
         </label>
 
         <label className="field">
-          <span>Project</span>
+          <span>Campaign</span>
           <select value={projectId} onChange={(event) => setProjectId(event.target.value)} required>
             {projects.map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}
           </select>
@@ -1008,15 +1011,15 @@ function AddTaskDialog({
 
         <label className="field">
           <span>Why it matters <i>optional</i></span>
-          <textarea value={meaning} onChange={(event) => setMeaning(event.target.value)} maxLength={180} rows={3} placeholder="Connect this move to the project outcome" />
+          <textarea value={meaning} onChange={(event) => setMeaning(event.target.value)} maxLength={180} rows={3} placeholder="Connect this quest to the campaign objective" />
         </label>
 
         <fieldset className="weight-field">
-          <legend>Effort</legend>
+          <legend>Energy cost</legend>
           <div>
             {([1, 2, 3] as const).map((item) => (
               <button type="button" className={weight === item ? "weight-option is-active" : "weight-option"} onClick={() => setWeight(item)} key={item}>
-                <span>{"●".repeat(item)}</span><strong>{item === 1 ? "Pebble" : item === 2 ? "Stone" : "Boulder"}</strong><small>{item === 1 ? "under 30m" : item === 2 ? "focused block" : "deep work"}</small>
+                <span>{"◆".repeat(item)}</span><strong>{item === 1 ? "Spark" : item === 2 ? "Forge" : "Siege"}</strong><small>{item === 1 ? "small patch" : item === 2 ? "focused build" : "deep system work"}</small>
               </button>
             ))}
           </div>
@@ -1024,12 +1027,12 @@ function AddTaskDialog({
 
         <label className={canFocus ? "focus-check" : "focus-check is-disabled"}>
           <input type="checkbox" checked={isFocus} onChange={(event) => setIsFocus(event.target.checked)} disabled={!canFocus} />
-          <span><strong>Add to today’s three</strong><small>{canFocus ? "Keep the move close and visible." : "Today already has three moves."}</small></span>
+          <span><strong>Add to today’s party</strong><small>{canFocus ? "Keep this quest in the active three." : "Today’s party already holds three quests."}</small></span>
         </label>
 
         <footer className="dialog-foot">
           <button type="button" className="button button--quiet" onClick={() => dialogRef.current?.close()}>Cancel</button>
-          <button className="button button--primary" type="submit">Accept quest <Sword size={16} /></button>
+          <button className="button button--primary" type="submit">Inscribe quest <Sword size={16} /></button>
         </footer>
       </form>
     </dialog>

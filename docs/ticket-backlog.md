@@ -2,21 +2,21 @@
 
 Generated: 2026-07-16  
 Repo/app: Forth  
-Audit scope: Product docs, design direction, Next.js app shell, workspace domain layer, Firebase boundary, tests, README, and repo instructions.
+Audit scope: Product/design docs, responsive UI, workspace state, Firebase Auth/Firestore persistence, security rules, dependencies, tests, and production build.
 
 ## Product Intent Snapshot
 
-- Plain English: Forth helps a small team choose a believable daily pace, keep only three meaningful moves in focus, move work through honest states, and remember finished work as proof instead of pressure.
-- Engineering framing: A local-first Next.js 16/React 19 MVP with reducer-driven workspace state, derived selectors, localStorage persistence, and a prepared Firebase Auth/Firestore boundary for private beta.
-- Brand/design guardrails: Preserve the field-journal/editorial feel: warm paper, deep green ink, moss, clay, slate, serif hierarchy, tactile rules, calm copy, and no generic AI gradients, glow, confetti, streaks, or leaderboard mechanics.
-- Assumptions: This backlog treats the current repo as a polished local MVP, not a production collaboration service.
+- Plain English: Forth turns a small engineering team’s real ticket queue into a calm fantasy quest board. It rewards finishing meaningful work without leaderboards, punishment, or streak anxiety.
+- Engineering framing: Next.js 16/React 19 with a strict TypeScript reducer domain, localStorage fallback, and an authenticated Firestore workspace document synchronized through a client adapter.
+- Brand/design guardrails: Preserve Iron & Parchment: SNES-era medieval guild framing, warm parchment, near-black green, moss, oxblood, amber, square pixel edges, serif display type, restrained sprite motion, and literal engineering meaning beneath themed labels.
+- Assumptions: The current target is a small private beta. It is not yet a conflict-safe, multi-team production SaaS.
 
 ## Verification Summary
 
-- Commands run before backlog creation: `git status --short --branch` -> clean `main...origin/main`; `rg --files` -> repo mapped; targeted reads of `AGENTS.md`, `README.md`, `docs/PRD.md`, `docs/DESIGN.md`, `components/forth-app.tsx`, `lib/workspace.ts`, `tests/workspace.test.ts`, Firebase config, and global styles.
-- Commands to run after this backlog edit: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and `corepack pnpm audit --audit-level moderate`.
-- Visual/app checks: Prior build work established the Today, Work map, Proof, Settings, add-move dialog, and responsive desktop/tablet/mobile paths. This backlog pass inspected source evidence rather than changing UI behavior.
-- Not run yet: Firestore emulator rules tests and live Firebase auth flows, because no Firebase project/emulator suite was provisioned in scope.
+- Commands run: `pnpm lint` → pass; `pnpm typecheck` → pass; `pnpm test` → 6/6 pass; `pnpm build` → pass; `pnpm test:rules` → 4/4 pass; `corepack pnpm audit --audit-level moderate` → no known vulnerabilities.
+- Security checks: no committed Firebase key/private-key patterns; only the safe `.env.example` is tracked; Firebase public browser configuration stays in `NEXT_PUBLIC_*`; authorization is enforced by `firestore.rules` and emulator tests cover owner, member, outsider, and signed-out access.
+- Visual/app checks: Today, Realm Map, responsive navigation, and the New Quest dialog inspected at 375×812, 768×1024, and 1440×1000. No page-level horizontal overflow was observed. Native dialog Escape behavior passed.
+- Not run: automated browser E2E and assistive-technology screen-reader testing; both remain backlog work.
 
 ## Priority Guide
 
@@ -27,313 +27,173 @@ Audit scope: Product docs, design direction, Next.js app shell, workspace domain
 
 ## Tickets
 
-### TICKET-001: Add Firestore emulator rule tests before private beta
+### TICKET-001: Prevent last-write-wins data loss during concurrent cloud edits
 
 - Priority: P1 High
-- Type: Security/Test
-- Area: `firestore.rules`, `firebase.json`, Firebase private-beta setup
-- Effort: M
-- Confidence: High
-- Evidence: `firestore.rules` defines owner/member access, but the repo has no emulator test suite proving owner, member, outsider, create, update, and nested document cases.
-- Plain English: The rules look intentionally cautious, but cloud permissions should be tested like app code before real team data touches them.
-- Learning brief (layman terms):
-  - What is happening now: The app has a written security policy for Firestore, but no automated rehearsal that proves the policy behaves correctly.
-  - Why it matters: A small mistake in database rules can let the wrong person read or change workspace data even if the UI hides the button.
-  - What changing it means: Add emulator-based tests that create fake users and check exactly who can read, write, invite, and edit.
-  - Concept to learn: Authorization testing means proving permissions at the data layer, not trusting what the screen shows.
-- Engineering framing: Add Firebase Emulator Suite tests for Firestore Security Rules using authenticated test contexts and explicit allow/deny assertions across workspace owner, member, and outsider roles.
-- Scope:
-  - Add emulator test tooling and scripts.
-  - Cover workspace create/read/update/delete, membership management, and nested collections.
-  - Document how to run the rule suite locally.
-- Out of scope:
-  - Creating a live Firebase project.
-  - Deploying rules to production.
-  - Implementing auth screens.
-- Acceptance criteria:
-  - `pnpm test:rules` or equivalent passes locally against the emulator.
-  - Tests prove owners can manage workspaces and members.
-  - Tests prove members can read/write allowed nested workspace documents.
-  - Tests prove outsiders and signed-out users are denied.
-- Suggested files:
-  - `firestore.rules`
-  - `firebase.json`
-  - `tests/firestore-rules.test.ts`
-  - `package.json`
-- Validation:
-  - Run the new rules test script.
-  - Run `pnpm lint`, `pnpm typecheck`, and `pnpm test`.
-- Subagent prompt:
-  > Use the repository context and implement TICKET-001. Preserve the existing design system and product intent. Keep the change scoped to the acceptance criteria, update or add focused tests where appropriate, and summarize validation results.
-
-### TICKET-002: Build the Firebase workspace adapter behind the existing state contract
-
-- Priority: P1 High
-- Type: Feature/Architecture
-- Area: `lib/workspace.ts`, `lib/firebase/config.ts`, future persistence adapter
+- Type: Architecture/Reliability
+- Area: `lib/firebase/workspace.ts`, Firestore workspace data model
 - Effort: L
 - Confidence: High
-- Evidence: The PRD defines Phase 2 as Firebase Auth and Firestore replacing local persistence, while the current app honestly remains localStorage-only with only configuration detection.
-- Plain English: The screen already knows how work should behave; the next big step is teaching it to save and sync through Firebase without rewriting the product rules.
+- Evidence: `saveWorkspace` writes the entire `WorkspaceState` into `workspaces/{uid}/data/current` after each local change. Two open clients can overwrite one another, and the document will eventually approach Firestore’s document-size ceiling as Proof grows.
+- Plain English: Cloud saving works, but two devices editing at once can accidentally replace each other’s latest work.
 - Learning brief (layman terms):
-  - What is happening now: The app saves data in one browser. That is perfect for a demo, but it cannot support a team using different devices.
-  - Why it matters: Collaboration needs one shared source of truth, otherwise each person sees a different version of the project.
-  - What changing it means: Put Firebase behind the same workspace shape so the UI can keep dispatching clear actions while the storage layer changes.
-  - Concept to learn: An adapter lets the app swap where data comes from without changing the rest of the code that uses it.
-- Engineering framing: Introduce a persistence adapter boundary that maps `WorkspaceState` and reducer actions to Firestore documents while preserving localStorage as the unauthenticated demo implementation.
+  - What is happening now: Every save replaces one large snapshot of the whole board.
+  - Why it matters: The newest writer wins even if it started from older data, so a teammate’s change can disappear.
+  - What changing it means: Store projects/tasks as smaller records or add revision checks so conflicting writes are detected instead of silently accepted.
+  - Concept to learn: Concurrency control is how a system prevents simultaneous edits from unknowingly overwriting one another.
+- Engineering framing: Replace whole-state blind writes with normalized documents and transactions/version preconditions, or explicitly constrain private beta to single-user workspaces until implemented.
 - Scope:
-  - Define a `WorkspaceRepository` or similar interface.
-  - Keep reducer/selectors as the domain source of truth.
-  - Add loading, error, offline, and sync-state handling.
-  - Preserve local demo behavior when Firebase env vars or auth are missing.
+  - Choose and document a normalized Firestore schema or revisioned snapshot strategy.
+  - Detect stale writes and expose a recoverable conflict state.
+  - Preserve local demo behavior and the reducer domain contract.
 - Out of scope:
-  - Complex real-time conflict resolution beyond a private-beta baseline.
-  - Billing, org administration, or public multi-tenant operations.
+  - Google Docs-style collaborative text editing.
+  - Enterprise audit history.
 - Acceptance criteria:
-  - Local demo behavior remains unchanged without Firebase.
-  - Authenticated users can load and update a Firestore-backed workspace.
-  - UI labels distinguish Local demo, Syncing, Synced, and Sync problem states.
-  - Failed writes do not silently look successful.
+  - Two simulated clients cannot silently erase one another’s ticket updates.
+  - Proof history can grow without one unbounded state document.
+  - Emulator/integration tests cover stale and concurrent writes.
 - Suggested files:
-  - `lib/workspace.ts`
-  - `lib/firebase/config.ts`
-  - `lib/firebase/workspace-repository.ts`
-  - `components/forth-app.tsx`
-  - `tests/workspace.test.ts`
-- Validation:
-  - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
-  - Manually test local mode and emulator-backed Firebase mode.
-- Subagent prompt:
-  > Use the repository context and implement TICKET-002. Preserve the existing design system and product intent. Keep the change scoped to the acceptance criteria, update or add focused tests where appropriate, and summarize validation results.
-
-### TICKET-003: Add workspace onboarding for first-run clarity
-
-- Priority: P2 Medium
-- Type: UX/Feature
-- Area: Today view, Settings, seed/local reset flow
-- Effort: M
-- Confidence: Medium
-- Evidence: The app opens directly into a polished seeded workspace. That is demo-friendly, but a first private-beta user will need to name their workspace, understand local-vs-cloud mode, and set the first pace intentionally.
-- Plain English: The product should greet a real user with a short setup path, not drop them into Calvin's sample workspace forever.
-- Learning brief (layman terms):
-  - What is happening now: The seed data makes the app easy to demo, but it is not yet a personal starting point.
-  - Why it matters: Onboarding prevents confusion about whether the data is sample data, private data, or shared team data.
-  - What changing it means: Add a short first-run setup that lets the user name the workspace, choose a pace, and optionally keep or replace demo tasks.
-  - Concept to learn: Onboarding is a guided first state that helps users form the right mental model before they do real work.
-- Engineering framing: Add a first-run state machine and persisted onboarding flag without disrupting the existing reducer ownership of workspace mutations.
-- Scope:
-  - Add first-run detection for empty or newly seeded workspaces.
-  - Let the user set workspace/team name and first pace.
-  - Clearly label sample data and offer a clean-start path.
-  - Keep the seeded demo available for presentations.
-- Out of scope:
-  - Full account creation.
-  - Team invitations.
-  - Product tours or marketing screens.
-- Acceptance criteria:
-  - New users can tell whether they are using sample data or their own workspace.
-  - A clean workspace can be created without manually resetting browser storage.
-  - Returning users do not see onboarding repeatedly.
-- Suggested files:
-  - `components/forth-app.tsx`
+  - `lib/firebase/workspace.ts`
   - `lib/types.ts`
-  - `lib/seed.ts`
-  - `lib/workspace.ts`
+  - `firestore.rules`
+  - `tests/firestore.rules.test.ts`
+- Validation:
+  - Run rule tests, integration tests, lint, typecheck, unit tests, and build.
+- Subagent prompt:
+  > Implement TICKET-001 using the current Forth domain model. Preserve Iron & Parchment and local mode. Prove concurrent cloud updates cannot silently overwrite each other, and explain the chosen concurrency strategy in plain English and engineering terms.
+
+### TICKET-002: Make sync failures actionable and retryable
+
+- Priority: P1 High
+- Type: UX/Reliability
+- Area: `components/forth-app.tsx`, `lib/firebase/workspace.ts`
+- Effort: M
+- Confidence: High
+- Evidence: The app records a generic `error` sync state after failed writes, but does not retain the failed operation, provide a retry control, or explain whether the local edit is waiting, saved locally, or lost.
+- Plain English: A user can learn that cloud saving failed, but not what to do next.
+- Learning brief (layman terms):
+  - What is happening now: The cloud rune changes to an error state after a failed request.
+  - Why it matters: People may close the tab believing their ticket was safely stored.
+  - What changing it means: Keep local work safe, show a precise message, and provide a retry path.
+  - Concept to learn: Failure recovery is the designed path from an error back to a trustworthy state.
+- Engineering framing: Add an explicit sync state machine with pending/failed payload handling, retry/backoff, offline awareness, and non-sensitive error reporting.
+- Scope:
+  - Distinguish local-only, syncing, synced, offline, and retry-required states.
+  - Preserve the latest local state until a remote acknowledgement succeeds.
+  - Add a visible retry action and test failure/recovery transitions.
+- Out of scope:
+  - Full conflict resolution from TICKET-001.
+- Acceptance criteria:
+  - A failed write never presents as synced.
+  - Users can retry without recreating their ticket.
+  - Copy explains the state without exposing Firebase internals.
+- Suggested files:
+  - `components/forth-app.tsx`
+  - `lib/firebase/workspace.ts`
   - `tests/workspace.test.ts`
 - Validation:
-  - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
-  - Manually test first visit, returning visit, reset, and corrupt-storage recovery.
+  - Simulate offline and rejected writes, then run the complete QA gate.
 - Subagent prompt:
-  > Use the repository context and implement TICKET-003. Preserve the existing design system and product intent. Keep the change scoped to the acceptance criteria, update or add focused tests where appropriate, and summarize validation results.
+  > Implement TICKET-002. Keep the fantasy UI language paired with literal save-state meaning. Add focused tests for the sync state machine and preserve all local work during failure and retry.
 
-### TICKET-004: Add browser-level E2E coverage for the core motivational loop
+### TICKET-003: Add automated E2E coverage for the complete quest loop
 
 - Priority: P2 Medium
 - Type: Test/QA
-- Area: Today, Work map, Proof, Settings, add-move dialog
+- Area: Today, Realm Map, Chronicle, Guild Hall, New Quest dialog
 - Effort: M
 - Confidence: High
-- Evidence: Current Vitest coverage validates reducer behavior and persistence parsing, but no browser test proves the end-to-end flow: set pace, add move, move status, land work, see Proof, refresh persistence, and reset.
-- Plain English: Unit tests prove the rules; a browser test should prove the user can actually complete the loop on the screen.
+- Evidence: Reducer and rule tests pass, and manual responsive QA passed, but no committed browser suite proves create → focus → forge → ship → Chronicle → refresh persistence.
+- Plain English: The rules are tested, but an automated test should also click through the same journey a user takes.
 - Learning brief (layman terms):
-  - What is happening now: The app's inner rules have tests, but the full click-through experience is not automatically checked.
-  - Why it matters: A button, dialog, storage effect, or navigation bug can break the product even if the reducer still passes.
-  - What changing it means: Add a Playwright suite that uses the app like a real person and verifies the main journey.
-  - Concept to learn: End-to-end testing checks a complete user path across UI, state, and browser behavior.
-- Engineering framing: Add Playwright E2E tests around the App Router page with deterministic localStorage setup/cleanup and viewport coverage for desktop and mobile.
+  - What is happening now: Browser behavior is checked manually.
+  - Why it matters: A future CSS or component change can break a button while unit tests remain green.
+  - What changing it means: Add a browser robot that completes the core workflow on desktop and phone.
+  - Concept to learn: End-to-end testing verifies that separate parts work together through the real interface.
+- Engineering framing: Add Playwright coverage with deterministic localStorage fixtures, responsive assertions, keyboard dialog behavior, WIP limits, and persistence after reload.
 - Scope:
-  - Install/configure Playwright only if approved and appropriate for the repo.
-  - Cover create task, WIP limit cue, status transition, Proof ledger, persistence after reload, reset confirmation, and mobile nav reachability.
-  - Keep tests deterministic and scoped to local mode.
+  - Cover the core local-mode workflow and empty/error states.
+  - Assert no page-level overflow at 375 px.
+  - Verify visible focus and dialog focus return.
 - Out of scope:
-  - Cloud Firebase tests.
-  - Pixel-perfect screenshot baselines.
+  - Pixel-perfect screenshot snapshots.
+  - Live Google OAuth automation.
 - Acceptance criteria:
-  - `pnpm test:e2e` runs locally and passes.
-  - Tests cover the main Today -> Board -> Proof loop.
-  - Tests verify no horizontal page overflow at the smallest supported viewport.
+  - `pnpm test:e2e` passes locally and in CI.
+  - The main quest loop and mobile navigation are covered.
 - Suggested files:
-  - `package.json`
   - `playwright.config.ts`
   - `tests/e2e/forth-loop.spec.ts`
-  - `components/forth-app.tsx`
+  - `package.json`
 - Validation:
-  - Run `pnpm test:e2e`.
-  - Run existing lint, typecheck, unit tests, and build.
+  - Run E2E plus lint, typecheck, unit/rules tests, and build.
 - Subagent prompt:
-  > Use the repository context and implement TICKET-004. Preserve the existing design system and product intent. Keep the change scoped to the acceptance criteria, update or add focused tests where appropriate, and summarize validation results.
+  > Implement TICKET-003 with a minimal Playwright setup. Use local mode, deterministic fixtures, and resilient role-based locators. Preserve the current UI and explain what each journey protects.
 
-### TICKET-005: Make workspace identity and members first-class data
-
-- Priority: P2 Medium
-- Type: Feature/Refactor
-- Area: `lib/types.ts`, `lib/seed.ts`, rail member display, Firebase model
-- Effort: M
-- Confidence: Medium
-- Evidence: `WorkspaceState` currently contains `pace`, `projects`, and `tasks`; member initials and names are hard-coded in `components/forth-app.tsx`, while the PRD names Workspace and Member as entities.
-- Plain English: The app looks like a team workspace, but the team is still mostly painted into the screen instead of represented in data.
-- Learning brief (layman terms):
-  - What is happening now: Some people shown in the UI are static labels, not real workspace records.
-  - Why it matters: Private beta features like invitations, ownership, and activity attribution need actual member data.
-  - What changing it means: Add workspace and member objects to the state so UI labels come from real data instead of hard-coded placeholders.
-  - Concept to learn: A domain model is the app's shared vocabulary for real things like workspaces, projects, tasks, and members.
-- Engineering framing: Extend `WorkspaceState` with workspace metadata and members, then derive avatars, assignee labels, ownership, and future Firestore document mapping from typed state rather than component constants.
-- Scope:
-  - Add `workspace` metadata and `members` to the type model.
-  - Update seed data and runtime validation.
-  - Replace hard-coded member display where practical.
-  - Add reducer tests for parsing and backwards-compatible fallback if needed.
-- Out of scope:
-  - Live invitations or auth.
-  - Role-based permission UI.
-- Acceptance criteria:
-  - Member displays come from typed workspace data.
-  - Stored state validation handles the new version safely.
-  - Existing local demo data migrates or resets predictably.
-- Suggested files:
-  - `lib/types.ts`
-  - `lib/seed.ts`
-  - `lib/workspace.ts`
-  - `components/forth-app.tsx`
-  - `tests/workspace.test.ts`
-- Validation:
-  - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
-  - Manually verify Settings and rail member display.
-- Subagent prompt:
-  > Use the repository context and implement TICKET-005. Preserve the existing design system and product intent. Keep the change scoped to the acceptance criteria, update or add focused tests where appropriate, and summarize validation results.
-
-### TICKET-006: Add edit and archive flows for tasks
-
-- Priority: P2 Medium
-- Type: Feature/UX
-- Area: Task cards, reducer actions, add/edit dialog
-- Effort: M
-- Confidence: Medium
-- Evidence: Users can create, move, pause, land, and focus tasks, but cannot correct a typo, change effort, update meaning, or archive a no-longer-relevant unfinished task.
-- Plain English: Real work changes shape; the app should let people adjust the plan without needing a browser reset.
-- Learning brief (layman terms):
-  - What is happening now: Once a move is created, the user can change its status but not its details.
-  - Why it matters: A project tool becomes brittle if a small typo or changed scope forces awkward workarounds.
-  - What changing it means: Add scoped edit and archive actions while protecting the Proof ledger from accidental rewriting.
-  - Concept to learn: CRUD means create, read, update, and delete/archive; most real tools need all four, with extra care around history.
-- Engineering framing: Add typed `UPDATE_TASK` and `ARCHIVE_TASK` reducer actions, reuse the dialog as edit mode where possible, and keep completed proof records immutable or carefully audited.
-- Scope:
-  - Edit title, project, meaning, weight, and focus flag for unfinished tasks.
-  - Archive unfinished tasks with confirmation.
-  - Keep landed Proof records stable unless a separate restore/edit policy is designed.
-  - Add reducer tests.
-- Out of scope:
-  - Bulk edit.
-  - Deleting completed proof history.
-  - Undo stack.
-- Acceptance criteria:
-  - Users can edit unfinished task details from Today or Work map.
-  - Users can archive an unfinished task after confirmation.
-  - Archived tasks no longer count toward focus, capacity, or project active columns.
-  - Tests cover update/archive behavior.
-- Suggested files:
-  - `components/forth-app.tsx`
-  - `lib/types.ts`
-  - `lib/workspace.ts`
-  - `tests/workspace.test.ts`
-- Validation:
-  - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
-  - Manually test editing focused, paused, and ready tasks.
-- Subagent prompt:
-  > Use the repository context and implement TICKET-006. Preserve the existing design system and product intent. Keep the change scoped to the acceptance criteria, update or add focused tests where appropriate, and summarize validation results.
-
-### TICKET-007: Improve accessibility semantics for tabs, dialogs, and status messages
+### TICKET-004: Make project tabs follow the full keyboard pattern
 
 - Priority: P2 Medium
 - Type: A11y/UX
-- Area: Navigation, project tabs, add-move dialog, toast/live region
+- Area: Realm Map project switcher
 - Effort: S
-- Confidence: Medium
-- Evidence: The app uses visible focus, labeled controls, native dialog, and ARIA on several elements. The project tabs use `role="tablist"` and `role="tab"` but do not implement full keyboard tab behavior, and toast/status feedback could use targeted assistive-technology review.
-- Plain English: Keyboard and screen-reader users should get the same calm, clear experience as mouse users.
+- Confidence: High
+- Evidence: The switcher declares `tablist`/`tab` semantics and selection state, but manual DOM inspection found no Arrow Left/Right, Home/End, or roving-tabindex behavior.
+- Plain English: Mouse users can switch campaigns easily; keyboard users should get the behavior promised by a tab control.
 - Learning brief (layman terms):
-  - What is happening now: The app has many accessibility basics, but a few widgets need stricter behavior checks.
-  - Why it matters: If a component claims to be a tab or status message, assistive tech expects it to behave a certain way.
-  - What changing it means: Either implement the expected keyboard patterns or use simpler semantic buttons where that is more honest.
-  - Concept to learn: Semantic HTML means choosing markup that matches both what something looks like and how it behaves.
-- Engineering framing: Audit ARIA roles against WAI-ARIA expectations, simplify roles where native buttons are sufficient, verify dialog focus return, and improve live-region announcements if needed.
+  - What is happening now: The controls look and announce themselves as tabs but behave like independent buttons.
+  - Why it matters: Screen-reader and keyboard users rely on predictable arrow-key navigation.
+  - What changing it means: Add the standard tab keyboard behavior or use simpler button semantics.
+  - Concept to learn: ARIA is a behavioral contract, not only a label.
+- Engineering framing: Implement the WAI-ARIA Tabs pattern with roving `tabIndex`, keyboard navigation, and correctly associated tabpanels, or remove tab roles if the simpler model is intentional.
 - Scope:
-  - Review `role="tablist"`/`role="tab"` implementation.
-  - Confirm Escape/backdrop/close focus behavior for the native dialog.
-  - Check toast status announcements for task transitions.
-  - Add small regression tests if an E2E harness exists by then.
+  - Add keyboard behavior and focus management.
+  - Add E2E/component coverage.
 - Out of scope:
-  - Full WCAG certification.
-  - Screen-reader support matrix documentation.
+  - Full third-party accessibility certification.
 - Acceptance criteria:
-  - Keyboard-only users can navigate project selection predictably.
-  - Assistive roles match implemented behavior.
-  - Add-move dialog opens, closes, and returns focus reliably.
-  - Status updates are announced without trapping focus.
+  - Arrow, Home, and End keys work predictably.
+  - Only the active tab is in the normal tab order.
+  - Roles and controlled panel relationships are valid.
 - Suggested files:
   - `components/forth-app.tsx`
-  - `app/globals.css`
   - `tests/e2e/forth-loop.spec.ts`
 - Validation:
-  - Run lint, typecheck, tests, and build.
-  - Manually test keyboard-only navigation and reduced-motion mode.
+  - Keyboard-only and screen-reader smoke test, then the standard QA gate.
 - Subagent prompt:
-  > Use the repository context and implement TICKET-007. Preserve the existing design system and product intent. Keep the change scoped to the acceptance criteria, update or add focused tests where appropriate, and summarize validation results.
+  > Implement TICKET-004 following the ARIA Tabs pattern without changing the Iron & Parchment visual design. Add focused keyboard coverage and document the semantic decisions.
 
-### TICKET-008: Add lightweight telemetry and error reporting for beta learning
+### TICKET-005: Introduce an explicit demo-data onboarding and migration choice
 
-- Priority: P3 Low
-- Type: Ops/Analytics
-- Area: Settings, app shell, deployment/beta readiness
+- Priority: P2 Medium
+- Type: Product/UX/Data
+- Area: First run, reset flow, seeded workspace, existing Firebase workspaces
 - Effort: M
-- Confidence: Medium
-- Evidence: The current MVP has no analytics, logging, or error reporting. The PRD places analytics and operational monitoring in public beta, but private beta will still need basic learning signals.
-- Plain English: Once real people try Forth, the team should see where the product helps or gets stuck without spying on sensitive task content.
+- Confidence: High
+- Evidence: New engineering seed data applies only to fresh/reset local state. Existing cloud users correctly retain their earlier workspace snapshot, but the app does not explain or offer an intentional keep/replace/start-clean choice.
+- Plain English: Existing users should not be surprised that old demo tickets remain, and new users should know which quests are examples.
 - Learning brief (layman terms):
-  - What is happening now: The app can be tested manually, but it will not report crashes or usage patterns from beta sessions.
-  - Why it matters: Without safe feedback signals, it is harder to know whether people actually complete the motivational loop.
-  - What changing it means: Add privacy-aware event tracking for broad actions, plus error reporting for crashes.
-  - Concept to learn: Telemetry is product instrumentation; it measures behavior patterns while avoiding unnecessary personal data.
-- Engineering framing: Define privacy-preserving analytics events and error boundaries before beta, with content redaction and opt-in/consent language appropriate to the deployment context.
+  - What is happening now: Safe persistence prevents the redesign from erasing existing cloud data.
+  - Why it matters: That safety also means sample content can look like permanent user work.
+  - What changing it means: Add a one-time choice to keep existing work, load the engineering demo, or start empty.
+  - Concept to learn: A data migration changes stored information deliberately while protecting user-owned records.
+- Engineering framing: Add a versioned onboarding/migration state with explicit, idempotent user choice and no destructive automatic overwrite.
 - Scope:
-  - Add an error boundary or route-level fallback.
-  - Define event names for pace set, task created, task landed, proof viewed, reset, and sync failure.
-  - Avoid logging task titles, meanings, or private workspace content.
-  - Document analytics env/config requirements.
+  - Label sample data clearly.
+  - Offer keep, demo, and empty-workspace paths.
+  - Require confirmation before replacing cloud state.
 - Out of scope:
-  - Choosing an enterprise observability platform without approval.
-  - Tracking individual productivity scores.
+  - Automatic deletion of existing Firestore workspaces.
 - Acceptance criteria:
-  - Runtime UI failures show a recoverable error state.
-  - Analytics events exclude user-entered task content.
-  - Settings or docs clearly state what beta telemetry records.
+  - Existing cloud data is never replaced without confirmation.
+  - New users can begin empty or with the engineering demo.
+  - The choice does not reappear after completion unless invoked from Guild Hall.
 - Suggested files:
-  - `app/error.tsx`
   - `components/forth-app.tsx`
-  - `docs/PRD.md`
-  - `README.md`
+  - `lib/seed.ts`
+  - `lib/types.ts`
+  - `lib/workspace.ts`
 - Validation:
-  - Run lint, typecheck, tests, and build.
-  - Manually trigger a recoverable error in development if practical.
+  - Test fresh local, returning local, returning cloud, cancel, and confirmed replacement paths.
 - Subagent prompt:
-  > Use the repository context and implement TICKET-008. Preserve the existing design system and product intent. Keep the change scoped to the acceptance criteria, update or add focused tests where appropriate, and summarize validation results.
+  > Implement TICKET-005 as a safe, versioned onboarding/migration flow. Do not overwrite cloud data implicitly. Preserve the themed language while making every data consequence literal.

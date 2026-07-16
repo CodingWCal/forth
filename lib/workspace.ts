@@ -16,10 +16,10 @@ export const PACE_CAPACITY: Record<Pace, number> = {
 };
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  ready: "Ready",
-  moving: "Moving",
-  paused: "Paused",
-  done: "Landed",
+  ready: "Quest Log",
+  moving: "In Forge",
+  paused: "Camped",
+  done: "Shipped",
 };
 
 export function workspaceReducer(

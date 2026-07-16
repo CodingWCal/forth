@@ -2,7 +2,7 @@
 
 Status: MVP build contract  
 Delivery mode: Phased  
-Last updated: 2026-07-14
+Last updated: 2026-07-16
 
 ## 1. Product frame
 
@@ -27,7 +27,7 @@ The product deliberately combines patterns that currently live in separate categ
 - Sunsama uses a guided daily ritual and predicted workload to make an achievable plan ([Sunsama Daily Planning](https://help.sunsama.com/docs/usage-guides/daily-planning/)).
 - Habitica makes completion immediately rewarding through explicit game mechanics ([Habitica Features](https://habitica.com/static/features)).
 
-**Inference:** There is room for a team-capable tool that borrows short feedback loops and capacity realism without fantasy rewards, punishment, noisy celebration, or a dense executive reporting surface.
+**Inference:** There is room for a team-capable tool that combines capacity realism with a restrained fantasy-RPG frame. The game layer should create identity and immediate feedback without punishment, noisy celebration, random rewards, or a dense executive reporting surface.
 
 Forth’s motivation model is intrinsic and social:
 
@@ -43,9 +43,9 @@ Forth’s motivation model is intrinsic and social:
 
 The full motivational loop works with seeded data and browser persistence. It must feel coherent, responsive, keyboard-usable, and demo-ready without cloud credentials.
 
-### Phase 2 — Private beta
+### Phase 2 — Private beta (active)
 
-Firebase Authentication and Cloud Firestore replace local persistence. Workspaces gain membership, live synchronization, invitations, basic activity attribution, and secure rules tested against the emulator.
+Firebase Authentication and Cloud Firestore provide authenticated cloud persistence with a local fallback. Owner-scoped workspaces and emulator-tested rules are connected. Invitations, multi-member live collaboration, activity attribution, and recovery UX remain future beta work.
 
 ### Phase 3 — Public beta
 
@@ -109,12 +109,13 @@ Desktop uses a narrow persistent left rail. Mobile uses a compact top bar and fi
 
 ### Visual direction
 
-- **Aesthetic:** contemporary field journal, workshop ledger, trail markers, editorial utility.
-- **Palette:** warm paper, deep forest ink, moss, clay/persimmon accent, faded blue-gray.
-- **Typography:** bookish serif for emotional hierarchy; restrained sans-serif for controls and data; compact monospace for small labels.
-- **Surfaces:** tactile flat paper layers, visible one-pixel rules, restrained shadows, varied rather than universal rounding.
-- **Motif:** contour lines and cairn/wayfinding marks rendered as code-native linework.
-- **Avoid:** purple/blue AI gradients, glassmorphism, glowing orbs, chatbot-first layouts, excessive pill chips, stock illustrations, confetti, fake testimonials, and unexplained AI sparkle icons.
+- **Aesthetic:** original 16-bit medieval software-guild ledger: parchment, iron frames, tile grids, heraldic status colors, and compact RPG HUDs.
+- **Palette:** night green, parchment, oak, moss, oxblood, slate, and amber gold.
+- **Typography:** monospace for system/navigation copy, book serif for hierarchy and ticket titles, plain sans for longer descriptions.
+- **Surfaces:** square two-pixel rules, stepped shadows, hard corners, double dividers, and code-native tile textures.
+- **Motif:** campaign maps, quest inscriptions, save runes, guild chronicles, and one restrained animated code-squire sprite.
+- **Clarity:** pair fantasy naming with recognizable ticket concepts; the theme may not obscure status, priority, ownership, due date, or destructive actions.
+- **Avoid:** purple/blue AI gradients, glassmorphism, glowing orbs, sparkle icons, chatbot-first layouts, universal pills, glossy mobile-game rewards, confetti, streak pressure, and public rankings.
 
 ### Copy system
 

@@ -1,93 +1,111 @@
-# Forth Design Direction
+# Forth Design Direction — Iron & Parchment
 
 ## Concept
 
-Forth should feel like opening a beautifully maintained field notebook, not entering a control room. The interface treats work as movement through terrain: finite energy, a few visible waypoints, honest pauses, and a durable trail showing where the team has already been.
+Forth is the quest ledger of a small software guild. It should feel like a lost 16-bit strategy-RPG menu rebuilt as a serious engineering tool: square pixel construction, iron frames, parchment work surfaces, heraldic status colors, terse system copy, and one quietly animated code-squire avatar.
 
-The metaphor stays mostly visual. Labels remain understandable project-management language, so a user never has to decode a game.
+The fantasy layer is a mnemonic, not a puzzle. Every themed label stays adjacent to a familiar product concept:
 
-## Experience principles
+| Forth language | Engineering meaning |
+| --- | --- |
+| Campaign | Project |
+| Quest | Ticket/task |
+| Quest Log | Ready backlog |
+| In Forge | In progress |
+| Camped | Paused/blocked |
+| Shipped | Done |
+| Chronicle | Completion history |
+| Energy | Relative effort |
+| Party | Today’s maximum-three WIP set |
+| Cloud rune | Firebase persistence status |
 
-1. **Show the next ledge, not the whole mountain.** Today exposes at most three active moves.
-2. **Capacity is information, not a grade.** Going over plan triggers a neutral adjustment cue.
-3. **Completion should leave evidence.** The Proof ledger is permanent and specific.
-4. **A blocker is a state of work, not a trait of a person.** “Paused” uses calm language and an easy recovery action.
-5. **Purpose stays near action.** A project’s intended outcome and a task’s “why it matters” sit near the work.
+## Product feeling
 
-## Token direction
+1. **A guild tool, not a fantasy landing page.** The board remains dense, fast, and literal.
+2. **A game state, not a productivity grade.** Rank and gold reflect completed effort privately; there are no public leaderboards, streak loss, penalties, or random rewards.
+3. **A map with boundaries.** Today holds at most three unfinished quests.
+4. **A chronicle with evidence.** Shipped work preserves its objective and builder.
+5. **A camp is recovery.** Paused work is visible and easy to resume.
 
-| Token | Value | Purpose |
+## Visual references
+
+The direction draws from the material and information design of 16-bit console RPG interfaces: tile grids, compact status HUDs, square dialogue frames, limited palettes, bitmap-like ornament, and map/ledger metaphors. It does not reproduce any franchise character, logo, named location, UI layout, or proprietary sprite.
+
+Avoid modern “AI SaaS” visual shorthand:
+
+- no purple/blue gradients, glowing orbs, glass cards, floating sparkle marks, or chatbot framing;
+- no universal pill components, soft 24px rounding, ornamental dashboard metrics, or vague motivational copy;
+- no generated fantasy scenery behind functional UI;
+- no glossy mobile-game reward chest, confetti, streak anxiety, or public rank.
+
+## Palette and materials
+
+| Token | Value | Role |
 | --- | --- | --- |
-| Paper | `#f3efe4` | Primary background |
-| Canvas | `#e8e1d2` | Secondary surface |
-| Ink | `#203128` | Primary text and strong controls |
-| Moss | `#66745a` | Progress and positive state |
-| Clay | `#d65f43` | Primary action and human warmth |
-| Slate | `#71807b` | Secondary information |
-| Rule | `#c9c1b1` | Structural borders |
+| Night | `#121814` | Guild rail and backdrop |
+| Iron | `#202a20` | Dark panels and HUD |
+| Parchment | `#e9d9b7` | Primary work surface |
+| Light parchment | `#f5e8c9` | Ticket and form surfaces |
+| Oak | `#665034` | Structural rule and pixel shadow |
+| Moss | `#5b6f3a` | Shipped/safe state |
+| Oxblood | `#a84732` | Paused/danger emphasis |
+| Amber | `#c58b2b` | Active selection, reward, focus |
+| Slate | `#596b69` | Secondary engineering metadata |
 
-Typography uses a system serif stack for display hierarchy, a system sans stack for interface copy, and monospace for short project/status labels. This avoids runtime font downloads and keeps first render reliable.
+Surfaces use two-pixel rules, hard corners, stepped shadows, small repeating tile patterns, and double rules. Gradients are reserved for code-native checker/tile texture; never for soft glow or brand spectacle.
 
-## Layout map
+## Typography
 
-```text
-Desktop
-┌──────────┬─────────────────────────────────────┬─────────────┐
-│ Brand    │ Date / page title                   │ Local demo  │
-│          ├─────────────────────────────────────┼─────────────┤
-│ Today    │ Pace + capacity                     │ Project     │
-│ Board    ├─────────────────────────────────────┤ signal      │
-│ Proof    │ Next three meaningful moves         ├─────────────┤
-│ Settings ├─────────────────────────────────────┤ Team note   │
-│          │ Seven-day momentum trail            │             │
-└──────────┴─────────────────────────────────────┴─────────────┘
+- Monospace: navigation, status, small data, controls, system feedback.
+- Book serif: quest titles, campaign objectives, page hierarchy.
+- Plain sans: descriptions and longer instructional copy.
+- No runtime font download. Reliability and readable fallback behavior matter more than font novelty.
 
-Mobile
-┌─────────────────────────┐
-│ Brand        Local demo │
-├─────────────────────────┤
-│ Page content            │
-│ Single column           │
-├─────────────────────────┤
-│ Today Board Proof More  │
-└─────────────────────────┘
-```
+## Character asset
 
-## Component inventory
+`public/sprites/code-squire.png` is an original pixel-art guild engineer generated for Forth. It is shown as a small UI avatar, not a hero illustration. Motion is code-driven with a two-step idle/breathing loop and disabled by `prefers-reduced-motion`.
 
-- App rail / mobile tab bar
-- Local-demo environment badge
-- Pace selector and capacity meter
-- Project outcome signal
-- Next-three move row
-- Board column and move card
-- Progress trail figure
-- Proof ledger row
-- Add-move dialog
-- Toast live region
-- Empty state
+Rules:
 
-## Interaction details
+- render with `image-rendering: pixelated`;
+- keep the character subordinate to ticket content;
+- never use the avatar as proof of user identity;
+- provide empty alt text when decorative;
+- do not add randomized motion or audio.
 
-- Checkbox-like completion controls use a visible square “landing mark,” not a celebratory animation.
-- Task state changes use 160–220 ms opacity/transform transitions.
-- Progress bars are flat inked tracks with numeric text; color is never the only status cue.
-- The dialog closes on Escape and returns focus through native dialog behavior.
-- Touch targets are at least 44 px on mobile.
-- Hover states are additive; no required information is hover-only.
+## Layout and interaction
 
-## Responsive rules
+- Desktop: dark guild rail, parchment workspace, optional campaign context rail.
+- Tablet: compact rail plus the main ledger; context moves into the document flow.
+- Mobile: guild masthead, single-column quest log, fixed four-item bottom menu.
+- Board columns may scroll horizontally inside the board only.
+- Touch targets are at least 44px where practical.
+- Focus is a high-contrast amber outline, never color-only.
+- Movement lasts under 220ms except the decorative avatar idle; reduced motion disables both.
 
-- `> 1180 px`: rail + main + context column.
-- `760–1180 px`: rail + main; context cards join the main grid.
-- `< 760 px`: top brand bar, single column, fixed bottom nav, full-width dialog.
-- Data-dense board columns scroll horizontally only inside the board region; the page itself must not overflow.
+## Component contract
+
+- Guild rail and mobile menu
+- Cloud-rune environment badge
+- Code-squire rank HUD
+- Expedition/energy selector
+- Today’s three-quest party
+- Campaign charter
+- Seven-day expedition record
+- Realm-map board with four provinces
+- Engineering quest card
+- Release chronicle
+- Guild hall/account ward
+- Quest inscription dialog
+- System toast
 
 ## Visual QA checklist
 
-- No component resembles a default Tailwind/shadcn dashboard assembly.
-- Clay is used as an accent, not flooded across the interface.
-- Serif type creates hierarchy without harming control readability.
-- At least one tactile asymmetry or editorial rule is visible per major surface.
-- Empty, paused, complete, over-capacity, and local-demo states are visually distinct and clearly named.
-- Keyboard focus is always visible against paper and ink surfaces.
+- The screen is recognizable as Forth when grayscale and copy are removed.
+- No component resembles a default shadcn/Tailwind SaaS card assembly.
+- Every fantasy term retains obvious engineering context.
+- Pixel ornament never reduces text contrast or touch size.
+- Avatar edges remain crisp at 44px, 54px, and 86px containers.
+- Quest Log, In Forge, Camped, and Shipped are distinguishable without color.
+- Empty, sync-error, over-capacity, and local-camp states are explicit.
+- 375×812, 768×1024, and 1440×1000 have no page-level horizontal overflow.

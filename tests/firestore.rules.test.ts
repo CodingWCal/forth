@@ -49,6 +49,35 @@ describe("Firestore workspace rules", () => {
     }));
   });
 
+  it("lets a member use workspace data without granting owner controls", async () => {
+    const memberId = "guild-member";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", ownerId), { ownerId, name: "Owner guild" });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "members", memberId), {
+        uid: memberId,
+        role: "member",
+      });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "data", "current"), {
+        state: { version: 2 },
+      });
+    });
+
+    const memberDb = testEnv.authenticatedContext(memberId).firestore();
+    await assertSucceeds(getDoc(doc(memberDb, "workspaces", ownerId)));
+    await assertSucceeds(setDoc(doc(memberDb, "workspaces", ownerId, "data", "current"), {
+      state: { version: 2, pace: 3 },
+    }));
+    await assertFails(setDoc(doc(memberDb, "workspaces", ownerId), {
+      ownerId,
+      name: "Renamed without permission",
+    }, { merge: true }));
+    await assertFails(setDoc(doc(memberDb, "workspaces", ownerId, "members", "new-member"), {
+      uid: "new-member",
+      role: "member",
+    }));
+  });
+
   it("denies unauthenticated access", async () => {
     const anonymousDb = testEnv.unauthenticatedContext().firestore();
     await assertFails(getDoc(doc(anonymousDb, "workspaces", ownerId)));

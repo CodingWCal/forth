@@ -27,7 +27,7 @@ service cloud.firestore {
         allow create, update, delete: if ownsWorkspace(workspaceId);
       }
 
-      match /{document=**} {
+      match /data/{document=**} {
         allow read, write: if belongsToWorkspace(workspaceId) || ownsWorkspace(workspaceId);
       }
     }
