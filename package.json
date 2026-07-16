@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:rules": "npx firebase-tools emulators:exec --only firestore \"pnpm exec vitest run --config vitest.rules.config.ts\"",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "react-dom": "19.2.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/node": "^22.15.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
