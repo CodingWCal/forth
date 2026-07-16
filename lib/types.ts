@@ -1,6 +1,7 @@
 export type Pace = "light" | "steady" | "full";
 
 export type TaskStatus = "ready" | "moving" | "paused" | "done";
+export type TaskPriority = "low" | "medium" | "high";
 
 export type Project = {
   id: string;
@@ -22,10 +23,13 @@ export type Task = {
   isFocus: boolean;
   createdAt: string;
   completedAt?: string;
+  description?: string;
+  priority?: TaskPriority;
+  dueDate?: string;
 };
 
 export type WorkspaceState = {
-  version: 1;
+  version: 2;
   pace: Pace;
   projects: Project[];
   tasks: Task[];
@@ -34,6 +38,8 @@ export type WorkspaceState = {
 export type WorkspaceAction =
   | { type: "SET_PACE"; pace: Pace }
   | { type: "ADD_TASK"; task: Task }
+  | { type: "UPDATE_TASK"; taskId: string; changes: Partial<Omit<Task, "id" | "createdAt">> }
+  | { type: "DELETE_TASK"; taskId: string }
   | { type: "SET_STATUS"; taskId: string; status: TaskStatus; at?: string }
   | { type: "TOGGLE_FOCUS"; taskId: string }
   | { type: "RESET"; state: WorkspaceState };

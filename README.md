@@ -102,6 +102,7 @@ Every GitHub commit can then create a Vercel deployment; pull requests can recei
 - [Product requirements](docs/PRD.md)
 - [Design direction](docs/DESIGN.md)
 - [Future ticket backlog](docs/ticket-backlog.md)
+- [Phase 2 private-guild beta contract](docs/PHASE2.md)
 - [Agent operating instructions](AGENTS.md)
 
 ## Current boundary

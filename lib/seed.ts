@@ -166,5 +166,5 @@ export function createSeedWorkspace(): WorkspaceState {
     },
   ];
 
-  return { version: 1, pace: "steady", projects, tasks };
+  return { version: 2, pace: "steady", projects, tasks };
 }

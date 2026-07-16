@@ -31,6 +31,15 @@ export function workspaceReducer(
       return { ...state, pace: action.pace };
     case "ADD_TASK":
       return { ...state, tasks: [action.task, ...state.tasks] };
+    case "UPDATE_TASK":
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId ? { ...task, ...action.changes } : task,
+        ),
+      };
+    case "DELETE_TASK":
+      return { ...state, tasks: state.tasks.filter((task) => task.id !== action.taskId) };
     case "SET_STATUS":
       return {
         ...state,
@@ -66,18 +75,18 @@ export function parseStoredWorkspace(value: string | null): WorkspaceState | nul
   if (!value) return null;
   try {
     const parsed: unknown = JSON.parse(value);
-    if (!isWorkspaceState(parsed)) return null;
-    return parsed;
+    if (!isWorkspaceShape(parsed)) return null;
+    return { ...parsed, version: 2 };
   } catch {
     return null;
   }
 }
 
-function isWorkspaceState(value: unknown): value is WorkspaceState {
+function isWorkspaceShape(value: unknown): value is Omit<WorkspaceState, "version"> & { version: 1 | 2 } {
   if (!value || typeof value !== "object") return false;
-  const state = value as Partial<WorkspaceState>;
+  const state = value as Partial<Omit<WorkspaceState, "version">> & { version?: number };
   return (
-    state.version === 1 &&
+    (state.version === 1 || state.version === 2) &&
     (state.pace === "light" || state.pace === "steady" || state.pace === "full") &&
     Array.isArray(state.projects) &&
     state.projects.every(isProject) &&
@@ -163,6 +172,9 @@ export function createTask(input: {
   meaning: string;
   weight: 1 | 2 | 3;
   isFocus: boolean;
+  description?: string;
+  priority?: Task["priority"];
+  dueDate?: string;
 }): Task {
   const id =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -178,5 +190,8 @@ export function createTask(input: {
     status: "ready",
     isFocus: input.isFocus,
     createdAt: new Date().toISOString(),
+    description: input.description?.trim() ?? "",
+    priority: input.priority ?? "medium",
+    dueDate: input.dueDate || undefined,
   };
 }

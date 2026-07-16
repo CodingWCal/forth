@@ -28,7 +28,7 @@ service cloud.firestore {
       }
 
       match /{document=**} {
-        allow read, write: if belongsToWorkspace(workspaceId);
+        allow read, write: if belongsToWorkspace(workspaceId) || ownsWorkspace(workspaceId);
       }
     }
   }

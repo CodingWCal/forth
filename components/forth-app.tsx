@@ -17,12 +17,27 @@ import {
   Settings,
   Target,
   X,
+  Coins,
+  ScrollText,
+  Sword,
+  Pencil,
+  Trash2,
+  Search,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { hasFirebaseConfig } from "@/lib/firebase/config";
+import type { User } from "firebase/auth";
+import {
+  provisionWorkspace,
+  saveWorkspace,
+  signInWithGoogle,
+  signOutOfForth,
+  watchAuth,
+  watchWorkspace,
+} from "@/lib/firebase/workspace";
 import { createSeedWorkspace } from "@/lib/seed";
-import type { Pace, Project, Task, TaskStatus, WorkspaceState } from "@/lib/types";
+import type { Pace, Project, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
 import {
   createTask,
   getFocusTasks,
@@ -57,6 +72,10 @@ export function ForthApp() {
   const [activeProjectId, setActiveProjectId] = useState("project-forth");
   const [hydrated, setHydrated] = useState(false);
   const [toast, setToast] = useState("");
+  const [cloudUser, setCloudUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(hasFirebaseConfig);
+  const [syncState, setSyncState] = useState<"local" | "syncing" | "synced" | "error">("local");
+  const cloudReadyRef = useRef(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -71,6 +90,60 @@ export function ForthApp() {
   useEffect(() => {
     if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [hydrated, state]);
+
+  useEffect(() => {
+    if (!hasFirebaseConfig) return;
+    return watchAuth(({ user, loading }) => {
+      setCloudUser(user);
+      setAuthLoading(loading);
+      if (user) {
+        setSyncState("syncing");
+      } else {
+        cloudReadyRef.current = false;
+        setSyncState("local");
+      }
+    }) ?? undefined;
+  }, []);
+
+  useEffect(() => {
+    if (!cloudUser || !hydrated) return;
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    void provisionWorkspace(cloudUser, state)
+      .then(() => {
+        if (cancelled) return;
+        unsubscribe = watchWorkspace(
+          cloudUser,
+          (cloudState) => {
+            cloudReadyRef.current = false;
+            dispatch({ type: "RESET", state: cloudState });
+            window.requestAnimationFrame(() => {
+              cloudReadyRef.current = true;
+              setSyncState("synced");
+            });
+          },
+          () => setSyncState("error"),
+        ) ?? undefined;
+      })
+      .catch(() => setSyncState("error"));
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  // Provision exactly when the authenticated identity changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudUser?.uid, hydrated]);
+
+  useEffect(() => {
+    if (!cloudUser || !cloudReadyRef.current) return;
+    setSyncState("syncing");
+    const timeout = window.setTimeout(() => {
+      void saveWorkspace(cloudUser, state)
+        .then(() => setSyncState("synced"))
+        .catch(() => setSyncState("error"));
+    }, 450);
+    return () => window.clearTimeout(timeout);
+  }, [cloudUser, state]);
 
   const focusTasks = getFocusTasks(state);
   const plannedWeight = getPlannedWeight(state);
@@ -89,7 +162,7 @@ export function ForthApp() {
     if (!task) return;
     announce(
       status === "done"
-        ? `Landed: ${task.title}`
+        ? `Quest complete: ${task.title} · +${task.weight * 10} gold`
         : `${task.title} is now ${STATUS_LABELS[status].toLowerCase()}.`,
     );
   }
@@ -112,8 +185,20 @@ export function ForthApp() {
       : view === "board"
         ? "See the work without the weight."
         : view === "proof"
-          ? "The work has left a trail."
-          : "Keep the foundation honest.";
+        ? "The work has left a trail."
+        : "Keep the foundation honest.";
+
+  function renameTask(task: Task) {
+    const title = window.prompt("Rename this ticket", task.title)?.trim();
+    if (title) dispatch({ type: "UPDATE_TASK", taskId: task.id, changes: { title } });
+  }
+
+  function deleteTask(task: Task) {
+    if (window.confirm(`Delete “${task.title}”? This cannot be undone.`)) {
+      dispatch({ type: "DELETE_TASK", taskId: task.id });
+      announce("Ticket deleted.");
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -205,6 +290,16 @@ export function ForthApp() {
             onSetPace={(pace) => dispatch({ type: "SET_PACE", pace })}
             onSetStatus={setStatus}
             onOpenAdd={openAddDialog}
+            onRename={(task) => {
+              const title = window.prompt("Rename this ticket", task.title)?.trim();
+              if (title) dispatch({ type: "UPDATE_TASK", taskId: task.id, changes: { title } });
+            }}
+            onDelete={(task) => {
+              if (window.confirm(`Delete “${task.title}”? This cannot be undone.`)) {
+                dispatch({ type: "DELETE_TASK", taskId: task.id });
+                announce("Ticket deleted.");
+              }
+            }}
             onGoToBoard={() => setView("board")}
           />
         )}
@@ -225,10 +320,31 @@ export function ForthApp() {
               }
             }}
             onOpenAdd={openAddDialog}
+            onRename={renameTask}
+            onDelete={deleteTask}
           />
         )}
         {view === "proof" && <ProofView state={state} />}
-        {view === "settings" && <SettingsView onReset={resetDemo} />}
+        {view === "settings" && (
+          <SettingsView
+            onReset={resetDemo}
+            user={cloudUser}
+            authLoading={authLoading}
+            syncState={syncState}
+            onSignIn={async () => {
+              try {
+                await signInWithGoogle();
+                announce("Welcome to the guild. Cloud save is active.");
+              } catch {
+                announce("Sign-in did not finish. Your local quests are still safe.");
+              }
+            }}
+            onSignOut={async () => {
+              await signOutOfForth();
+              announce("Signed out. This browser keeps its local copy.");
+            }}
+          />
+        )}
       </main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -296,6 +412,8 @@ function TodayView({
   onSetPace: (pace: Pace) => void;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onOpenAdd: () => void;
+  onRename: (task: Task) => void;
+  onDelete: (task: Task) => void;
   onGoToBoard: () => void;
 }) {
   const momentum = getMomentumDays(state.tasks);
@@ -303,10 +421,26 @@ function TodayView({
   const progress = getProjectProgress(state, activeProject.id);
   const completedToday = momentum[momentum.length - 1]?.weight ?? 0;
   const overPlan = plannedWeight > capacity;
+  const totalGold = state.tasks.filter((task) => task.status === "done").reduce((sum, task) => sum + task.weight * 10, 0);
+  const level = Math.floor(totalGold / 100) + 1;
+  const levelProgress = totalGold % 100;
 
   return (
     <div className="today-layout">
       <div className="today-main">
+        <section className="adventurer-hud" aria-label="Guild progress">
+          <div className="pixel-portrait" aria-hidden="true"><Sword size={25} /></div>
+          <div className="adventurer-copy">
+            <p className="eyebrow">Guild adventurer · Level {level}</p>
+            <h2>The Questkeeper</h2>
+            <div className="xp-track" role="progressbar" aria-label="Progress to next level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
+            <small>{100 - levelProgress} XP until the next guild rank</small>
+          </div>
+          <dl className="reward-stats">
+            <div><dt><Coins size={14} /> Gold</dt><dd>{totalGold}</dd></div>
+            <div><dt><ScrollText size={14} /> Quests</dt><dd>{state.tasks.filter((task) => task.status === "done").length}</dd></div>
+          </dl>
+        </section>
         <section className="pace-panel" aria-labelledby="pace-title">
           <div className="section-heading">
             <div>
@@ -498,6 +632,8 @@ function BoardView({
   onSetStatus,
   onToggleFocus,
   onOpenAdd,
+  onRename,
+  onDelete,
 }: {
   state: WorkspaceState;
   activeProject: Project;
@@ -505,8 +641,11 @@ function BoardView({
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onToggleFocus: (taskId: string) => void;
   onOpenAdd: () => void;
+  onRename: (task: Task) => void;
+  onDelete: (task: Task) => void;
 }) {
   const statuses: TaskStatus[] = ["ready", "moving", "paused", "done"];
+  const [query, setQuery] = useState("");
   return (
     <div className="board-view">
       <div className="project-tabs" role="tablist" aria-label="Projects">
@@ -535,10 +674,17 @@ function BoardView({
         </div>
       </section>
 
+      <div className="quest-tools">
+        <Search size={16} aria-hidden="true" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search tickets" placeholder="Search this quest board…" />
+        <button className="button button--primary" onClick={onOpenAdd}><Plus size={15} /> New ticket</button>
+      </div>
+
       <section className="kanban" aria-label={`${activeProject.title} work map`}>
         {statuses.map((status) => {
           const tasks = state.tasks.filter(
-            (task) => task.projectId === activeProject.id && task.status === status,
+            (task) => task.projectId === activeProject.id && task.status === status &&
+              `${task.title} ${task.description ?? ""} ${task.meaning}`.toLowerCase().includes(query.toLowerCase()),
           );
           return (
             <div className={`kanban-column kanban-column--${status}`} key={status}>
@@ -553,6 +699,8 @@ function BoardView({
                     task={task}
                     onSetStatus={onSetStatus}
                     onToggleFocus={onToggleFocus}
+                    onRename={onRename}
+                    onDelete={onDelete}
                   />
                 ))}
                 {tasks.length === 0 && (
@@ -577,10 +725,14 @@ function BoardTaskCard({
   task,
   onSetStatus,
   onToggleFocus,
+  onRename,
+  onDelete,
 }: {
   task: Task;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onToggleFocus: (taskId: string) => void;
+  onRename: (task: Task) => void;
+  onDelete: (task: Task) => void;
 }) {
   const previous: Partial<Record<TaskStatus, TaskStatus>> = {
     moving: "ready",
@@ -609,9 +761,16 @@ function BoardTaskCard({
         )}
       </div>
       <h3>{task.title}</h3>
+      {task.description && <p className="ticket-description">{task.description}</p>}
       <p>{task.meaning}</p>
+      <div className="ticket-facts">
+        <span className={`priority priority--${task.priority ?? "medium"}`}>{task.priority ?? "medium"}</span>
+        {task.dueDate && <time dateTime={task.dueDate}>Due {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(`${task.dueDate}T12:00:00`))}</time>}
+      </div>
       <div className="board-task-assignee"><span>{task.assignee.charAt(0)}</span>{task.assignee}</div>
       <div className="board-task-actions">
+        <button onClick={() => onRename(task)} aria-label={`Rename ${task.title}`}><Pencil size={13} /></button>
+        <button onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`}><Trash2 size={13} /></button>
         {previous[task.status] && task.status !== "done" && (
           <button onClick={() => onSetStatus(task.id, previous[task.status]!)} aria-label={`Move ${task.title} backward`}>
             <ArrowLeft size={14} />
@@ -689,35 +848,54 @@ function ProofView({ state }: { state: WorkspaceState }) {
   );
 }
 
-function SettingsView({ onReset }: { onReset: () => void }) {
+function SettingsView({
+  onReset,
+  user,
+  authLoading,
+  syncState,
+  onSignIn,
+  onSignOut,
+}: {
+  onReset: () => void;
+  user: User | null;
+  authLoading: boolean;
+  syncState: "local" | "syncing" | "synced" | "error";
+  onSignIn: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+}) {
   return (
     <div className="settings-view">
       <section className="settings-intro">
-        <p className="eyebrow">Build mode</p>
-        <h2>Useful now. Ready to grow honestly.</h2>
-        <p>Forth currently keeps the demo workspace in this browser. The interface and data model are prepared for Firebase, but it will not claim cloud sync until a real project and authentication policy are connected.</p>
+        <p className="eyebrow">Guild hall</p>
+        <h2>Your save point and account.</h2>
+        <p>Play locally without an account, or sign in to keep the same quest board across devices. Your tickets are work data—not a public score.</p>
       </section>
 
       <section className="settings-card">
         <div className="settings-icon"><LockKeyhole size={22} /></div>
         <div>
           <p className="eyebrow">Persistence</p>
-          <h3>{hasFirebaseConfig ? "Firebase configuration detected" : "Local browser storage"}</h3>
-          <p>{hasFirebaseConfig ? "Environment values are present. Authentication and workspace provisioning remain a deliberate private-beta step." : "Changes survive refreshes on this device. They are not synced, shared, or uploaded."}</p>
+          <h3>{user ? `Signed in as ${user.displayName ?? user.email}` : hasFirebaseConfig ? "Cloud save is available" : "Local browser save"}</h3>
+          <p>{user ? `Save status: ${syncState}. Forth keeps a local fallback while your private Firestore workspace synchronizes.` : hasFirebaseConfig ? "Use Google sign-in to create your private guild save." : "Changes survive refreshes on this device but do not travel to another browser."}</p>
+          {hasFirebaseConfig && (
+            <button className="button button--primary" disabled={authLoading} onClick={() => void (user ? onSignOut() : onSignIn())}>
+              {authLoading ? "Checking save…" : user ? "Sign out" : "Sign in with Google"}
+            </button>
+          )}
         </div>
-        <span className={hasFirebaseConfig ? "status-stamp is-ready" : "status-stamp"}>{hasFirebaseConfig ? "Ready" : "Local"}</span>
+        <span className={user && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{user ? syncState : "Local"}</span>
       </section>
 
       <section className="settings-card">
         <div className="settings-icon"><Target size={22} /></div>
         <div>
-          <p className="eyebrow">Private-beta gate</p>
-          <h3>What cloud connection will add</h3>
+          <p className="eyebrow">Adventure rules</p>
+          <h3>What the game layer rewards</h3>
           <ul>
-            <li>Email or Google sign-in</li>
-            <li>Workspace membership and secure collaboration</li>
-            <li>Live project, task, pace, and proof synchronization</li>
-            <li>Tested Firestore authorization rules</li>
+            <li>Finishing meaningful tickets earns gold equal to effort</li>
+            <li>Completed quests fill your guild rank</li>
+            <li>Proof remains a permanent adventure log</li>
+            <li>There are no penalties, broken streaks, or public rankings</li>
           </ul>
         </div>
       </section>
@@ -747,6 +925,9 @@ function AddTaskDialog({
     meaning: string;
     weight: 1 | 2 | 3;
     isFocus: boolean;
+    description?: string;
+    priority?: TaskPriority;
+    dueDate?: string;
   }) => void;
 }) {
   const [title, setTitle] = useState("");
@@ -754,15 +935,21 @@ function AddTaskDialog({
   const [meaning, setMeaning] = useState("");
   const [weight, setWeight] = useState<1 | 2 | 3>(2);
   const [isFocus, setIsFocus] = useState(canFocus);
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [dueDate, setDueDate] = useState("");
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim() || !projectId) return;
-    onSubmit({ title, projectId, meaning, weight, isFocus });
+    onSubmit({ title, projectId, meaning, weight, isFocus, description, priority, dueDate });
     setTitle("");
     setMeaning("");
     setWeight(2);
     setIsFocus(canFocus);
+    setDescription("");
+    setPriority("medium");
+    setDueDate("");
   }
 
   return (
@@ -771,14 +958,19 @@ function AddTaskDialog({
     }}>
       <form onSubmit={submit}>
         <header className="dialog-head">
-          <div><p className="eyebrow">Add to the work map</p><h2>What should move next?</h2></div>
+          <div><p className="eyebrow">Accept a new quest</p><h2>What needs doing?</h2></div>
           <button type="button" className="icon-button" onClick={() => dialogRef.current?.close()} aria-label="Close dialog"><X size={19} /></button>
         </header>
 
         <label className="field">
-          <span>Move</span>
+          <span>Ticket title</span>
           <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={90} autoFocus placeholder="Describe a finishable outcome" />
           <small>Use a verb and make the finish line visible.</small>
+        </label>
+
+        <label className="field">
+          <span>Description <i>optional</i></span>
+          <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} rows={3} placeholder="Add context, requirements, or a definition of done" />
         </label>
 
         <label className="field">
@@ -787,6 +979,19 @@ function AddTaskDialog({
             {projects.map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}
           </select>
         </label>
+
+        <div className="field-pair">
+          <label className="field">
+            <span>Priority</span>
+            <select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
+              <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Due date <i>optional</i></span>
+            <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          </label>
+        </div>
 
         <label className="field">
           <span>Why it matters <i>optional</i></span>
@@ -811,7 +1016,7 @@ function AddTaskDialog({
 
         <footer className="dialog-foot">
           <button type="button" className="button button--quiet" onClick={() => dialogRef.current?.close()}>Cancel</button>
-          <button className="button button--primary" type="submit">Make it ready <ArrowRight size={16} /></button>
+          <button className="button button--primary" type="submit">Accept quest <Sword size={16} /></button>
         </footer>
       </form>
     </dialog>

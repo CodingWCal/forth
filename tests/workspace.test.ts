@@ -16,6 +16,11 @@ describe("workspace state", () => {
     expect(parseStoredWorkspace('{"version":99}')).toBeNull();
   });
 
+  it("migrates a valid version 1 browser save to version 2", () => {
+    const legacy = { ...createSeedWorkspace(), version: 1 };
+    expect(parseStoredWorkspace(JSON.stringify(legacy))?.version).toBe(2);
+  });
+
   it("keeps the focus list to three moves", () => {
     const seed = createSeedWorkspace();
     const candidate = seed.tasks.find((task) => !task.isFocus && task.status !== "done");
@@ -46,5 +51,22 @@ describe("workspace state", () => {
     expect(getPlannedWeight(seed)).toBe(6);
     expect(getProjectProgress(seed, "project-forth")).toBeGreaterThan(0);
     expect(getProjectProgress(seed, "missing-project")).toBe(0);
+  });
+
+  it("updates and deletes a ticket without mutating other tickets", () => {
+    const seed = createSeedWorkspace();
+    const target = seed.tasks[0];
+    const renamed = workspaceReducer(seed, {
+      type: "UPDATE_TASK",
+      taskId: target.id,
+      changes: { title: "New quest title", priority: "high", dueDate: "2026-08-01" },
+    });
+    expect(renamed.tasks.find((task) => task.id === target.id)).toMatchObject({
+      title: "New quest title",
+      priority: "high",
+      dueDate: "2026-08-01",
+    });
+    expect(workspaceReducer(renamed, { type: "DELETE_TASK", taskId: target.id }).tasks)
+      .toHaveLength(seed.tasks.length - 1);
   });
 });

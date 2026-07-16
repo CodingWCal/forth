@@ -1851,6 +1851,84 @@ h3 {
   transform: translateY(0);
 }
 
+/* Quest layer: deliberately small and functional, not a productivity score. */
+.adventurer-hud {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 22px;
+  padding: 16px 18px;
+  border: 2px solid var(--ink);
+  background: #f7e8b8;
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.pixel-portrait {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 3px solid var(--ink);
+  background: var(--clay);
+  color: #fff9dc;
+  box-shadow: inset -5px -5px 0 rgba(32, 49, 40, 0.18);
+}
+
+.adventurer-copy h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 20px;
+}
+
+.adventurer-copy small { color: var(--ink-soft); font-size: 10px; }
+
+.xp-track {
+  height: 9px;
+  margin: 6px 0 2px;
+  overflow: hidden;
+  border: 1px solid var(--ink);
+  background: #fff8df;
+}
+
+.xp-track span { display: block; height: 100%; background: var(--clay); }
+
+.reward-stats {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+}
+
+.reward-stats div { min-width: 54px; }
+.reward-stats dt { display: flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.reward-stats dd { margin: 1px 0 0; font-family: var(--mono); font-size: 20px; font-weight: 800; }
+
+.quest-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  background: var(--paper-bright);
+}
+
+.quest-tools input {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+}
+
+.field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ticket-description { color: var(--ink-soft) !important; }
+.ticket-facts { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; color: var(--slate); font-size: 9px; }
+.priority { padding: 2px 6px; border: 1px solid currentColor; font-family: var(--mono); font-size: 8px; font-weight: 700; text-transform: uppercase; }
+.priority--high { color: #a84230; background: #f4ddd3; }
+.priority--medium { color: #786117; background: #f6edc9; }
+.priority--low { color: #4f6444; background: var(--moss-pale); }
+
 @media (max-width: 1180px) {
   .main-canvas {
     padding-right: 30px;
@@ -2239,6 +2317,14 @@ h3 {
     left: 12px;
     max-width: none;
   }
+
+  .adventurer-hud { grid-template-columns: 48px minmax(0, 1fr); gap: 12px; padding: 13px; }
+  .pixel-portrait { width: 44px; height: 44px; }
+  .reward-stats { grid-column: 1 / -1; justify-content: space-between; padding-top: 7px; border-top: 1px dashed var(--rule-dark); }
+  .quest-tools { flex-wrap: wrap; }
+  .quest-tools input { min-width: calc(100% - 32px); }
+  .quest-tools .button { width: 100%; }
+  .field-pair { grid-template-columns: 1fr; gap: 0; }
 }
 
 @media (max-width: 430px) {
