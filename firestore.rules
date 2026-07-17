@@ -30,6 +30,15 @@ service cloud.firestore {
       allow get, list: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
+    // A signed-in person may discover only invitations addressed to their own
+    // authenticated email. This powers the in-app pending-invitations panel
+    // without exposing other people's invites through a collection-group query.
+    match /{document=**}/invites/{inviteEmail} {
+      allow get, list: if signedIn()
+        && request.auth.token.email != null
+        && resource.data.email == request.auth.token.email;
+    }
+
     match /workspaces/{workspaceId} {
       allow read: if belongsToWorkspace(workspaceId) || ownsWorkspace(workspaceId);
       allow create: if signedIn()

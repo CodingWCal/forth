@@ -31,6 +31,13 @@ export type GuildWorkspace = {
   role: "owner" | "member";
 };
 
+export type PendingGuildInvite = {
+  workspaceId: string;
+  workspaceName: string;
+  invitedBy: string;
+  email: string;
+};
+
 function requireServices() {
   const services = getFirebaseServices();
   if (!services) throw new Error("Firebase is not configured.");
@@ -149,10 +156,38 @@ export async function inviteGuildMember(user: User, workspace: GuildWorkspace, e
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Enter a valid teammate email address.");
   await setDoc(doc(services.db, "workspaces", workspace.id, "invites", email), {
     email,
+    workspaceId: workspace.id,
     workspaceName: workspace.name,
     invitedBy: user.displayName ?? user.email ?? "Guild leader",
     createdAt: serverTimestamp(),
   });
+}
+
+export async function listPendingGuildInvites(user: User): Promise<PendingGuildInvite[]> {
+  const services = requireServices();
+  const email = normalizedEmail(user);
+  const snapshots = await getDocs(query(collectionGroup(services.db, "invites"), where("email", "==", email)));
+  return snapshots.docs
+    .map((invite) => {
+      const data = invite.data();
+      const workspaceId = invite.ref.parent.parent?.id
+        ?? (typeof data.workspaceId === "string" ? data.workspaceId : "");
+      if (!workspaceId) return null;
+      return {
+        workspaceId,
+        workspaceName: typeof data.workspaceName === "string" ? data.workspaceName : "A guild",
+        invitedBy: typeof data.invitedBy === "string" ? data.invitedBy : "A guild leader",
+        email,
+      } satisfies PendingGuildInvite;
+    })
+    .filter((invite): invite is PendingGuildInvite => invite !== null)
+    .sort((a, b) => a.workspaceName.localeCompare(b.workspaceName));
+}
+
+export async function declineGuildInvite(user: User, workspaceId: string) {
+  const services = requireServices();
+  const email = normalizedEmail(user);
+  await deleteDoc(doc(services.db, "workspaces", workspaceId.trim(), "invites", email));
 }
 
 export async function acceptGuildInvite(user: User, workspaceId: string) {
