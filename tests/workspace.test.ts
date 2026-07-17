@@ -204,4 +204,17 @@ describe("workspace state", () => {
     expect(momentum.at(-1)?.weight).toBe(2);
     expect(momentum.reduce((sum, day) => sum + day.weight, 0)).toBe(2);
   });
+
+  it("can derive hydration-safe momentum against explicit UTC day boundaries", () => {
+    const seed = createSeedWorkspace(new Date("2026-07-17T00:30:00.000Z"));
+    const tasks = [{
+      ...seed.tasks[0],
+      status: "done" as const,
+      completedAt: "2026-07-16T23:59:59.000Z",
+    }];
+    const momentum = getMomentumDays(tasks, new Date("2026-07-17T00:30:00.000Z"), true);
+
+    expect(momentum.at(-2)?.weight).toBe(tasks[0].weight);
+    expect(momentum.at(-1)?.weight).toBe(0);
+  });
 });

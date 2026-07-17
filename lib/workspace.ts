@@ -167,17 +167,23 @@ export function getProjectProgress(state: WorkspaceState, projectId: string) {
   return totalWeight === 0 ? 0 : Math.round((doneWeight / totalWeight) * 100);
 }
 
-export function getMomentumDays(tasks: Task[], now = new Date()) {
+export function getMomentumDays(tasks: Task[], now = new Date(), useUtc = false) {
   const dates = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(now);
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (6 - index));
+    if (useUtc) {
+      date.setUTCHours(0, 0, 0, 0);
+      date.setUTCDate(date.getUTCDate() - (6 - index));
+    } else {
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() - (6 - index));
+    }
     return date;
   });
 
   return dates.map((date) => {
     const next = new Date(date);
-    next.setDate(next.getDate() + 1);
+    if (useUtc) next.setUTCDate(next.getUTCDate() + 1);
+    else next.setDate(next.getDate() + 1);
     const weight = tasks
       .filter((task) => {
         if (!task.completedAt) return false;
@@ -187,7 +193,10 @@ export function getMomentumDays(tasks: Task[], now = new Date()) {
       .reduce((sum, task) => sum + task.weight, 0);
     return {
       date: date.toISOString(),
-      label: new Intl.DateTimeFormat("en-US", { weekday: "narrow" }).format(date),
+      label: new Intl.DateTimeFormat("en-US", {
+        weekday: "narrow",
+        timeZone: useUtc ? "UTC" : undefined,
+      }).format(date),
       weight,
     };
   });

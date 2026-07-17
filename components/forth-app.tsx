@@ -313,6 +313,7 @@ export function ForthApp({
             plannedWeight={plannedWeight}
             capacity={capacity}
             now={displayDate}
+            useUtc={!hydrated}
             onSetPace={(pace) => dispatch({ type: "SET_PACE", pace })}
             onSetStatus={setStatus}
             onOpenAdd={openAddDialog}
@@ -427,6 +428,7 @@ function TodayView({
   plannedWeight,
   capacity,
   now,
+  useUtc,
   onSetPace,
   onSetStatus,
   onOpenAdd,
@@ -438,6 +440,7 @@ function TodayView({
   plannedWeight: number;
   capacity: number;
   now: Date;
+  useUtc: boolean;
   onSetPace: (pace: Pace) => void;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onOpenAdd: () => void;
@@ -445,7 +448,7 @@ function TodayView({
   onDelete: (task: Task) => void;
   onGoToBoard: () => void;
 }) {
-  const momentum = getMomentumDays(state.tasks, now);
+  const momentum = getMomentumDays(state.tasks, now, useUtc);
   const maxMomentum = Math.max(...momentum.map((day) => day.weight), 1);
   const progress = getProjectProgress(state, activeProject.id);
   const completedToday = momentum[momentum.length - 1]?.weight ?? 0;
