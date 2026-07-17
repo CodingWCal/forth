@@ -31,10 +31,30 @@ export type GuildWorkspace = {
   role: "owner" | "member";
 };
 
+export type PendingGuildInvite = {
+  workspaceId: string;
+  workspaceName: string;
+  invitedBy: string;
+  email: string;
+};
+
 function requireServices() {
   const services = getFirebaseServices();
   if (!services) throw new Error("Firebase is not configured.");
   return services;
+}
+
+// A brand-new account cannot read a workspace document that does not exist yet
+// under the owner-scoped rules, so a pre-create existence check can be denied.
+// Treat any failed/denied read as "not created yet" and let the create attempt
+// (which is governed by the create rule) decide. This keeps first-run
+// provisioning working without loosening authorization.
+async function documentExists(reference: Parameters<typeof getDoc>[0]) {
+  try {
+    return (await getDoc(reference)).exists();
+  } catch {
+    return false;
+  }
 }
 
 function normalizedEmail(user: User) {
@@ -68,8 +88,7 @@ async function createWorkspaceAt(
   const services = requireServices();
   const workspaceRef = doc(services.db, "workspaces", workspaceId);
   const stateRef = doc(workspaceRef, "data", "current");
-  const existingWorkspace = await getDoc(workspaceRef);
-  if (!existingWorkspace.exists()) {
+  if (!(await documentExists(workspaceRef))) {
     await setDoc(workspaceRef, {
       ownerId: user.uid,
       name,
@@ -84,8 +103,7 @@ async function createWorkspaceAt(
     role: "owner",
     joinedAt: serverTimestamp(),
   }, { merge: true });
-  const existingState = await getDoc(stateRef);
-  if (!existingState.exists()) {
+  if (!(await documentExists(stateRef))) {
     await setDoc(stateRef, { state: initialState, updatedAt: serverTimestamp() });
   }
   return workspaceId;
@@ -104,7 +122,26 @@ export async function createGuildWorkspace(user: User, name: string, initialStat
 
 export async function listGuildWorkspaces(user: User): Promise<GuildWorkspace[]> {
   const services = requireServices();
-  const memberSnapshots = await getDocs(query(collectionGroup(services.db, "members"), where("uid", "==", user.uid)));
+  // The owner workspace has a deterministic id (the owner's uid). Keep it in
+  // the directory even if a collection-group query is temporarily unavailable
+  // (for example while indexes/rules propagate). This also keeps the owner
+  // path usable so the invitation controls do not disappear.
+  const ownerWorkspace = await getDoc(doc(services.db, "workspaces", user.uid));
+  const ownerGuild: GuildWorkspace[] = ownerWorkspace.exists()
+    ? [{
+        id: ownerWorkspace.id,
+        name: typeof ownerWorkspace.data().name === "string" ? ownerWorkspace.data().name : "My guild",
+        ownerId: user.uid,
+        role: "owner",
+      }]
+    : [];
+
+  let memberSnapshots;
+  try {
+    memberSnapshots = await getDocs(query(collectionGroup(services.db, "members"), where("uid", "==", user.uid)));
+  } catch {
+    return ownerGuild;
+  }
   const workspaces = await Promise.all(memberSnapshots.docs.map(async (member) => {
     const workspaceRef = member.ref.parent.parent;
     if (!workspaceRef) return null;
@@ -118,7 +155,8 @@ export async function listGuildWorkspaces(user: User): Promise<GuildWorkspace[]>
       role: member.data().role === "owner" ? "owner" : "member",
     } satisfies GuildWorkspace;
   }));
-  return workspaces.filter((workspace): workspace is GuildWorkspace => workspace !== null)
+  return [...ownerGuild, ...workspaces.filter((workspace): workspace is GuildWorkspace => workspace !== null)]
+    .filter((workspace, index, all) => all.findIndex((candidate) => candidate.id === workspace.id) === index)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -129,10 +167,38 @@ export async function inviteGuildMember(user: User, workspace: GuildWorkspace, e
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Enter a valid teammate email address.");
   await setDoc(doc(services.db, "workspaces", workspace.id, "invites", email), {
     email,
+    workspaceId: workspace.id,
     workspaceName: workspace.name,
     invitedBy: user.displayName ?? user.email ?? "Guild leader",
     createdAt: serverTimestamp(),
   });
+}
+
+export async function listPendingGuildInvites(user: User): Promise<PendingGuildInvite[]> {
+  const services = requireServices();
+  const email = normalizedEmail(user);
+  const snapshots = await getDocs(query(collectionGroup(services.db, "invites"), where("email", "==", email)));
+  return snapshots.docs
+    .map((invite) => {
+      const data = invite.data();
+      const workspaceId = invite.ref.parent.parent?.id
+        ?? (typeof data.workspaceId === "string" ? data.workspaceId : "");
+      if (!workspaceId) return null;
+      return {
+        workspaceId,
+        workspaceName: typeof data.workspaceName === "string" ? data.workspaceName : "A guild",
+        invitedBy: typeof data.invitedBy === "string" ? data.invitedBy : "A guild leader",
+        email,
+      } satisfies PendingGuildInvite;
+    })
+    .filter((invite): invite is PendingGuildInvite => invite !== null)
+    .sort((a, b) => a.workspaceName.localeCompare(b.workspaceName));
+}
+
+export async function declineGuildInvite(user: User, workspaceId: string) {
+  const services = requireServices();
+  const email = normalizedEmail(user);
+  await deleteDoc(doc(services.db, "workspaces", workspaceId.trim(), "invites", email));
 }
 
 export async function acceptGuildInvite(user: User, workspaceId: string) {

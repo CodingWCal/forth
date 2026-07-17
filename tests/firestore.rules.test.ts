@@ -134,6 +134,96 @@ describe("Firestore workspace rules", () => {
     await assertSucceeds(getDoc(doc(memberDb, "workspaces", ownerId, "data", "current")));
   });
 
+  it("lets an invited account discover its invites through a collection-group query", async () => {
+    const inviteeEmail = "summoned@example.com";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", ownerId), { ownerId, name: "Owner guild" });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "invites", inviteeEmail), {
+        email: inviteeEmail,
+        workspaceId: ownerId,
+        workspaceName: "Owner guild",
+        invitedBy: "Guild leader",
+      });
+      await setDoc(doc(adminDb, "workspaces", "second-guild"), { ownerId, name: "Second guild" });
+      await setDoc(doc(adminDb, "workspaces", "second-guild", "invites", "someone-else@example.com"), {
+        email: "someone-else@example.com",
+        workspaceId: "second-guild",
+        workspaceName: "Second guild",
+        invitedBy: "Guild leader",
+      });
+    });
+
+    const inviteeDb = testEnv.authenticatedContext("summoned-user", { email: inviteeEmail }).firestore();
+    await assertSucceeds(getDocs(query(collectionGroup(inviteeDb, "invites"), where("email", "==", inviteeEmail))));
+    await assertFails(getDocs(query(collectionGroup(inviteeDb, "invites"), where("email", "==", "someone-else@example.com"))));
+    await assertFails(getDocs(collectionGroup(inviteeDb, "invites")));
+    await assertFails(getDoc(doc(inviteeDb, "workspaces", "second-guild", "invites", "someone-else@example.com")));
+  });
+
+  it("denies signed-out and unscoped invite discovery", async () => {
+    const anonymousDb = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDocs(query(collectionGroup(anonymousDb, "invites"), where("email", "==", "anyone@example.com"))));
+  });
+
+  it("lets a recipient decline only their own invitation", async () => {
+    const declinerEmail = "decliner@example.com";
+    const bystanderEmail = "bystander@example.com";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", ownerId), { ownerId, name: "Owner guild" });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "invites", declinerEmail), {
+        email: declinerEmail,
+        workspaceId: ownerId,
+        workspaceName: "Owner guild",
+      });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "invites", bystanderEmail), {
+        email: bystanderEmail,
+        workspaceId: ownerId,
+        workspaceName: "Owner guild",
+      });
+    });
+
+    const declinerDb = testEnv.authenticatedContext("decliner-user", { email: declinerEmail }).firestore();
+    await assertFails(deleteDoc(doc(declinerDb, "workspaces", ownerId, "invites", bystanderEmail)));
+    await assertSucceeds(deleteDoc(doc(declinerDb, "workspaces", ownerId, "invites", declinerEmail)));
+  });
+
+  it("lets a brand-new account provision its own default workspace", async () => {
+    const newUserId = "fresh-adventurer";
+    const newUserEmail = "fresh@example.com";
+    const db = testEnv.authenticatedContext(newUserId, { email: newUserEmail }).firestore();
+    // Mirrors createWorkspaceAt(): read own (non-existent) workspace first, then
+    // create it, the owner member document, and the initial state document.
+    await assertSucceeds(getDoc(doc(db, "workspaces", newUserId)));
+    await assertSucceeds(setDoc(doc(db, "workspaces", newUserId), {
+      ownerId: newUserId,
+      name: "Fresh guild",
+    }));
+    await assertSucceeds(setDoc(doc(db, "workspaces", newUserId, "members", newUserId), {
+      uid: newUserId,
+      email: newUserEmail,
+      role: "owner",
+    }));
+    await assertSucceeds(getDoc(doc(db, "workspaces", newUserId, "data", "current")));
+    await assertSucceeds(setDoc(doc(db, "workspaces", newUserId, "data", "current"), {
+      state: { version: 2 },
+    }));
+  });
+
+  it("does not let the own-workspace read rule expose another account's workspace", async () => {
+    // The uid-keyed read allowance must be scoped to the caller's own id only.
+    const stranger = testEnv.authenticatedContext("stranger", { email: "stranger@example.com" }).firestore();
+    await assertFails(getDoc(doc(stranger, "workspaces", "someone-elses-uid")));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", "someone-elses-uid"), {
+        ownerId: "someone-elses-uid",
+        name: "Private guild",
+      });
+    });
+    await assertFails(getDoc(doc(stranger, "workspaces", "someone-elses-uid")));
+  });
+
   it("rejects a member self-join without an email-matched invite", async () => {
     const memberDb = testEnv.authenticatedContext("uninvited", { email: "uninvited@example.com" }).firestore();
     await assertFails(setDoc(doc(memberDb, "workspaces", ownerId, "members", "uninvited"), {

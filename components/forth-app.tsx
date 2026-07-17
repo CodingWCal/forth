@@ -35,9 +35,12 @@ import type { User } from "firebase/auth";
 import {
   acceptGuildInvite,
   createGuildWorkspace,
+  declineGuildInvite,
   type GuildWorkspace,
   inviteGuildMember,
   listGuildWorkspaces,
+  listPendingGuildInvites,
+  type PendingGuildInvite,
   provisionWorkspace,
   saveWorkspace,
   signInWithGoogle,
@@ -106,6 +109,8 @@ export function ForthApp({
   const [syncState, setSyncState] = useState<"local" | "syncing" | "synced" | "error">("local");
   const [guilds, setGuilds] = useState<GuildWorkspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<PendingGuildInvite[]>([]);
+  const [inviteStatus, setInviteStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const cloudReadyRef = useRef(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
@@ -137,6 +142,8 @@ export function ForthApp({
         cloudReadyRef.current = false;
         setGuilds([]);
         setActiveWorkspaceId(null);
+        setPendingInvites([]);
+        setInviteStatus("idle");
         setSyncState("local");
       }
     }) ?? undefined;
@@ -164,6 +171,15 @@ export function ForthApp({
   // Provision exactly when the authenticated identity changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudUser?.uid, hydrated]);
+
+  // Look up pending invitations independently of workspace provisioning so a
+  // recipient always sees (and can act on) an invite even if their own guild
+  // sync is degraded.
+  useEffect(() => {
+    if (!cloudUser) return;
+    void refreshPendingInvites(cloudUser);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudUser?.uid]);
 
   useEffect(() => {
     if (!cloudUser || !activeWorkspaceId || !hydrated) return;
@@ -230,6 +246,17 @@ export function ForthApp({
     setGuilds(availableGuilds);
   }
 
+  async function refreshPendingInvites(user: User) {
+    setInviteStatus("loading");
+    try {
+      setPendingInvites(await listPendingGuildInvites(user));
+      setInviteStatus("ready");
+    } catch {
+      setPendingInvites([]);
+      setInviteStatus("error");
+    }
+  }
+
   function openEditDialog(task: Task) {
     setEditingTask(task);
     window.requestAnimationFrame(() => editDialogRef.current?.showModal());
@@ -284,7 +311,7 @@ export function ForthApp({
     if (!cloudUser || !activeGuild) return;
     try {
       await inviteGuildMember(cloudUser, activeGuild, email);
-      announce(`Invitation prepared for ${email.trim().toLowerCase()}. They can join after Google sign-in.`);
+      announce(`Invitation recorded for ${email.trim().toLowerCase()}. It appears in their Guild Hall after Google sign-in.`);
     } catch (error) {
       announce(error instanceof Error ? error.message : "The invitation could not be sent.");
     }
@@ -298,8 +325,35 @@ export function ForthApp({
       setActiveWorkspaceId(joinedGuild.workspaceId);
       setView("today");
       announce(`Joined ${joinedGuild.workspaceName}.`);
+      void refreshPendingInvites(cloudUser);
     } catch (error) {
       announce(error instanceof Error ? error.message : "The guild invitation could not be accepted.");
+    }
+  }
+
+  async function acceptPendingInvite(invite: PendingGuildInvite) {
+    if (!cloudUser) return;
+    try {
+      const joinedGuild = await acceptGuildInvite(cloudUser, invite.workspaceId);
+      setPendingInvites((current) => current.filter((item) => item.workspaceId !== invite.workspaceId));
+      await refreshGuildDirectory(cloudUser);
+      setActiveWorkspaceId(joinedGuild.workspaceId);
+      announce(`Welcome to ${joinedGuild.workspaceName}. The shared realm is now active.`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "The invitation could not be accepted. Try again.");
+      void refreshPendingInvites(cloudUser);
+    }
+  }
+
+  async function declinePendingInvite(invite: PendingGuildInvite) {
+    if (!cloudUser) return;
+    try {
+      await declineGuildInvite(cloudUser, invite.workspaceId);
+      setPendingInvites((current) => current.filter((item) => item.workspaceId !== invite.workspaceId));
+      announce(`Declined the invitation to ${invite.workspaceName}.`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "The invitation could not be declined. Try again.");
+      void refreshPendingInvites(cloudUser);
     }
   }
 
@@ -437,6 +491,13 @@ export function ForthApp({
             onCreateGuild={createGuild}
             onInviteGuildmate={inviteGuildmate}
             onJoinGuild={joinGuild}
+            pendingInvites={pendingInvites}
+            inviteStatus={inviteStatus}
+            onAcceptInvite={acceptPendingInvite}
+            onDeclineInvite={declinePendingInvite}
+            onRetryInvites={() => {
+              if (cloudUser) void refreshPendingInvites(cloudUser);
+            }}
             onOpenCampaign={openCampaignDialog}
             onSignIn={async () => {
               try {
@@ -1104,6 +1165,11 @@ function SettingsView({
   onCreateGuild,
   onInviteGuildmate,
   onJoinGuild,
+  pendingInvites,
+  inviteStatus,
+  onAcceptInvite,
+  onDeclineInvite,
+  onRetryInvites,
   onOpenCampaign,
   onSignIn,
   onSignOut,
@@ -1118,6 +1184,11 @@ function SettingsView({
   onCreateGuild: (name: string) => Promise<void>;
   onInviteGuildmate: (email: string) => Promise<void>;
   onJoinGuild: (workspaceId: string) => Promise<void>;
+  pendingInvites: PendingGuildInvite[];
+  inviteStatus: "idle" | "loading" | "ready" | "error";
+  onAcceptInvite: (invite: PendingGuildInvite) => Promise<void>;
+  onDeclineInvite: (invite: PendingGuildInvite) => Promise<void>;
+  onRetryInvites: () => void;
   onOpenCampaign: () => void;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
@@ -1144,6 +1215,16 @@ function SettingsView({
         </div>
         <span className={user && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{user ? syncState : "Local"}</span>
       </section>
+
+      {user && (
+        <PendingInvitesCard
+          pendingInvites={pendingInvites}
+          inviteStatus={inviteStatus}
+          onAcceptInvite={onAcceptInvite}
+          onDeclineInvite={onDeclineInvite}
+          onRetryInvites={onRetryInvites}
+        />
+      )}
 
       {user && (
         <GuildHallCard
@@ -1179,6 +1260,94 @@ function SettingsView({
   );
 }
 
+function PendingInvitesCard({
+  pendingInvites,
+  inviteStatus,
+  onAcceptInvite,
+  onDeclineInvite,
+  onRetryInvites,
+}: {
+  pendingInvites: PendingGuildInvite[];
+  inviteStatus: "idle" | "loading" | "ready" | "error";
+  onAcceptInvite: (invite: PendingGuildInvite) => Promise<void>;
+  onDeclineInvite: (invite: PendingGuildInvite) => Promise<void>;
+  onRetryInvites: () => void;
+}) {
+  const [busyWorkspaceId, setBusyWorkspaceId] = useState<string | null>(null);
+
+  async function act(invite: PendingGuildInvite, action: (invite: PendingGuildInvite) => Promise<void>) {
+    setBusyWorkspaceId(invite.workspaceId);
+    try {
+      await action(invite);
+    } finally {
+      setBusyWorkspaceId(null);
+    }
+  }
+
+  return (
+    <section className="guild-card">
+      <div className="settings-icon"><ScrollText size={22} /></div>
+      <div>
+        <p className="eyebrow">Guild summons</p>
+        <h3>Pending invitations</h3>
+        {(inviteStatus === "idle" || inviteStatus === "loading") && (
+          <p>Checking for guild invitations addressed to your Google email…</p>
+        )}
+        {inviteStatus === "error" && (
+          <>
+            <p>Invitations could not be loaded right now. Your guilds are unaffected — try again in a moment.</p>
+            <div className="guild-actions">
+              <button type="button" className="button button--quiet" onClick={onRetryInvites}>
+                <RotateCcw size={15} /> Check again
+              </button>
+            </div>
+          </>
+        )}
+        {inviteStatus === "ready" && pendingInvites.length === 0 && (
+          <>
+            <p>No invitations are waiting for you. When a guild leader invites this Google email, the summons appears here.</p>
+            <div className="guild-actions">
+              <button type="button" className="button button--quiet" onClick={onRetryInvites}>
+                <RotateCcw size={15} /> Check again
+              </button>
+            </div>
+          </>
+        )}
+        {inviteStatus === "ready" && pendingInvites.length > 0 && (
+          <div className="invite-list">
+            {pendingInvites.map((invite) => (
+              <div className="invite-row" key={invite.workspaceId}>
+                <div>
+                  <strong>{invite.workspaceName}</strong>
+                  <small>Invited by {invite.invitedBy}</small>
+                </div>
+                <div className="guild-actions">
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    disabled={busyWorkspaceId === invite.workspaceId}
+                    onClick={() => void act(invite, onAcceptInvite)}
+                  >
+                    <Check size={15} /> Accept
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--quiet"
+                    disabled={busyWorkspaceId === invite.workspaceId}
+                    onClick={() => void act(invite, onDeclineInvite)}
+                  >
+                    <X size={15} /> Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function GuildHallCard({
   activeGuild,
   guilds,
@@ -1206,7 +1375,7 @@ function GuildHallCard({
       <div>
         <p className="eyebrow">Guild roster</p>
         <h3>Build campaigns with real guildmates.</h3>
-        <p>Invite a teammate by the Google email they will use for Forth. Share this guild code with them; after Google sign-in, they enter it here to join this shared workspace.</p>
+        <p>Invite a teammate by the Google email they will use for Forth. After they sign in, the invitation appears in their own Guild Hall under Pending invitations. The guild code below is a backup path if that panel is unavailable.</p>
         {activeGuild?.role === "owner" && <p className="guild-code">Guild code: <code>{activeGuild.id}</code></p>}
 
         <label className="field guild-field">

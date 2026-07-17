@@ -223,3 +223,120 @@ Audit scope: Product/design docs, responsive UI, workspace state, Firebase Auth/
   - Run member lifecycle integration tests, Firestore rule tests, and the complete release gate.
 - Subagent prompt:
   > Implement TICKET-006 without weakening the owner-scoped private-beta rules. Store task assignment by member UID plus a display snapshot, add an owner-only invitation flow, and prove revoked users lose access.
+
+### TICKET-007: Show pending guild invitations inside Forth
+
+- Priority: P1 High
+- Type: Feature/UX
+- Area: Guild Hall, Firebase workspace adapter, authenticated onboarding
+- Effort: M
+- Confidence: High
+- Evidence: The current invite flow writes an email-keyed Firestore invite, but the recipient must receive the guild code out of band and manually enter it. There is no recipient-facing inbox or pending-invitation state.
+- Plain English: A teammate who signs in should immediately see that someone invited them instead of needing a separate message and a secret-looking code.
+- Learning brief (layman terms):
+  - What is happening now: The invitation exists in the database, but only the owner sees confirmation and the recipient sees nothing.
+  - Why it matters: The feature feels broken even when the database record was created successfully.
+  - What changing it means: After sign-in, Forth checks for invitations addressed to that Google email and presents clear Accept and Decline actions.
+  - Concept to learn: A pending state is a piece of data that represents work waiting for a user decision; it should have visible loading, empty, success, and failure states.
+- Engineering framing: Add a recipient-scoped invitation query/listener, an explicit invitation DTO, and reducer/UI state for loading, empty, accepted, declined, and failed outcomes. Keep reads limited to invitations whose document key matches the authenticated normalized email.
+- Scope:
+  - Add `listPendingGuildInvites` and accept/decline operations to the Firebase adapter.
+  - Add a Pending invitations panel to Guild Hall and signed-in onboarding.
+  - Refresh the guild directory and active workspace after acceptance.
+  - Add Firestore rules and emulator coverage for recipient-only reads and owner-controlled invite creation.
+- Out of scope:
+  - Sending email.
+  - Cross-account invitation search or public invite listings.
+- Acceptance criteria:
+  - A signed-in invited Google account sees the guild name and inviter without entering a code.
+  - An uninvited account sees a clear empty state and cannot read another email's invite.
+  - Accept joins the workspace exactly once and removes or marks the invite consumed.
+  - Decline removes or marks only that recipient's invitation and does not affect the guild.
+  - Loading and Firestore errors are visible and retryable.
+- Suggested files:
+  - `components/forth-app.tsx`
+  - `lib/firebase/workspace.ts`
+  - `firestore.rules`
+  - `tests/firestore.rules.test.ts`
+- Validation:
+  - Test invited, uninvited, already-accepted, declined, signed-out, loading, and failed-query states in the emulator and browser.
+- Subagent prompt:
+  > Implement TICKET-007 as an in-app pending invitation experience. Preserve the Iron & Parchment Guild Hall design, enforce recipient-scoped Firestore reads, and add focused UI plus rules tests.
+
+### TICKET-008: Add invitation decline, cancellation, and expiry lifecycle
+
+- Priority: P2 Medium
+- Type: Feature/Security
+- Area: Guild Hall, invitation documents, owner roster controls
+- Effort: M
+- Confidence: Medium
+- Evidence: The current invitation record has no lifecycle beyond creation and acceptance. Owners cannot cancel a typo or stale invite, and recipients cannot remove an unwanted invite.
+- Plain English: Invitations need a tidy way to be withdrawn or allowed to expire so an old email never stays actionable forever.
+- Learning brief (layman terms):
+  - What is happening now: An invitation remains available until it is accepted, with no way to clean up mistakes.
+  - Why it matters: Old or mistyped invitations create confusion and leave unnecessary records in the workspace.
+  - What changing it means: Add cancel, decline, and expiry behavior with clear statuses and timestamps.
+  - Concept to learn: A lifecycle is the set of valid states a record can move through, such as pending, accepted, declined, cancelled, or expired.
+- Engineering framing: Model invitation status and `expiresAt` explicitly, make transitions idempotent, and enforce owner-only cancellation plus recipient-only decline in rules. Avoid relying solely on client clocks for authorization.
+- Scope:
+  - Add invitation status, created/updated timestamps, and expiry policy.
+  - Add owner roster controls to cancel pending invites.
+  - Add recipient decline action and stale-invite messaging.
+  - Preserve audit-safe metadata without storing unnecessary personal data.
+- Out of scope:
+  - Automated email reminders.
+  - Bulk invite management.
+- Acceptance criteria:
+  - Owners can cancel only their workspace's pending invites.
+  - Recipients can decline only invites addressed to their authenticated email.
+  - Expired invites cannot be accepted and explain why.
+  - Repeating accept, decline, or cancel requests produces no duplicate membership or errors that imply data loss.
+- Suggested files:
+  - `lib/firebase/workspace.ts`
+  - `components/forth-app.tsx`
+  - `firestore.rules`
+  - `tests/firestore.rules.test.ts`
+- Validation:
+  - Emulator tests for every transition, expiry boundary, repeated request, outsider, and signed-out case.
+- Subagent prompt:
+  > Implement TICKET-008 as a small, explicit invitation state machine. Preserve privacy and owner/recipient authorization boundaries, and prove transitions are idempotent with emulator tests.
+
+### TICKET-009: Add optional transactional email delivery for invitations
+
+- Priority: P2 Medium
+- Type: Feature/Ops/Security
+- Area: Server-side invitation workflow, email provider integration, environment configuration
+- Effort: L
+- Confidence: High
+- Evidence: Forth currently documents that invitation delivery is out-of-band; the app does not send an email notification. The desired experience is for invited teammates to receive a direct join notification.
+- Plain English: In-app invitations solve discovery, but an optional email makes sure teammates know they were invited even when they are not currently using Forth.
+- Learning brief (layman terms):
+  - What is happening now: The app can record an invitation but has no trusted service that sends a message.
+  - Why it matters: People may never return to the app to discover a pending invitation.
+  - What changing it means: A server-side function sends a short, branded email containing a safe link back to Forth; the in-app invitation remains the source of truth.
+  - Concept to learn: Server-side secrets belong in a backend boundary, not in browser code, because anything shipped to the browser can be inspected.
+- Engineering framing: Add a Next.js server action/API route or Firebase Cloud Function that validates an owner-authenticated invite request, writes the Firestore invite, and invokes a transactional email provider using server-only credentials. Use an idempotency key and never place provider keys in `NEXT_PUBLIC_*` variables.
+- Scope:
+  - Select and document one email provider and sender identity.
+  - Add server-side invite creation and delivery status.
+  - Add environment variables to `.env.example` and deployment setup docs without committing secrets.
+  - Keep accept/decline functionality working if delivery fails.
+  - Add rate limits, abuse protection, and structured non-sensitive logs.
+- Out of scope:
+  - Marketing campaigns or bulk newsletters.
+  - Treating email delivery as proof of workspace membership.
+- Acceptance criteria:
+  - A valid owner invite creates exactly one pending invite and at most one email per idempotency key.
+  - Provider failures leave the in-app invite usable and show an actionable status to the owner.
+  - No private provider credential appears in browser bundles, Git history, or logs.
+  - Local development and tests work with a mail stub; production setup is documented.
+- Suggested files:
+  - `app/api/` or `functions/`
+  - `lib/firebase/workspace.ts`
+  - `.env.example`
+  - `docs/ENVIRONMENT.md`
+  - `firestore.rules`
+- Validation:
+  - Unit-test provider adapter with a stub, inspect the production bundle for secret leakage, run emulator authorization tests, and perform one end-to-end delivery test in a non-production mailbox.
+- Subagent prompt:
+  > Implement TICKET-009 only after TICKET-007 is complete. Keep Firestore as the invitation source of truth, put email credentials behind a server-only boundary, make delivery idempotent, and preserve the existing fantasy engineering aesthetic in the email copy.

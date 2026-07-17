@@ -13,6 +13,7 @@ service cloud.firestore {
 
     function ownsWorkspace(workspaceId) {
       return signedIn()
+        && exists(/databases/$(database)/documents/workspaces/$(workspaceId))
         && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
@@ -30,8 +31,23 @@ service cloud.firestore {
       allow get, list: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
+    // A signed-in person may discover only invitations addressed to their own
+    // authenticated email. This powers the in-app pending-invitations panel
+    // without exposing other people's invites through a collection-group query.
+    match /{document=**}/invites/{inviteEmail} {
+      allow get, list: if signedIn()
+        && request.auth.token.email != null
+        && resource.data.email == request.auth.token.email;
+    }
+
     match /workspaces/{workspaceId} {
-      allow read: if belongsToWorkspace(workspaceId) || ownsWorkspace(workspaceId);
+      // A signed-in person may always read the workspace whose id equals their
+      // own uid (their default guild). This lets first-run provisioning check
+      // for existence before creating it, without exposing anyone else's data
+      // because no other account can hold that document id.
+      allow read: if belongsToWorkspace(workspaceId)
+        || ownsWorkspace(workspaceId)
+        || (signedIn() && workspaceId == request.auth.uid);
       allow create: if signedIn()
         && request.resource.data.ownerId == request.auth.uid;
       allow update: if ownsWorkspace(workspaceId)
