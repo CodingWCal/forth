@@ -1,110 +1,198 @@
 # Forth
 
-**Project work with a pulse.** Forth is a motivational project-management MVP for small creative and product teams. It helps a team choose an honest daily pace, keep only three meaningful moves close, recover gracefully from blockers, and preserve a visible record of what became real.
+**Project work with a pulse.** Forth is a real, local-first ticketing and productivity app that helps software teams choose an honest pace, keep at most three meaningful quests close, move work visibly, and preserve shipped work as proof.
 
-## Why this is different
+Built for the **Curious Boston × Hult International School AI Engineering Cohort — Week 1 Project**.
 
-Most project tools are excellent inventories of unfinished work. Forth keeps the inventory, but changes the emotional center of the product:
+- Production: [https://forth-bice.vercel.app](https://forth-bice.vercel.app)
+- Source: [CodingWCal/forth](https://github.com/CodingWCal/forth)
 
-- **Pace before pressure:** choose Light, Steady, or Full capacity before filling the day.
-- **Three meaningful moves:** a work-in-progress limit keeps today believable.
-- **Paused is a valid state:** blockers are visible without labeling a person as behind.
-- **Proof over points:** completed work becomes a purpose-rich ledger, not a score or streak.
-- **Local honesty:** the current MVP clearly says when data lives only in this browser.
+## Product idea
 
-In engineering terms, Forth combines capacity planning, a WIP limit, deterministic task state transitions, derived project progress, and a completion event surface.
+Most project tools are excellent inventories of unfinished work. Forth keeps the useful structure of a ticket board while changing its emotional center:
 
-## Stack
+- **Pace before pressure:** choose Scout, Venture, or Raid capacity before filling the day.
+- **Three meaningful quests:** a strict work-in-progress limit keeps Today believable.
+- **Camped is a valid state:** blocked work remains visible without labeling a person as behind.
+- **Proof over points:** completed tickets enter a permanent Chronicle with their purpose attached.
+- **Private progression:** shipped effort advances a small fantasy guild identity without leaderboards, streak loss, penalties, or public comparison.
+
+In engineering terms, Forth combines capacity planning, a WIP limit, deterministic state transitions, derived progress, versioned browser persistence, Firebase authentication, and owner-scoped Firestore storage.
+
+## Current features
+
+### Quest Log — Today
+
+- Set daily capacity and see planned effort against it.
+- Keep no more than three unfinished tickets in the active party.
+- Begin, pause, resume, or ship focused work.
+- See private guild rank, earned gold, and a seven-day completion history.
+
+### Realm Map — Kanban board
+
+- Filter tickets by project and search title, description, or purpose.
+- Move work through Quest Log, In Forge, Camped, and Shipped.
+- Drag tickets between columns with a pixel-sword cursor on desktop.
+- Use explicit move buttons on keyboard and touch devices.
+- Create, rename, prioritize, focus, and delete tickets.
+
+### Chronicle — Proof ledger
+
+- Review shipped tickets newest-first.
+- Preserve the project, purpose, builder, effort, and completion date.
+- Derive project progress from completed ticket weight rather than manually entered percentages.
+
+### Guild Hall — Account and persistence
+
+- Work without an account using local browser persistence.
+- Sign in with Google to provision a private Firebase workspace.
+- Synchronize the current workspace through Cloud Firestore.
+- Sign out while retaining a usable local fallback.
+- Restore the seeded campaign after an explicit, destination-aware confirmation.
+
+## Motivation and engagement design
+
+Forth uses a restrained 16-bit medieval software-guild theme to make state memorable without turning productivity into a casino. The game layer rewards meaningful completion, not compulsive return behavior.
+
+The motivation model is:
+
+1. **Autonomy:** the user declares a realistic pace.
+2. **Meaning:** each ticket can explain why it matters.
+3. **Achievability:** Today is limited to three active quests.
+4. **Evidence:** completion becomes durable proof in the Chronicle.
+5. **Recovery:** paused work can camp and return without punishment.
+
+There are no public rankings, random rewards, broken-streak warnings, shame states, or productivity grades.
+
+## Architecture summary
+
+**Plain English:** The screen does not make up its own task rules. User actions go through one predictable workspace rule set. The resulting state is saved locally and, after sign-in, synchronized to the user's private Firebase workspace.
+
+**Engineering terms:** Forth is a Next.js App Router client application with a reducer/selectors domain layer, runtime-validated `WorkspaceState`, localStorage adapter, Firebase Auth boundary, debounced Firestore persistence adapter, and Firestore Security Rules authorization boundary.
+
+```text
+React UI (`components/forth-app.tsx`)
+        │ typed WorkspaceAction
+        ▼
+Reducer + selectors (`lib/workspace.ts`)
+        │
+        ├── versioned localStorage fallback
+        │
+        └── Firebase boundary
+              ├── Google Authentication
+              ├── workspaces/{ownerUid}/data/current
+              └── owner/member Firestore Security Rules
+```
+
+Core domain rules stay independent of storage so the local and cloud adapters use the same state contract.
+
+## Technology
 
 - Next.js 16 App Router
-- React 19 + strict TypeScript
+- React 19
+- Strict TypeScript
 - Hand-built responsive CSS design system
-- Vitest for domain logic
-- LocalStorage persistence for the zero-credential MVP
-- Firebase Auth + Cloud Firestore integration boundary for private beta
-- Vercel-ready production build
+- Firebase Authentication and Cloud Firestore
+- Vitest and Firebase Rules Unit Testing
+- Vercel production deployment
+- pnpm 11 package management
 
-## Quick start
+## Fresh-clone setup
 
-Requirements: Node.js 22+ and pnpm 11+.
+Requirements:
+
+- Node.js 22+
+- pnpm 11+ through Corepack
+- Java/JDK for the optional Firestore emulator test suite
 
 ```bash
-pnpm install
+git clone https://github.com/CodingWCal/forth.git
+cd forth
+corepack enable
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). Firebase is optional for local development; with no environment values, Forth starts in safe local-camp mode.
 
-Quality commands:
+### Optional Firebase configuration
+
+Copy `.env.example` to `.env.local` and provide the public Firebase Web App configuration:
+
+```dotenv
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+```
+
+`NEXT_PUBLIC_*` values are public browser configuration, not secrets. Actual authorization is enforced by `firestore.rules`. Never add a service-account JSON file, private key, or Firebase Admin credential to this repository.
+
+For Google sign-in, enable the Google provider and add the deployed hostname to Firebase Authentication's authorized domains.
+
+## Quality and verification
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
+pnpm lint          # ESLint
+pnpm typecheck     # strict TypeScript
+pnpm test          # reducer, selector, parser, and persistence-domain tests
+pnpm test:rules    # emulator-backed Firestore authorization tests
+pnpm build         # production Next.js build
 ```
 
-## Product tour
+The rules command uses the Firebase Emulator Suite and may download `firebase-tools` through `npx` on its first run.
 
-1. **Today:** set capacity, choose three moves, begin, pause, or land work.
-2. **Work map:** inspect one project across Ready, Moving, Paused, and Landed.
-3. **Proof:** review completed work with its original reason attached.
-4. **Settings:** see the real persistence state and reset only local demo data.
+Release QA also exercises Today, Realm Map, Chronicle, Guild Hall, ticket creation/editing/deletion, every status transition, WIP enforcement, refresh persistence, authentication/sync states, empty/error states, keyboard operation, reduced motion, and 375px/768px/1440px responsive layouts.
 
-Browser state uses the key `forth.workspace.v1`. Invalid or corrupt data falls back to the safe seeded workspace instead of crashing.
+## Deployment
 
-## Architecture in two languages
+Vercel imports the GitHub repository and deploys the `main` branch with the standard Next.js build. The six Firebase browser variables are configured in Vercel for Production and Preview. Firebase Authentication authorizes `forth-bice.vercel.app`, and Firestore rules are deployed separately through Firebase tooling.
 
-**Plain English:** The rules for changing work live outside the screen. The screen asks for a change, one predictable rule applies it, and calculated values such as progress are rebuilt from the actual tasks.
+## Security model
 
-**Engineering terms:** `lib/workspace.ts` is a reducer/selectors domain layer. Components dispatch typed `WorkspaceAction` events; progress, planned weight, focus work, and momentum are derived selectors. Storage is an adapter around a versioned, runtime-validated `WorkspaceState`.
+- Anonymous users can use only their browser's local copy.
+- Firebase reads and writes require authentication.
+- A private-beta workspace path is bound to its authenticated owner's UID.
+- Workspace ownership cannot be reassigned through a client update.
+- Outsiders cannot read or write another workspace.
+- Client-side visibility is never treated as authorization.
+- Stored local or cloud state is runtime-validated before the UI accepts it.
 
-```text
-User action
-   ↓
-Typed reducer action ──→ Workspace state ──→ Derived selectors ──→ UI
-                              ↓
-                    localStorage adapter now
-                    Firestore adapter in beta
-```
+## Known limitations
 
-## Connect Firebase for private beta
+- The current private beta provisions one owner-scoped workspace per account; invitations and multi-user collaboration are not exposed in the UI.
+- Firestore synchronization uses whole-workspace, last-write-wins documents; simultaneous multi-device editing has no conflict-resolution interface yet.
+- Google popup authentication is the only configured sign-in path.
+- Desktop supports native drag and drop; touch and keyboard users use the explicit ticket movement buttons.
+- There is no notification system, analytics dashboard, audit log, backup/restore console, or operational error monitoring yet.
+- Unit and Firestore-rule suites are automated; UI flow verification is currently a release QA procedure rather than a committed Playwright suite.
 
-The local MVP does not need Firebase. To prepare a real private-beta environment:
+These are intentionally scoped private-beta boundaries, not hidden production claims. Future work is tracked in [`docs/ticket-backlog.md`](docs/ticket-backlog.md).
 
-1. Create a Firebase project in the [Firebase console](https://console.firebase.google.com/).
-2. Register a Web app and copy its public web configuration.
-3. Enable Authentication providers (email link or Google are reasonable first choices).
-4. Create a Cloud Firestore database in the correct region for your users.
-5. Copy `.env.example` to `.env.local` and fill the six `NEXT_PUBLIC_FIREBASE_*` values.
-6. Install the Firebase CLI separately, authenticate, and select the intended project.
-7. Review `firestore.rules`, then test owner/member/outsider cases with the Firebase Emulator Suite.
-8. Deploy the rules only after the emulator tests pass.
-9. Implement the Firestore persistence adapter and auth screens behind the current workspace state contract.
+## Agent usage summary
 
-The Firebase web values identify a project but are not server secrets. Authorization must remain in Firestore Security Rules; hiding UI buttons is not security.
+Codex and custom agent skills supported product planning, PRD generation, visual-direction work, backlog creation, implementation, Firebase integration, security review, browser QA, and release documentation. Agents generated and revised code, but the repository uses deterministic application logic—there is no LLM or AI API dependency at runtime.
 
-Suggested data shape is documented in [the PRD](docs/PRD.md#7-data-and-integration-requirements).
+The workflow used explicit validation gates: source review, typed domain rules, unit tests, Firestore emulator tests, linting, production builds, browser exercises, and human approval before external or destructive operations.
 
-## Deploy with Vercel
+## Cohort submission reference
 
-1. Push this repository to GitHub.
-2. In Vercel, choose **Add New → Project** and import the repository.
-3. Keep the detected Next.js defaults (`pnpm build` and framework-managed output).
-4. If Firebase is enabled, add the six public Firebase variables in Vercel project settings for Preview and Production.
-5. Deploy, then test local-demo/Firebase labeling, task creation, task completion, refresh persistence, and mobile layout on the generated URL.
-6. Promote to production only after the private-beta auth and Firestore rule checks pass.
+The cohort checklist requires:
 
-Every GitHub commit can then create a Vercel deployment; pull requests can receive separate preview URLs.
+- Submission branch: `participants/summer26/phase-1-project-1/CodingWCal`
+- PR target: `projects/summer26/phase-1-project-1`
+- PR title: `[Project 1] Submission — CodingWCal`
+- PR description: production URL, fresh-clone setup verification, architecture summary, motivation/engagement notes, known limitations, and agent usage summary
+- Merge deadline shown in the supplied requirements: Sunday, July 19 at 5:00 PM ET
 
-## Documentation
+This README contains each required description section. Creating the cohort-repository branch and pull request is a separate submission action.
+
+## Project documentation
 
 - [Product requirements](docs/PRD.md)
 - [Design direction](docs/DESIGN.md)
+- [Phase 2 private-beta contract](docs/PHASE2.md)
 - [Future ticket backlog](docs/ticket-backlog.md)
-- [Phase 2 private-guild beta contract](docs/PHASE2.md)
 - [Agent operating instructions](AGENTS.md)
-
-## Current boundary
-
-This repository is a polished local-first MVP, not a production collaboration service yet. Authentication, member invitations, live synchronization, Firestore emulator tests, analytics, and operational monitoring belong to the private/public beta phases and will be tracked in the backlog.

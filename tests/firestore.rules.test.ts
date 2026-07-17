@@ -49,6 +49,28 @@ describe("Firestore workspace rules", () => {
     }));
   });
 
+  it("binds a new workspace to the authenticated owner's uid", async () => {
+    const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+    await assertFails(setDoc(doc(ownerDb, "workspaces", "borrowed-id"), {
+      ownerId,
+      name: "Wrong path",
+    }));
+  });
+
+  it("prevents an owner from changing the workspace owner id", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", ownerId), {
+        ownerId,
+        name: "Owner guild",
+      });
+    });
+    const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+    await assertFails(setDoc(doc(ownerDb, "workspaces", ownerId), {
+      ownerId: outsiderId,
+      name: "Transferred guild",
+    }));
+  });
+
   it("lets a member use workspace data without granting owner controls", async () => {
     const memberId = "guild-member";
     await testEnv.withSecurityRulesDisabled(async (context) => {

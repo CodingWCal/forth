@@ -2,18 +2,18 @@ import type { Project, Task, WorkspaceState } from "@/lib/types";
 
 const day = 86_400_000;
 
-function isoFromNow(days: number, hour = 12) {
-  const date = new Date();
+function isoFromNow(referenceDate: Date, days: number, hour = 12) {
+  const date = new Date(referenceDate);
   date.setHours(hour, 0, 0, 0);
   date.setTime(date.getTime() + days * day);
   return date.toISOString();
 }
 
-function dateFromNow(days: number) {
-  return isoFromNow(days).slice(0, 10);
+function dateFromNow(referenceDate: Date, days: number) {
+  return isoFromNow(referenceDate, days).slice(0, 10);
 }
 
-export function createSeedWorkspace(): WorkspaceState {
+export function createSeedWorkspace(referenceDate = new Date()): WorkspaceState {
   const projects: Project[] = [
     {
       id: "project-forth",
@@ -21,7 +21,7 @@ export function createSeedWorkspace(): WorkspaceState {
       code: "CORE",
       outcome: "Ship a fast, dependable ticket workflow that developers can trust every day.",
       color: "clay",
-      targetDate: isoFromNow(18),
+      targetDate: isoFromNow(referenceDate, 18),
     },
     {
       id: "project-stories",
@@ -29,7 +29,7 @@ export function createSeedWorkspace(): WorkspaceState {
       code: "SYNC",
       outcome: "Keep every authenticated workspace private, synchronized, and recoverable.",
       color: "moss",
-      targetDate: isoFromNow(31),
+      targetDate: isoFromNow(referenceDate, 31),
     },
     {
       id: "project-fieldnotes",
@@ -37,7 +37,7 @@ export function createSeedWorkspace(): WorkspaceState {
       code: "QA",
       outcome: "Make each production deploy observable, accessible, secure, and boring in the best way.",
       color: "slate",
-      targetDate: isoFromNow(46),
+      targetDate: isoFromNow(referenceDate, 46),
     },
   ];
 
@@ -49,12 +49,12 @@ export function createSeedWorkspace(): WorkspaceState {
       projectId: "project-stories",
       status: "moving",
       priority: "high",
-      dueDate: dateFromNow(2),
+      dueDate: dateFromNow(referenceDate, 2),
       weight: 2,
       meaning: "A developer should know whether work is local, syncing, saved, or blocked.",
       assignee: "Calvin",
       isFocus: true,
-      createdAt: isoFromNow(-2),
+      createdAt: isoFromNow(referenceDate, -2),
     },
     {
       id: "task-rules-ci",
@@ -63,12 +63,12 @@ export function createSeedWorkspace(): WorkspaceState {
       projectId: "project-stories",
       status: "ready",
       priority: "high",
-      dueDate: dateFromNow(4),
+      dueDate: dateFromNow(referenceDate, 4),
       weight: 3,
       meaning: "Authorization regressions should fail before they can reach production.",
       assignee: "Calvin",
       isFocus: true,
-      createdAt: isoFromNow(-1),
+      createdAt: isoFromNow(referenceDate, -1),
     },
     {
       id: "task-mobile-board",
@@ -77,12 +77,12 @@ export function createSeedWorkspace(): WorkspaceState {
       projectId: "project-fieldnotes",
       status: "ready",
       priority: "medium",
-      dueDate: dateFromNow(3),
+      dueDate: dateFromNow(referenceDate, 3),
       weight: 1,
       meaning: "Core ticket actions must remain reachable when the workstation is a phone.",
       assignee: "Maya",
       isFocus: true,
-      createdAt: isoFromNow(-1),
+      createdAt: isoFromNow(referenceDate, -1),
     },
     {
       id: "task-offline-copy",
@@ -95,7 +95,7 @@ export function createSeedWorkspace(): WorkspaceState {
       meaning: "A temporary network failure should never feel like lost work.",
       assignee: "Maya",
       isFocus: false,
-      createdAt: isoFromNow(-3),
+      createdAt: isoFromNow(referenceDate, -3),
     },
     {
       id: "task-keyboard-dialog",
@@ -104,12 +104,12 @@ export function createSeedWorkspace(): WorkspaceState {
       projectId: "project-fieldnotes",
       status: "ready",
       priority: "medium",
-      dueDate: dateFromNow(7),
+      dueDate: dateFromNow(referenceDate, 7),
       weight: 2,
       meaning: "Creating work should not require a mouse.",
       assignee: "Jon",
       isFocus: false,
-      createdAt: isoFromNow(-2),
+      createdAt: isoFromNow(referenceDate, -2),
     },
     {
       id: "task-domain-events",
@@ -122,7 +122,7 @@ export function createSeedWorkspace(): WorkspaceState {
       meaning: "A clear persistence boundary makes future collaboration features safer to add.",
       assignee: "Calvin",
       isFocus: false,
-      createdAt: isoFromNow(-1),
+      createdAt: isoFromNow(referenceDate, -1),
     },
     {
       id: "done-schema",
@@ -134,8 +134,8 @@ export function createSeedWorkspace(): WorkspaceState {
       meaning: "The work map now carries enough context for real sprint decisions.",
       assignee: "Calvin",
       isFocus: false,
-      createdAt: isoFromNow(-8),
-      completedAt: isoFromNow(-6, 16),
+      createdAt: isoFromNow(referenceDate, -8),
+      completedAt: isoFromNow(referenceDate, -6, 16),
     },
     {
       id: "done-auth",
@@ -147,8 +147,8 @@ export function createSeedWorkspace(): WorkspaceState {
       meaning: "Each engineer can enter a private workspace with a verified identity.",
       assignee: "Calvin",
       isFocus: false,
-      createdAt: isoFromNow(-6),
-      completedAt: isoFromNow(-4, 11),
+      createdAt: isoFromNow(referenceDate, -6),
+      completedAt: isoFromNow(referenceDate, -4, 11),
     },
     {
       id: "done-rules",
@@ -160,8 +160,8 @@ export function createSeedWorkspace(): WorkspaceState {
       meaning: "Anonymous visitors and unrelated accounts cannot read guild workspaces.",
       assignee: "Calvin",
       isFocus: false,
-      createdAt: isoFromNow(-5),
-      completedAt: isoFromNow(-3, 15),
+      createdAt: isoFromNow(referenceDate, -5),
+      completedAt: isoFromNow(referenceDate, -3, 15),
     },
     {
       id: "done-reducer",
@@ -173,8 +173,8 @@ export function createSeedWorkspace(): WorkspaceState {
       meaning: "Ready, moving, paused, and shipped behavior now has a repeatable safety net.",
       assignee: "Maya",
       isFocus: false,
-      createdAt: isoFromNow(-4),
-      completedAt: isoFromNow(-1, 17),
+      createdAt: isoFromNow(referenceDate, -4),
+      completedAt: isoFromNow(referenceDate, -1, 17),
     },
     {
       id: "done-deploy",
@@ -186,8 +186,8 @@ export function createSeedWorkspace(): WorkspaceState {
       meaning: "The team has a stable production URL for real workflow testing.",
       assignee: "Jon",
       isFocus: false,
-      createdAt: isoFromNow(-2),
-      completedAt: isoFromNow(0, 9),
+      createdAt: isoFromNow(referenceDate, -2),
+      completedAt: isoFromNow(referenceDate, 0, 9),
     },
   ];
 

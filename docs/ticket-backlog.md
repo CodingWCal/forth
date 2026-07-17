@@ -13,7 +13,7 @@ Audit scope: Product/design docs, responsive UI, workspace state, Firebase Auth/
 
 ## Verification Summary
 
-- Commands run: `pnpm lint` → pass; `pnpm typecheck` → pass; `pnpm test` → 6/6 pass; `pnpm build` → pass; `pnpm test:rules` → 4/4 pass; `corepack pnpm audit --audit-level moderate` → no known vulnerabilities.
+- Commands run: `pnpm lint` → pass; `pnpm typecheck` → pass; `pnpm test` → 14/14 pass; `pnpm build` → pass; `pnpm test:rules` → 6/6 pass; `corepack pnpm audit --prod` → no known vulnerabilities.
 - Security checks: no committed Firebase key/private-key patterns; only the safe `.env.example` is tracked; Firebase public browser configuration stays in `NEXT_PUBLIC_*`; authorization is enforced by `firestore.rules` and emulator tests cover owner, member, outsider, and signed-out access.
 - Visual/app checks: Today, Realm Map, responsive navigation, and the New Quest dialog inspected at 375×812, 768×1024, and 1440×1000. No page-level horizontal overflow was observed. Native dialog Escape behavior passed.
 - Not run: automated browser E2E and assistive-technology screen-reader testing; both remain backlog work.

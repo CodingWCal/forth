@@ -80,8 +80,15 @@ const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
   full: { label: "Raid", hint: "Deep-work reserves ready" },
 };
 
-export function ForthApp() {
-  const [state, dispatch] = useReducer(workspaceReducer, undefined, createSeedWorkspace);
+export function ForthApp({
+  initialState,
+  renderedAt,
+}: {
+  initialState: WorkspaceState;
+  renderedAt: string;
+}) {
+  const [state, dispatch] = useReducer(workspaceReducer, initialState);
+  const [displayDate, setDisplayDate] = useState(() => new Date(renderedAt));
   const [view, setView] = useState<View>("today");
   const [activeProjectId, setActiveProjectId] = useState("project-forth");
   const [hydrated, setHydrated] = useState(false);
@@ -95,7 +102,8 @@ export function ForthApp() {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const stored = parseStoredWorkspace(window.localStorage.getItem(STORAGE_KEY));
-      if (stored) dispatch({ type: "RESET", state: stored });
+      dispatch({ type: "RESET", state: stored ?? createSeedWorkspace() });
+      setDisplayDate(new Date());
       setHydrated(true);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -186,11 +194,14 @@ export function ForthApp() {
   }
 
   function resetDemo() {
-    if (!window.confirm("Reset every local change and restore the Forth demo?")) return;
+    const destination = cloudUser
+      ? "this signed-in guild and every device it syncs to"
+      : "this browser";
+    if (!window.confirm(`Restore the starter campaign in ${destination}? This replaces the current workspace.`)) return;
     dispatch({ type: "RESET", state: createSeedWorkspace() });
     setActiveProjectId("project-forth");
     setView("today");
-    announce("The local demo has been reset.");
+    announce(cloudUser ? "Starter campaign restored and syncing." : "The local demo has been reset.");
   }
 
   const title =
@@ -280,7 +291,7 @@ export function ForthApp() {
                 weekday: "long",
                 month: "long",
                 day: "numeric",
-              }).format(new Date())}
+              }).format(displayDate)}
             </p>
             <h1>{title}</h1>
           </div>
@@ -301,6 +312,7 @@ export function ForthApp() {
             focusTasks={focusTasks}
             plannedWeight={plannedWeight}
             capacity={capacity}
+            now={displayDate}
             onSetPace={(pace) => dispatch({ type: "SET_PACE", pace })}
             onSetStatus={setStatus}
             onOpenAdd={openAddDialog}
@@ -414,6 +426,7 @@ function TodayView({
   focusTasks,
   plannedWeight,
   capacity,
+  now,
   onSetPace,
   onSetStatus,
   onOpenAdd,
@@ -424,6 +437,7 @@ function TodayView({
   focusTasks: Task[];
   plannedWeight: number;
   capacity: number;
+  now: Date;
   onSetPace: (pace: Pace) => void;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onOpenAdd: () => void;
@@ -431,7 +445,7 @@ function TodayView({
   onDelete: (task: Task) => void;
   onGoToBoard: () => void;
 }) {
-  const momentum = getMomentumDays(state.tasks);
+  const momentum = getMomentumDays(state.tasks, now);
   const maxMomentum = Math.max(...momentum.map((day) => day.weight), 1);
   const progress = getProjectProgress(state, activeProject.id);
   const completedToday = momentum[momentum.length - 1]?.weight ?? 0;
@@ -979,8 +993,8 @@ function SettingsView({
       </section>
 
       <section className="reset-card">
-        <div><p className="eyebrow">Local camp controls</p><h3>Restore the starter campaign</h3><p>This replaces local browser data only. It cannot erase Firebase or another device.</p></div>
-        <button className="button button--danger" onClick={onReset}><RotateCcw size={16} /> Restore local seed</button>
+        <div><p className="eyebrow">Workspace controls</p><h3>Restore the starter campaign</h3><p>{user ? "This replaces the signed-in workspace and synchronizes the starter campaign to Firebase." : "This replaces local browser data on this device only."}</p></div>
+        <button className="button button--danger" onClick={onReset}><RotateCcw size={16} /> {user ? "Restore guild seed" : "Restore local seed"}</button>
       </section>
     </div>
   );

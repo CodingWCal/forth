@@ -85,42 +85,69 @@ export function parseStoredWorkspace(value: string | null): WorkspaceState | nul
 function isWorkspaceShape(value: unknown): value is Omit<WorkspaceState, "version"> & { version: 1 | 2 } {
   if (!value || typeof value !== "object") return false;
   const state = value as Partial<Omit<WorkspaceState, "version">> & { version?: number };
-  return (
-    (state.version === 1 || state.version === 2) &&
-    (state.pace === "light" || state.pace === "steady" || state.pace === "full") &&
-    Array.isArray(state.projects) &&
-    state.projects.every(isProject) &&
-    Array.isArray(state.tasks) &&
-    state.tasks.every(isTask)
-  );
+  if (
+    (state.version !== 1 && state.version !== 2) ||
+    (state.pace !== "light" && state.pace !== "steady" && state.pace !== "full") ||
+    !Array.isArray(state.projects) ||
+    state.projects.length === 0 ||
+    !state.projects.every(isProject) ||
+    !Array.isArray(state.tasks) ||
+    !state.tasks.every(isTask)
+  ) {
+    return false;
+  }
+
+  const projectIds = new Set(state.projects.map((project) => project.id));
+  return state.tasks.every((task) => projectIds.has(task.projectId));
 }
 
 function isProject(value: unknown): value is Project {
   if (!value || typeof value !== "object") return false;
   const project = value as Partial<Project>;
   return (
-    typeof project.id === "string" &&
-    typeof project.title === "string" &&
-    typeof project.code === "string" &&
+    isNonEmptyString(project.id) &&
+    isNonEmptyString(project.title) &&
+    isNonEmptyString(project.code) &&
     typeof project.outcome === "string" &&
-    typeof project.targetDate === "string"
+    (project.color === "clay" || project.color === "moss" || project.color === "slate") &&
+    isValidDate(project.targetDate)
   );
 }
 
 function isTask(value: unknown): value is Task {
   if (!value || typeof value !== "object") return false;
   const task = value as Partial<Task>;
+  const statusIsValid = ["ready", "moving", "paused", "done"].includes(task.status ?? "");
+  const completionIsValid =
+    task.completedAt === undefined || isValidDate(task.completedAt);
   return (
-    typeof task.id === "string" &&
-    typeof task.title === "string" &&
-    typeof task.projectId === "string" &&
-    ["ready", "moving", "paused", "done"].includes(task.status ?? "") &&
+    isNonEmptyString(task.id) &&
+    isNonEmptyString(task.title) &&
+    isNonEmptyString(task.projectId) &&
+    statusIsValid &&
     [1, 2, 3].includes(task.weight ?? 0) &&
     typeof task.meaning === "string" &&
-    typeof task.assignee === "string" &&
+    isNonEmptyString(task.assignee) &&
     typeof task.isFocus === "boolean" &&
-    typeof task.createdAt === "string"
+    isValidDate(task.createdAt) &&
+    completionIsValid &&
+    (task.status !== "done" || task.completedAt !== undefined) &&
+    (task.description === undefined || typeof task.description === "string") &&
+    (task.priority === undefined || ["low", "medium", "high"].includes(task.priority)) &&
+    (task.dueDate === undefined || isValidDateOnly(task.dueDate))
   );
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidDate(value: unknown): value is string {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+function isValidDateOnly(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && isValidDate(`${value}T12:00:00Z`);
 }
 
 export function getFocusTasks(state: WorkspaceState) {
