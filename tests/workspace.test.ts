@@ -46,6 +46,27 @@ describe("workspace state", () => {
     expect(completed?.isFocus).toBe(false);
   });
 
+  it("clears completion evidence when a shipped quest returns to the board", () => {
+    const seed = createSeedWorkspace();
+    const task = seed.tasks[0];
+    const shipped = workspaceReducer(seed, {
+      type: "SET_STATUS",
+      taskId: task.id,
+      status: "done",
+      at: "2026-07-14T18:00:00.000Z",
+    });
+    const returned = workspaceReducer(shipped, {
+      type: "SET_STATUS",
+      taskId: task.id,
+      status: "moving",
+    });
+
+    expect(returned.tasks.find((item) => item.id === task.id)).toMatchObject({
+      status: "moving",
+      completedAt: undefined,
+    });
+  });
+
   it("derives planned weight and project progress from task data", () => {
     const seed = createSeedWorkspace();
     expect(getPlannedWeight(seed)).toBe(6);

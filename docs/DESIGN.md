@@ -79,6 +79,8 @@ Rules:
 - Tablet: compact rail plus the main ledger; context moves into the document flow.
 - Mobile: guild masthead, single-column quest log, fixed four-item bottom menu.
 - Board columns may scroll horizontally inside the board only.
+- On desktop, quest cards drag between Realm Map provinces with a pixel-sword cursor and a clear drop target. The card arrows remain the keyboard, touch, and reduced-dexterity fallback.
+- Text fields retain the familiar text cursor; the sword cursor is reserved for the workspace and interactive controls so theme never obscures editing behavior.
 - Touch targets are at least 44px where practical.
 - Focus is a high-contrast amber outline, never color-only.
 - Movement lasts under 220ms except the decorative avatar idle; reduced motion disables both.

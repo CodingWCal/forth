@@ -23,8 +23,9 @@ import {
   Pencil,
   Trash2,
   Search,
+  GripVertical,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { type DragEvent, FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Image from "next/image";
 import { BrandMark } from "@/components/brand-mark";
 import { hasFirebaseConfig } from "@/lib/firebase/config";
@@ -662,6 +663,34 @@ function BoardView({
 }) {
   const statuses: TaskStatus[] = ["ready", "moving", "paused", "done"];
   const [query, setQuery] = useState("");
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
+
+  const startDragging = (event: DragEvent<HTMLElement>, task: Task) => {
+    if ((event.target as HTMLElement).closest("button")) {
+      event.preventDefault();
+      return;
+    }
+
+    setDraggedTaskId(task.id);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-forth-task", task.id);
+    event.dataTransfer.setData("text/plain", task.id);
+  };
+
+  const stopDragging = () => {
+    setDraggedTaskId(null);
+    setDragOverStatus(null);
+  };
+
+  const dropInProvince = (event: DragEvent<HTMLElement>, status: TaskStatus) => {
+    event.preventDefault();
+    const taskId = event.dataTransfer.getData("application/x-forth-task") || draggedTaskId;
+    const task = state.tasks.find((candidate) => candidate.id === taskId);
+
+    if (task && task.status !== status) onSetStatus(task.id, status);
+    stopDragging();
+  };
   return (
     <div className="board-view">
       <div className="project-tabs" role="tablist" aria-label="Projects">
@@ -696,14 +725,33 @@ function BoardView({
         <button className="button button--primary" onClick={onOpenAdd}><Plus size={15} /> Inscribe quest</button>
       </div>
 
-      <section className="kanban" aria-label={`${activeProject.title} work map`}>
+      <p className="drag-help" id="kanban-drag-help">
+        <GripVertical size={15} aria-hidden="true" />
+        Drag a quest between provinces with your cursor. On phone or keyboard, use its move arrows.
+      </p>
+
+      <section className="kanban" aria-label={`${activeProject.title} work map`} aria-describedby="kanban-drag-help">
         {statuses.map((status) => {
           const tasks = state.tasks.filter(
             (task) => task.projectId === activeProject.id && task.status === status &&
               `${task.title} ${task.description ?? ""} ${task.meaning}`.toLowerCase().includes(query.toLowerCase()),
           );
+          const draggedTask = state.tasks.find((task) => task.id === draggedTaskId);
+          const isDropTarget = dragOverStatus === status && draggedTask?.status !== status;
           return (
-            <div className={`kanban-column kanban-column--${status}`} key={status}>
+            <div
+              className={`kanban-column kanban-column--${status}${isDropTarget ? " is-drop-target" : ""}`}
+              key={status}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDragOverStatus(status);
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragOverStatus(null);
+              }}
+              onDrop={(event) => dropInProvince(event, status)}
+            >
               <div className="column-head">
                 <span>{STATUS_LABELS[status]}</span>
                 <strong>{tasks.length}</strong>
@@ -717,6 +765,9 @@ function BoardView({
                     onToggleFocus={onToggleFocus}
                     onRename={onRename}
                     onDelete={onDelete}
+                    isDragging={draggedTaskId === task.id}
+                    onDragStart={(event) => startDragging(event, task)}
+                    onDragEnd={stopDragging}
                   />
                 ))}
                 {tasks.length === 0 && (
@@ -743,12 +794,18 @@ function BoardTaskCard({
   onToggleFocus,
   onRename,
   onDelete,
+  isDragging,
+  onDragStart,
+  onDragEnd,
 }: {
   task: Task;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onToggleFocus: (taskId: string) => void;
   onRename: (task: Task) => void;
   onDelete: (task: Task) => void;
+  isDragging: boolean;
+  onDragStart: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
 }) {
   const previous: Partial<Record<TaskStatus, TaskStatus>> = {
     moving: "ready",
@@ -762,9 +819,14 @@ function BoardTaskCard({
   };
 
   return (
-    <article className="board-task">
+    <article
+      className={`board-task${isDragging ? " is-dragging" : ""}`}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    >
       <div className="board-task-top">
-        <span>{task.weight} energy</span>
+        <span className="board-task-drag-meta"><GripVertical size={13} aria-hidden="true" /> {task.weight} energy</span>
         {task.status !== "done" && (
           <button
             className={task.isFocus ? "bookmark-button is-active" : "bookmark-button"}

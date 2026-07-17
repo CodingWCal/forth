@@ -21,6 +21,7 @@
   --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --shadow-small: 4px 4px 0 rgba(46, 34, 20, 0.28);
   --shadow-lift: 7px 7px 0 rgba(8, 13, 9, 0.42);
+  --cursor-sword: url("/cursors/sword.svg") 2 2, auto;
 }
 
 * {
@@ -41,6 +42,7 @@ body {
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: auto;
+  cursor: var(--cursor-sword);
 }
 
 button,
@@ -57,8 +59,14 @@ button {
 
 button:not(:disabled),
 select:not(:disabled),
-input[type="checkbox"]:not(:disabled) {
-  cursor: pointer;
+input[type="checkbox"]:not(:disabled),
+a {
+  cursor: var(--cursor-sword);
+}
+
+input:not([type="checkbox"]),
+textarea {
+  cursor: text;
 }
 
 button:focus-visible,
@@ -1170,9 +1178,32 @@ h3 {
 }
 
 .kanban-column {
+  position: relative;
   min-height: 530px;
   border: 1px solid var(--rule);
   background: rgba(232, 225, 210, 0.42);
+}
+
+.kanban-column.is-drop-target {
+  outline: 3px dashed var(--gold);
+  outline-offset: -7px;
+  background: rgba(223, 195, 123, 0.58);
+}
+
+.kanban-column.is-drop-target .column-head::after {
+  position: absolute;
+  z-index: 2;
+  top: 52px;
+  right: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--night);
+  background: var(--gold);
+  color: var(--night);
+  content: "DROP QUEST";
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
 }
 
 .kanban-column--moving {
@@ -1227,6 +1258,13 @@ h3 {
   background: var(--paper-bright);
   box-shadow: 0 2px 0 rgba(48, 45, 36, 0.04);
   transition: transform 150ms ease, box-shadow 150ms ease;
+  cursor: var(--cursor-sword);
+}
+
+.board-task.is-dragging {
+  opacity: 0.42;
+  transform: scale(0.98);
+  box-shadow: none;
 }
 
 .board-task:hover {
@@ -1243,6 +1281,22 @@ h3 {
   font-family: var(--mono);
   font-size: 8px;
   text-transform: uppercase;
+}
+
+.board-task-drag-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.drag-help {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: -7px 0 11px;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 9px;
 }
 
 .bookmark-button {
