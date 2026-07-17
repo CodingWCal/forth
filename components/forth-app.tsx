@@ -24,6 +24,8 @@ import {
   Trash2,
   Search,
   GripVertical,
+  UserPlus,
+  Scroll,
 } from "lucide-react";
 import { type DragEvent, FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Image from "next/image";
@@ -31,6 +33,11 @@ import { BrandMark } from "@/components/brand-mark";
 import { hasFirebaseConfig } from "@/lib/firebase/config";
 import type { User } from "firebase/auth";
 import {
+  acceptGuildInvite,
+  createGuildWorkspace,
+  type GuildWorkspace,
+  inviteGuildMember,
+  listGuildWorkspaces,
   provisionWorkspace,
   saveWorkspace,
   signInWithGoogle,
@@ -42,6 +49,7 @@ import { createSeedWorkspace } from "@/lib/seed";
 import type { Pace, Project, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
 import {
   createTask,
+  createProject,
   getFocusTasks,
   getMomentumDays,
   getPlannedWeight,
@@ -96,8 +104,13 @@ export function ForthApp({
   const [cloudUser, setCloudUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(hasFirebaseConfig);
   const [syncState, setSyncState] = useState<"local" | "syncing" | "synced" | "error">("local");
+  const [guilds, setGuilds] = useState<GuildWorkspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const cloudReadyRef = useRef(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const editDialogRef = useRef<HTMLDialogElement>(null);
+  const campaignDialogRef = useRef<HTMLDialogElement>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -122,6 +135,8 @@ export function ForthApp({
         setSyncState("syncing");
       } else {
         cloudReadyRef.current = false;
+        setGuilds([]);
+        setActiveWorkspaceId(null);
         setSyncState("local");
       }
     }) ?? undefined;
@@ -130,48 +145,61 @@ export function ForthApp({
   useEffect(() => {
     if (!cloudUser || !hydrated) return;
     let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
     void provisionWorkspace(cloudUser, state)
-      .then(() => {
+      .then(async () => {
         if (cancelled) return;
-        unsubscribe = watchWorkspace(
-          cloudUser,
-          (cloudState) => {
-            cloudReadyRef.current = false;
-            dispatch({ type: "RESET", state: cloudState });
-            window.requestAnimationFrame(() => {
-              cloudReadyRef.current = true;
-              setSyncState("synced");
-            });
-          },
-          () => setSyncState("error"),
-        ) ?? undefined;
+        const availableGuilds = await listGuildWorkspaces(cloudUser);
+        if (cancelled) return;
+        setGuilds(availableGuilds);
+        const storedWorkspaceId = window.localStorage.getItem(`forth.active-workspace.${cloudUser.uid}`);
+        const selectedWorkspaceId = availableGuilds.some((guild) => guild.id === storedWorkspaceId)
+          ? storedWorkspaceId!
+          : cloudUser.uid;
+        setActiveWorkspaceId(selectedWorkspaceId);
       })
       .catch(() => setSyncState("error"));
     return () => {
       cancelled = true;
-      unsubscribe?.();
     };
   // Provision exactly when the authenticated identity changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudUser?.uid, hydrated]);
 
   useEffect(() => {
-    if (!cloudUser || !cloudReadyRef.current) return;
+    if (!cloudUser || !activeWorkspaceId || !hydrated) return;
+    window.localStorage.setItem(`forth.active-workspace.${cloudUser.uid}`, activeWorkspaceId);
+    const unsubscribe = watchWorkspace(
+      activeWorkspaceId,
+      (cloudState) => {
+        cloudReadyRef.current = false;
+        dispatch({ type: "RESET", state: cloudState });
+        window.requestAnimationFrame(() => {
+          cloudReadyRef.current = true;
+          setSyncState("synced");
+        });
+      },
+      () => setSyncState("error"),
+    ) ?? undefined;
+    return () => unsubscribe?.();
+  }, [activeWorkspaceId, cloudUser, hydrated]);
+
+  useEffect(() => {
+    if (!cloudUser || !activeWorkspaceId || !cloudReadyRef.current) return;
     setSyncState("syncing");
     const timeout = window.setTimeout(() => {
-      void saveWorkspace(cloudUser, state)
+      void saveWorkspace(activeWorkspaceId, state)
         .then(() => setSyncState("synced"))
         .catch(() => setSyncState("error"));
     }, 450);
     return () => window.clearTimeout(timeout);
-  }, [cloudUser, state]);
+  }, [activeWorkspaceId, cloudUser, state]);
 
   const focusTasks = getFocusTasks(state);
   const plannedWeight = getPlannedWeight(state);
   const capacity = PACE_CAPACITY[state.pace];
   const activeProject =
     state.projects.find((project) => project.id === activeProjectId) ?? state.projects[0];
+  const activeGuild = guilds.find((guild) => guild.id === activeWorkspaceId) ?? null;
 
   function announce(message: string) {
     setToast(message);
@@ -191,6 +219,20 @@ export function ForthApp({
 
   function openAddDialog() {
     dialogRef.current?.showModal();
+  }
+
+  function openCampaignDialog() {
+    campaignDialogRef.current?.showModal();
+  }
+
+  async function refreshGuildDirectory(user: User) {
+    const availableGuilds = await listGuildWorkspaces(user);
+    setGuilds(availableGuilds);
+  }
+
+  function openEditDialog(task: Task) {
+    setEditingTask(task);
+    window.requestAnimationFrame(() => editDialogRef.current?.showModal());
   }
 
   function resetDemo() {
@@ -213,15 +255,51 @@ export function ForthApp({
         ? "Read what the guild has shipped."
         : "Tend the guild hall.";
 
-  function renameTask(task: Task) {
-    const title = window.prompt("Rename this ticket", task.title)?.trim();
-    if (title) dispatch({ type: "UPDATE_TASK", taskId: task.id, changes: { title } });
-  }
-
   function deleteTask(task: Task) {
     if (window.confirm(`Delete “${task.title}”? This cannot be undone.`)) {
       dispatch({ type: "DELETE_TASK", taskId: task.id });
       announce("Ticket deleted.");
+    }
+  }
+
+  async function createGuild(name: string) {
+    if (!cloudUser) {
+      announce("Sign in with Google before creating a shared guild.");
+      setView("settings");
+      return;
+    }
+    try {
+      const workspaceId = await createGuildWorkspace(cloudUser, name, createSeedWorkspace());
+      await refreshGuildDirectory(cloudUser);
+      setActiveWorkspaceId(workspaceId);
+      setActiveProjectId("project-forth");
+      setView("board");
+      announce(`Guild founded: ${name.trim()}.`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "The guild could not be created.");
+    }
+  }
+
+  async function inviteGuildmate(email: string) {
+    if (!cloudUser || !activeGuild) return;
+    try {
+      await inviteGuildMember(cloudUser, activeGuild, email);
+      announce(`Invitation prepared for ${email.trim().toLowerCase()}. They can join after Google sign-in.`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "The invitation could not be sent.");
+    }
+  }
+
+  async function joinGuild(workspaceId: string) {
+    if (!cloudUser) return;
+    try {
+      const joinedGuild = await acceptGuildInvite(cloudUser, workspaceId);
+      await refreshGuildDirectory(cloudUser);
+      setActiveWorkspaceId(joinedGuild.workspaceId);
+      setView("today");
+      announce(`Joined ${joinedGuild.workspaceName}.`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "The guild invitation could not be accepted.");
     }
   }
 
@@ -265,6 +343,9 @@ export function ForthApp({
               <span>{project.title}</span>
             </button>
           ))}
+          <button className="project-link project-link--new" onClick={openCampaignDialog}>
+            <Plus size={13} /> <span>New campaign</span>
+          </button>
         </div>
 
         <div className="rail-foot">
@@ -317,16 +398,8 @@ export function ForthApp({
             onSetPace={(pace) => dispatch({ type: "SET_PACE", pace })}
             onSetStatus={setStatus}
             onOpenAdd={openAddDialog}
-            onRename={(task) => {
-              const title = window.prompt("Rename this ticket", task.title)?.trim();
-              if (title) dispatch({ type: "UPDATE_TASK", taskId: task.id, changes: { title } });
-            }}
-            onDelete={(task) => {
-              if (window.confirm(`Delete “${task.title}”? This cannot be undone.`)) {
-                dispatch({ type: "DELETE_TASK", taskId: task.id });
-                announce("Ticket deleted.");
-              }
-            }}
+            onEdit={openEditDialog}
+            onDelete={deleteTask}
             onGoToBoard={() => setView("board")}
           />
         )}
@@ -347,17 +420,24 @@ export function ForthApp({
               }
             }}
             onOpenAdd={openAddDialog}
-            onRename={renameTask}
+            onEdit={openEditDialog}
             onDelete={deleteTask}
           />
         )}
-        {view === "proof" && <ProofView state={state} />}
+        {view === "proof" && <ProofView state={state} onEdit={openEditDialog} onDelete={deleteTask} />}
         {view === "settings" && (
           <SettingsView
             onReset={resetDemo}
             user={cloudUser}
             authLoading={authLoading}
             syncState={syncState}
+            activeGuild={activeGuild}
+            guilds={guilds}
+            onSelectGuild={setActiveWorkspaceId}
+            onCreateGuild={createGuild}
+            onInviteGuildmate={inviteGuildmate}
+            onJoinGuild={joinGuild}
+            onOpenCampaign={openCampaignDialog}
             onSignIn={async () => {
               try {
                 await signInWithGoogle();
@@ -398,10 +478,56 @@ export function ForthApp({
         projects={state.projects}
         activeProjectId={activeProject.id}
         canFocus={focusTasks.length < 3}
+        assignees={Array.from(new Set(state.tasks.map((task) => task.assignee)))}
         onSubmit={(input) => {
           dispatch({ type: "ADD_TASK", task: createTask(input) });
           dialogRef.current?.close();
           announce(`Quest logged: ${input.title.trim()}`);
+        }}
+      />
+
+      <EditTaskDialog
+        key={editingTask?.id ?? "no-edit"}
+        dialogRef={editDialogRef}
+        task={editingTask}
+        projects={state.projects}
+        assignees={Array.from(new Set(state.tasks.map((task) => task.assignee)))}
+        canFocus={Boolean(editingTask?.isFocus) || focusTasks.length < 3}
+        onClose={() => setEditingTask(null)}
+        onSubmit={(input) => {
+          if (!editingTask) return;
+          if (input.status !== editingTask.status) {
+            dispatch({ type: "SET_STATUS", taskId: editingTask.id, status: input.status });
+          }
+          dispatch({
+            type: "UPDATE_TASK",
+            taskId: editingTask.id,
+            changes: {
+              title: input.title.trim(),
+              description: input.description.trim(),
+              projectId: input.projectId,
+              priority: input.priority,
+              dueDate: input.dueDate || undefined,
+              meaning: input.meaning.trim(),
+              weight: input.weight,
+              assignee: input.assignee.trim(),
+              isFocus: input.status === "done" ? false : input.isFocus,
+            },
+          });
+          editDialogRef.current?.close();
+          announce(`Quest revised: ${input.title.trim()}`);
+        }}
+      />
+
+      <AddCampaignDialog
+        dialogRef={campaignDialogRef}
+        onSubmit={(input) => {
+          const campaign = createProject(input);
+          dispatch({ type: "ADD_PROJECT", project: campaign });
+          setActiveProjectId(campaign.id);
+          campaignDialogRef.current?.close();
+          setView("board");
+          announce(`Campaign chartered: ${campaign.title}.`);
         }}
       />
 
@@ -432,6 +558,8 @@ function TodayView({
   onSetPace,
   onSetStatus,
   onOpenAdd,
+  onEdit,
+  onDelete,
   onGoToBoard,
 }: {
   state: WorkspaceState;
@@ -444,7 +572,7 @@ function TodayView({
   onSetPace: (pace: Pace) => void;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onOpenAdd: () => void;
-  onRename: (task: Task) => void;
+  onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onGoToBoard: () => void;
 }) {
@@ -535,6 +663,8 @@ function TodayView({
                 project={state.projects.find((project) => project.id === task.projectId)!}
                 index={index}
                 onSetStatus={onSetStatus}
+                onEdit={onEdit}
+                onDelete={onDelete}
               />
             ))}
             {focusTasks.length < 3 && (
@@ -619,11 +749,15 @@ function FocusTaskRow({
   project,
   index,
   onSetStatus,
+  onEdit,
+  onDelete,
 }: {
   task: Task;
   project: Project;
   index: number;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
 }) {
   return (
     <article className={`focus-task focus-task--${task.status}`}>
@@ -639,6 +773,10 @@ function FocusTaskRow({
         </div>
         <h3>{task.title}</h3>
         <p>{task.meaning}</p>
+        <div className="task-inline-actions">
+          <button type="button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`}><Pencil size={13} /> Edit</button>
+          <button type="button" onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`}><Trash2 size={13} /> Delete</button>
+        </div>
       </div>
       {task.status === "ready" && (
         <button className="task-state-button" onClick={() => onSetStatus(task.id, "moving")}>
@@ -666,7 +804,7 @@ function BoardView({
   onSetStatus,
   onToggleFocus,
   onOpenAdd,
-  onRename,
+  onEdit,
   onDelete,
 }: {
   state: WorkspaceState;
@@ -675,7 +813,7 @@ function BoardView({
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onToggleFocus: (taskId: string) => void;
   onOpenAdd: () => void;
-  onRename: (task: Task) => void;
+  onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
 }) {
   const statuses: TaskStatus[] = ["ready", "moving", "paused", "done"];
@@ -780,7 +918,7 @@ function BoardView({
                     task={task}
                     onSetStatus={onSetStatus}
                     onToggleFocus={onToggleFocus}
-                    onRename={onRename}
+                    onEdit={onEdit}
                     onDelete={onDelete}
                     isDragging={draggedTaskId === task.id}
                     onDragStart={(event) => startDragging(event, task)}
@@ -809,7 +947,7 @@ function BoardTaskCard({
   task,
   onSetStatus,
   onToggleFocus,
-  onRename,
+  onEdit,
   onDelete,
   isDragging,
   onDragStart,
@@ -818,7 +956,7 @@ function BoardTaskCard({
   task: Task;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onToggleFocus: (taskId: string) => void;
-  onRename: (task: Task) => void;
+  onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   isDragging: boolean;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
@@ -864,7 +1002,7 @@ function BoardTaskCard({
       </div>
       <div className="board-task-assignee"><span>{task.assignee.charAt(0)}</span>{task.assignee}</div>
       <div className="board-task-actions">
-        <button onClick={() => onRename(task)} aria-label={`Rename ${task.title}`}><Pencil size={13} /></button>
+        <button onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit ticket"><Pencil size={13} /></button>
         <button onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`}><Trash2 size={13} /></button>
         {previous[task.status] && task.status !== "done" && (
           <button onClick={() => onSetStatus(task.id, previous[task.status]!)} aria-label={`Move ${task.title} backward`}>
@@ -882,7 +1020,15 @@ function BoardTaskCard({
   );
 }
 
-function ProofView({ state }: { state: WorkspaceState }) {
+function ProofView({
+  state,
+  onEdit,
+  onDelete,
+}: {
+  state: WorkspaceState;
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
+}) {
   const completed = useMemo(
     () =>
       state.tasks
@@ -933,6 +1079,10 @@ function ProofView({ state }: { state: WorkspaceState }) {
                     <p>{task.meaning}</p>
                   </div>
                   <div className="ledger-person"><span>{task.assignee.charAt(0)}</span><p>{task.assignee}<small>{task.weight} energy</small></p></div>
+                  <div className="ledger-actions">
+                    <button type="button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`}><Pencil size={14} /></button>
+                    <button type="button" onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`}><Trash2 size={14} /></button>
+                  </div>
                 </article>
               );
             })}
@@ -948,6 +1098,13 @@ function SettingsView({
   user,
   authLoading,
   syncState,
+  activeGuild,
+  guilds,
+  onSelectGuild,
+  onCreateGuild,
+  onInviteGuildmate,
+  onJoinGuild,
+  onOpenCampaign,
   onSignIn,
   onSignOut,
 }: {
@@ -955,6 +1112,13 @@ function SettingsView({
   user: User | null;
   authLoading: boolean;
   syncState: "local" | "syncing" | "synced" | "error";
+  activeGuild: GuildWorkspace | null;
+  guilds: GuildWorkspace[];
+  onSelectGuild: (workspaceId: string) => void;
+  onCreateGuild: (name: string) => Promise<void>;
+  onInviteGuildmate: (email: string) => Promise<void>;
+  onJoinGuild: (workspaceId: string) => Promise<void>;
+  onOpenCampaign: () => void;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
@@ -981,6 +1145,18 @@ function SettingsView({
         <span className={user && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{user ? syncState : "Local"}</span>
       </section>
 
+      {user && (
+        <GuildHallCard
+          activeGuild={activeGuild}
+          guilds={guilds}
+          onSelectGuild={onSelectGuild}
+          onCreateGuild={onCreateGuild}
+          onInviteGuildmate={onInviteGuildmate}
+          onJoinGuild={onJoinGuild}
+          onOpenCampaign={onOpenCampaign}
+        />
+      )}
+
       <section className="settings-card">
         <div className="settings-icon"><Target size={22} /></div>
         <div>
@@ -1003,17 +1179,129 @@ function SettingsView({
   );
 }
 
+function GuildHallCard({
+  activeGuild,
+  guilds,
+  onSelectGuild,
+  onCreateGuild,
+  onInviteGuildmate,
+  onJoinGuild,
+  onOpenCampaign,
+}: {
+  activeGuild: GuildWorkspace | null;
+  guilds: GuildWorkspace[];
+  onSelectGuild: (workspaceId: string) => void;
+  onCreateGuild: (name: string) => Promise<void>;
+  onInviteGuildmate: (email: string) => Promise<void>;
+  onJoinGuild: (workspaceId: string) => Promise<void>;
+  onOpenCampaign: () => void;
+}) {
+  const [guildName, setGuildName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [guildCode, setGuildCode] = useState("");
+
+  return (
+    <section className="guild-card">
+      <div className="settings-icon"><UserPlus size={22} /></div>
+      <div>
+        <p className="eyebrow">Guild roster</p>
+        <h3>Build campaigns with real guildmates.</h3>
+        <p>Invite a teammate by the Google email they will use for Forth. Share this guild code with them; after Google sign-in, they enter it here to join this shared workspace.</p>
+        {activeGuild?.role === "owner" && <p className="guild-code">Guild code: <code>{activeGuild.id}</code></p>}
+
+        <label className="field guild-field">
+          <span>Active guild</span>
+          <select value={activeGuild?.id ?? ""} onChange={(event) => onSelectGuild(event.target.value)}>
+            {guilds.map((guild) => <option value={guild.id} key={guild.id}>{guild.name} · {guild.role}</option>)}
+          </select>
+        </label>
+
+        <div className="guild-actions">
+          <button type="button" className="button button--quiet" onClick={onOpenCampaign}><Scroll size={15} /> New campaign</button>
+        </div>
+
+        <form className="guild-inline-form" onSubmit={(event) => {
+          event.preventDefault();
+          if (!guildName.trim()) return;
+          void onCreateGuild(guildName).then(() => setGuildName(""));
+        }}>
+          <label className="field"><span>Found another guild</span><input value={guildName} onChange={(event) => setGuildName(event.target.value)} placeholder="Platform guild" maxLength={60} /></label>
+          <button className="button button--quiet" type="submit">Found guild</button>
+        </form>
+
+        {activeGuild?.role === "owner" && (
+          <form className="guild-inline-form" onSubmit={(event) => {
+            event.preventDefault();
+            if (!inviteEmail.trim()) return;
+            void onInviteGuildmate(inviteEmail).then(() => setInviteEmail(""));
+          }}>
+            <label className="field"><span>Invite a guildmate</span><input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="teammate@example.com" /></label>
+            <button className="button button--primary" type="submit">Send invite</button>
+          </form>
+        )}
+
+        <form className="guild-inline-form" onSubmit={(event) => {
+          event.preventDefault();
+          if (!guildCode.trim()) return;
+          void onJoinGuild(guildCode).then(() => setGuildCode(""));
+        }}>
+          <label className="field"><span>Join with a guild code</span><input value={guildCode} onChange={(event) => setGuildCode(event.target.value)} placeholder="guild-…" /></label>
+          <button className="button button--primary" type="submit">Join guild</button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function AddCampaignDialog({
+  dialogRef,
+  onSubmit,
+}: {
+  dialogRef: React.RefObject<HTMLDialogElement | null>;
+  onSubmit: (input: { title: string; code: string; outcome: string; targetDate: string; color: Project["color"] }) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [code, setCode] = useState("");
+  const [outcome, setOutcome] = useState("");
+  const [targetDate, setTargetDate] = useState("");
+  const [color, setColor] = useState<Project["color"]>("moss");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim() || !outcome.trim() || !targetDate) return;
+    onSubmit({ title, code, outcome, targetDate, color });
+    setTitle(""); setCode(""); setOutcome(""); setTargetDate(""); setColor("moss");
+  }
+
+  return (
+    <dialog className="move-dialog" ref={dialogRef} onClick={(event) => {
+      if (event.target === dialogRef.current) dialogRef.current?.close();
+    }}>
+      <form onSubmit={submit}>
+        <header className="dialog-head"><div><p className="eyebrow">Campaign charter</p><h2>Begin a new engineering campaign</h2></div><button type="button" className="icon-button" onClick={() => dialogRef.current?.close()} aria-label="Close campaign dialog"><X size={19} /></button></header>
+        <label className="field"><span>Campaign name</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Harden the release gate" required maxLength={60} autoFocus /></label>
+        <label className="field"><span>Campaign code</span><input value={code} onChange={(event) => setCode(event.target.value)} placeholder="RELEASE" maxLength={8} /></label>
+        <label className="field"><span>Outcome</span><textarea value={outcome} onChange={(event) => setOutcome(event.target.value)} placeholder="What will be true when this campaign lands?" required maxLength={180} rows={3} /></label>
+        <div className="field-pair"><label className="field"><span>Target date</span><input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} required /></label><label className="field"><span>Heraldic color</span><select value={color} onChange={(event) => setColor(event.target.value as Project["color"])}><option value="moss">Moss</option><option value="clay">Clay</option><option value="slate">Slate</option></select></label></div>
+        <footer className="dialog-foot"><button type="button" className="button button--quiet" onClick={() => dialogRef.current?.close()}>Cancel</button><button className="button button--primary" type="submit">Charter campaign <Scroll size={16} /></button></footer>
+      </form>
+    </dialog>
+  );
+}
+
 function AddTaskDialog({
   dialogRef,
   projects,
   activeProjectId,
   canFocus,
+  assignees,
   onSubmit,
 }: {
   dialogRef: React.RefObject<HTMLDialogElement | null>;
   projects: Project[];
   activeProjectId: string;
   canFocus: boolean;
+  assignees: string[];
   onSubmit: (input: {
     title: string;
     projectId: string;
@@ -1023,6 +1311,7 @@ function AddTaskDialog({
     description?: string;
     priority?: TaskPriority;
     dueDate?: string;
+    assignee?: string;
   }) => void;
 }) {
   const [title, setTitle] = useState("");
@@ -1033,11 +1322,12 @@ function AddTaskDialog({
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [dueDate, setDueDate] = useState("");
+  const [assignee, setAssignee] = useState("Calvin");
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim() || !projectId) return;
-    onSubmit({ title, projectId, meaning, weight, isFocus, description, priority, dueDate });
+    onSubmit({ title, projectId, meaning, weight, isFocus, description, priority, dueDate, assignee });
     setTitle("");
     setMeaning("");
     setWeight(2);
@@ -1045,6 +1335,7 @@ function AddTaskDialog({
     setDescription("");
     setPriority("medium");
     setDueDate("");
+    setAssignee("Calvin");
   }
 
   return (
@@ -1068,12 +1359,19 @@ function AddTaskDialog({
           <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} rows={3} placeholder="Context, constraints, acceptance criteria, or definition of done" />
         </label>
 
-        <label className="field">
-          <span>Campaign</span>
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)} required>
-            {projects.map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}
-          </select>
-        </label>
+        <div className="field-pair">
+          <label className="field">
+            <span>Campaign</span>
+            <select value={projectId} onChange={(event) => setProjectId(event.target.value)} required>
+              {projects.map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            <span>Assigned guildmate</span>
+            <input value={assignee} onChange={(event) => setAssignee(event.target.value)} required maxLength={60} list="new-ticket-assignees" placeholder="Calvin" />
+            <datalist id="new-ticket-assignees">{assignees.map((name) => <option value={name} key={name} />)}</datalist>
+          </label>
+        </div>
 
         <div className="field-pair">
           <label className="field">
@@ -1112,6 +1410,157 @@ function AddTaskDialog({
         <footer className="dialog-foot">
           <button type="button" className="button button--quiet" onClick={() => dialogRef.current?.close()}>Cancel</button>
           <button className="button button--primary" type="submit">Inscribe quest <Sword size={16} /></button>
+        </footer>
+      </form>
+    </dialog>
+  );
+}
+
+type TaskEditInput = {
+  title: string;
+  projectId: string;
+  status: TaskStatus;
+  meaning: string;
+  weight: 1 | 2 | 3;
+  isFocus: boolean;
+  description: string;
+  priority: TaskPriority;
+  dueDate: string;
+  assignee: string;
+};
+
+function EditTaskDialog({
+  dialogRef,
+  task,
+  projects,
+  assignees,
+  canFocus,
+  onClose,
+  onSubmit,
+}: {
+  dialogRef: React.RefObject<HTMLDialogElement | null>;
+  task: Task | null;
+  projects: Project[];
+  assignees: string[];
+  canFocus: boolean;
+  onClose: () => void;
+  onSubmit: (input: TaskEditInput) => void;
+}) {
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [projectId, setProjectId] = useState(task?.projectId ?? projects[0]?.id ?? "");
+  const [status, setStatus] = useState<TaskStatus>(task?.status ?? "ready");
+  const [meaning, setMeaning] = useState(task?.meaning ?? "");
+  const [weight, setWeight] = useState<1 | 2 | 3>(task?.weight ?? 2);
+  const [isFocus, setIsFocus] = useState(task?.isFocus ?? false);
+  const [description, setDescription] = useState(task?.description ?? "");
+  const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
+  const [dueDate, setDueDate] = useState(task?.dueDate ?? "");
+  const [assignee, setAssignee] = useState(task?.assignee ?? "Calvin");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!task || !title.trim() || !projectId || !assignee.trim()) return;
+    onSubmit({
+      title,
+      projectId,
+      status,
+      meaning,
+      weight,
+      isFocus,
+      description,
+      priority,
+      dueDate,
+      assignee,
+    });
+  }
+
+  return (
+    <dialog className="move-dialog" ref={dialogRef} onClose={onClose} onClick={(event) => {
+      if (event.target === dialogRef.current) dialogRef.current?.close();
+    }}>
+      <form onSubmit={submit}>
+        <header className="dialog-head">
+          <div><p className="eyebrow">Quest scribe</p><h2>Edit the complete ticket</h2></div>
+          <button type="button" className="icon-button" onClick={() => dialogRef.current?.close()} aria-label="Close edit dialog"><X size={19} /></button>
+        </header>
+
+        <label className="field">
+          <span>Quest title</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={90} autoFocus />
+        </label>
+
+        <label className="field">
+          <span>Description <i>optional</i></span>
+          <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={500} rows={3} />
+        </label>
+
+        <div className="field-pair">
+          <label className="field">
+            <span>Campaign</span>
+            <select value={projectId} onChange={(event) => setProjectId(event.target.value)} required>
+              {projects.map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            <span>Province</span>
+            <select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}>
+              <option value="ready">Quest Log</option>
+              <option value="moving">In Forge</option>
+              <option value="paused">Camped</option>
+              <option value="done">Shipped</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="field-pair">
+          <label className="field">
+            <span>Priority</span>
+            <select value={priority} onChange={(event) => setPriority(event.target.value as TaskPriority)}>
+              <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Due date <i>optional</i></span>
+            <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          </label>
+        </div>
+
+        <label className="field">
+          <span>Assigned guildmate</span>
+          <input value={assignee} onChange={(event) => setAssignee(event.target.value)} required maxLength={60} list="edit-ticket-assignees" />
+          <datalist id="edit-ticket-assignees">{assignees.map((name) => <option value={name} key={name} />)}</datalist>
+          <small>Choose a known guildmate or type another teammate’s name.</small>
+        </label>
+
+        <label className="field">
+          <span>Why it matters <i>optional</i></span>
+          <textarea value={meaning} onChange={(event) => setMeaning(event.target.value)} maxLength={180} rows={3} />
+        </label>
+
+        <fieldset className="weight-field">
+          <legend>Energy cost</legend>
+          <div>
+            {([1, 2, 3] as const).map((item) => (
+              <button type="button" className={weight === item ? "weight-option is-active" : "weight-option"} onClick={() => setWeight(item)} key={item}>
+                <span>{"◆".repeat(item)}</span><strong>{item === 1 ? "Spark" : item === 2 ? "Forge" : "Siege"}</strong><small>{item === 1 ? "small patch" : item === 2 ? "focused build" : "deep system work"}</small>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <label className={canFocus && status !== "done" ? "focus-check" : "focus-check is-disabled"}>
+          <input
+            type="checkbox"
+            checked={status === "done" ? false : isFocus}
+            onChange={(event) => setIsFocus(event.target.checked)}
+            disabled={!canFocus || status === "done"}
+          />
+          <span><strong>Keep in today’s party</strong><small>{status === "done" ? "Shipped quests live in the Chronicle." : canFocus ? "This quest counts toward the active three." : "Today’s party already holds three other quests."}</small></span>
+        </label>
+
+        <footer className="dialog-foot">
+          <button type="button" className="button button--quiet" onClick={() => dialogRef.current?.close()}>Cancel</button>
+          <button className="button button--primary" type="submit">Save ticket <Sword size={16} /></button>
         </footer>
       </form>
     </dialog>

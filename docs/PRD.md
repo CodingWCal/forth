@@ -45,7 +45,7 @@ The full motivational loop works with seeded data and browser persistence. It mu
 
 ### Phase 2 — Private beta (active)
 
-Firebase Authentication and Cloud Firestore provide authenticated cloud persistence with a local fallback. Owner-scoped workspaces and emulator-tested rules are connected. Invitations, multi-member live collaboration, activity attribution, and recovery UX remain future beta work.
+Firebase Authentication and Cloud Firestore provide authenticated cloud persistence with a local fallback. Owner-created guild workspaces, email-matched invitations, and emulator-tested rules are connected. Conflict-aware multi-member editing, activity attribution, and recovery UX remain future beta work.
 
 ### Phase 3 — Public beta
 

@@ -52,7 +52,7 @@ Avoid modern “AI SaaS” visual shorthand:
 | Amber | `#c58b2b` | Active selection, reward, focus |
 | Slate | `#596b69` | Secondary engineering metadata |
 
-Surfaces use two-pixel rules, hard corners, stepped shadows, small repeating tile patterns, and double rules. Gradients are reserved for code-native checker/tile texture; never for soft glow or brand spectacle.
+Surfaces use two-pixel rules, hard corners, stepped shadows, small repeating tile patterns, and double rules. Today and Realm Map tickets use restrained rolled-papyrus edges, warm fiber lines, and oak shadows; the ornament must remain outside the text column and controls. Gradients are reserved for code-native checker/tile texture; never for soft glow or brand spectacle.
 
 ## Typography
 
@@ -80,6 +80,8 @@ Rules:
 - Mobile: guild masthead, single-column quest log, fixed four-item bottom menu.
 - Board columns may scroll horizontally inside the board only.
 - On desktop, quest cards drag between Realm Map provinces with a pixel-sword cursor and a clear drop target. The card arrows remain the keyboard, touch, and reduced-dexterity fallback.
+- The sword cursor keeps a tip-aligned hotspot and a readable blade, crossguard, grip, and pommel at its native 32px size.
+- Every ticket exposes a complete edit path for campaign, province, priority, due date, purpose, effort, Today focus, and named assignee; themed labels never hide the underlying field.
 - Text fields retain the familiar text cursor; the sword cursor is reserved for the workspace and interactive controls so theme never obscures editing behavior.
 - Touch targets are at least 44px where practical.
 - Focus is a high-contrast amber outline, never color-only.

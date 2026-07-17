@@ -16,18 +16,48 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
+    function hasInviteForCurrentUser(workspaceId, inviteEmail) {
+      return signedIn()
+        && request.auth.token.email != null
+        && inviteEmail == request.auth.token.email
+        && exists(/databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(inviteEmail));
+    }
+
+    // A signed-in person may discover only member documents whose UID is
+    // their own. This powers the guild switcher without exposing rosters
+    // from unrelated workspaces through a collection-group query.
+    match /{document=**}/members/{memberId} {
+      allow get, list: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     match /workspaces/{workspaceId} {
       allow read: if belongsToWorkspace(workspaceId) || ownsWorkspace(workspaceId);
       allow create: if signedIn()
-        && workspaceId == request.auth.uid
         && request.resource.data.ownerId == request.auth.uid;
       allow update: if ownsWorkspace(workspaceId)
         && request.resource.data.ownerId == resource.data.ownerId;
       allow delete: if ownsWorkspace(workspaceId);
 
       match /members/{memberId} {
-        allow read: if belongsToWorkspace(workspaceId) || ownsWorkspace(workspaceId);
-        allow create, update, delete: if ownsWorkspace(workspaceId);
+        allow get, list: if belongsToWorkspace(workspaceId)
+          || ownsWorkspace(workspaceId)
+          || (signedIn() && resource.data.uid == request.auth.uid);
+        allow create: if ownsWorkspace(workspaceId)
+          || (memberId == request.auth.uid
+            && request.auth.token.email != null
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.email == request.auth.token.email
+            && request.resource.data.role == "member"
+            && hasInviteForCurrentUser(workspaceId, request.auth.token.email));
+        allow update, delete: if ownsWorkspace(workspaceId);
+      }
+
+      match /invites/{inviteEmail} {
+        allow get, list: if ownsWorkspace(workspaceId)
+          || hasInviteForCurrentUser(workspaceId, inviteEmail);
+        allow create, update: if ownsWorkspace(workspaceId);
+        allow delete: if ownsWorkspace(workspaceId)
+          || hasInviteForCurrentUser(workspaceId, inviteEmail);
       }
 
       match /data/{document=**} {

@@ -34,7 +34,7 @@ In engineering terms, Forth combines capacity planning, a WIP limit, determinist
 - Move work through Quest Log, In Forge, Camped, and Shipped.
 - Drag tickets between columns with a pixel-sword cursor on desktop.
 - Use explicit move buttons on keyboard and touch devices.
-- Create, rename, prioritize, focus, and delete tickets.
+- Create, fully edit, assign, prioritize, focus, move, and delete tickets.
 
 ### Chronicle — Proof ledger
 
@@ -47,6 +47,8 @@ In engineering terms, Forth combines capacity planning, a WIP limit, determinist
 - Work without an account using local browser persistence.
 - Sign in with Google to provision a private Firebase workspace.
 - Synchronize the current workspace through Cloud Firestore.
+- Found additional guild workspaces and create new campaigns inside them.
+- Invite a teammate by their Google email; they join with the shared guild code after signing in.
 - Sign out while retaining a usable local fallback.
 - Restore the seeded campaign after an explicit, destination-aware confirmation.
 
@@ -154,7 +156,7 @@ Vercel imports the GitHub repository and deploys the `main` branch with the stan
 
 - Anonymous users can use only their browser's local copy.
 - Firebase reads and writes require authentication.
-- A private-beta workspace path is bound to its authenticated owner's UID.
+- Workspace creation is bound to its authenticated owner, while invited accounts may create only their own member record after a matching email invitation exists.
 - Workspace ownership cannot be reassigned through a client update.
 - Outsiders cannot read or write another workspace.
 - Client-side visibility is never treated as authorization.
@@ -162,8 +164,8 @@ Vercel imports the GitHub repository and deploys the `main` branch with the stan
 
 ## Known limitations
 
-- The current private beta provisions one owner-scoped workspace per account; invitations and multi-user collaboration are not exposed in the UI.
 - Firestore synchronization uses whole-workspace, last-write-wins documents; simultaneous multi-device editing has no conflict-resolution interface yet.
+- Invitations are delivered by the owner sharing the displayed guild code out of band; Forth does not send transactional email.
 - Google popup authentication is the only configured sign-in path.
 - Desktop supports native drag and drop; touch and keyboard users use the explicit ticket movement buttons.
 - There is no notification system, analytics dashboard, audit log, backup/restore console, or operational error monitoring yet.

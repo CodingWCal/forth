@@ -29,6 +29,8 @@ export function workspaceReducer(
   switch (action.type) {
     case "SET_PACE":
       return { ...state, pace: action.pace };
+    case "ADD_PROJECT":
+      return { ...state, projects: [...state.projects, action.project] };
     case "ADD_TASK":
       return { ...state, tasks: [action.task, ...state.tasks] };
     case "UPDATE_TASK":
@@ -211,6 +213,7 @@ export function createTask(input: {
   description?: string;
   priority?: Task["priority"];
   dueDate?: string;
+  assignee?: string;
 }): Task {
   const id =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -222,12 +225,34 @@ export function createTask(input: {
     projectId: input.projectId,
     meaning: input.meaning.trim(),
     weight: input.weight,
-    assignee: "Calvin",
+    assignee: input.assignee?.trim() || "Calvin",
     status: "ready",
     isFocus: input.isFocus,
     createdAt: new Date().toISOString(),
     description: input.description?.trim() ?? "",
     priority: input.priority ?? "medium",
     dueDate: input.dueDate || undefined,
+  };
+}
+
+export function createProject(input: {
+  title: string;
+  code: string;
+  outcome: string;
+  targetDate: string;
+  color?: Project["color"];
+}): Project {
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `project-${Date.now()}`;
+  const normalizedCode = input.code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  return {
+    id,
+    title: input.title.trim(),
+    code: normalizedCode || "QUEST",
+    outcome: input.outcome.trim(),
+    color: input.color ?? "moss",
+    targetDate: input.targetDate,
   };
 }

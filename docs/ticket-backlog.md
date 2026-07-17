@@ -197,3 +197,29 @@ Audit scope: Product/design docs, responsive UI, workspace state, Firebase Auth/
   - Test fresh local, returning local, returning cloud, cancel, and confirmed replacement paths.
 - Subagent prompt:
   > Implement TICKET-005 as a safe, versioned onboarding/migration flow. Do not overwrite cloud data implicitly. Preserve the themed language while making every data consequence literal.
+
+### TICKET-006: Back assignments with authenticated guild membership
+
+- Priority: P1 High
+- Type: Feature/Security
+- Area: Guild Hall, task editor, Firestore members collection and rules
+- Effort: L
+- Confidence: High
+- Evidence: Tickets now support complete editing and named assignees, but Forth has no invitation flow or authenticated member directory. A typed assignee is useful planning metadata, not proof that the named person can access the workspace.
+- Plain English: You can put a teammate's name on a quest now; the next step is inviting that real account into the guild and assigning from a verified member list.
+- Engineering framing: Add an invitation and membership lifecycle, query owner-scoped member documents, reference immutable member UIDs from tasks, and preserve display-name snapshots for historical Proof entries.
+- Acceptance criteria:
+  - Owners can invite, revoke, and view authenticated members.
+  - The ticket editor assigns only active workspace members by UID.
+  - Removed members cannot access workspace data, while existing Chronicle entries retain readable attribution.
+  - Emulator tests cover invitation acceptance, owner controls, revocation, and outsider denial.
+- Suggested files:
+  - `components/forth-app.tsx`
+  - `lib/firebase/workspace.ts`
+  - `lib/types.ts`
+  - `firestore.rules`
+  - `tests/firestore.rules.test.ts`
+- Validation:
+  - Run member lifecycle integration tests, Firestore rule tests, and the complete release gate.
+- Subagent prompt:
+  > Implement TICKET-006 without weakening the owner-scoped private-beta rules. Store task assignment by member UID plus a display snapshot, add an owner-only invitation flow, and prove revoked users lose access.
