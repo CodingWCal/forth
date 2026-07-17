@@ -104,7 +104,26 @@ export async function createGuildWorkspace(user: User, name: string, initialStat
 
 export async function listGuildWorkspaces(user: User): Promise<GuildWorkspace[]> {
   const services = requireServices();
-  const memberSnapshots = await getDocs(query(collectionGroup(services.db, "members"), where("uid", "==", user.uid)));
+  // The owner workspace has a deterministic id (the owner's uid). Keep it in
+  // the directory even if a collection-group query is temporarily unavailable
+  // (for example while indexes/rules propagate). This also keeps the owner
+  // path usable so the invitation controls do not disappear.
+  const ownerWorkspace = await getDoc(doc(services.db, "workspaces", user.uid));
+  const ownerGuild: GuildWorkspace[] = ownerWorkspace.exists()
+    ? [{
+        id: ownerWorkspace.id,
+        name: typeof ownerWorkspace.data().name === "string" ? ownerWorkspace.data().name : "My guild",
+        ownerId: user.uid,
+        role: "owner",
+      }]
+    : [];
+
+  let memberSnapshots;
+  try {
+    memberSnapshots = await getDocs(query(collectionGroup(services.db, "members"), where("uid", "==", user.uid)));
+  } catch {
+    return ownerGuild;
+  }
   const workspaces = await Promise.all(memberSnapshots.docs.map(async (member) => {
     const workspaceRef = member.ref.parent.parent;
     if (!workspaceRef) return null;
@@ -118,7 +137,8 @@ export async function listGuildWorkspaces(user: User): Promise<GuildWorkspace[]>
       role: member.data().role === "owner" ? "owner" : "member",
     } satisfies GuildWorkspace;
   }));
-  return workspaces.filter((workspace): workspace is GuildWorkspace => workspace !== null)
+  return [...ownerGuild, ...workspaces.filter((workspace): workspace is GuildWorkspace => workspace !== null)]
+    .filter((workspace, index, all) => all.findIndex((candidate) => candidate.id === workspace.id) === index)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
