@@ -163,7 +163,6 @@ export function ForthApp({
           ? storedWorkspaceId!
           : cloudUser.uid;
         setActiveWorkspaceId(selectedWorkspaceId);
-        void refreshPendingInvites(cloudUser);
       })
       .catch(() => setSyncState("error"));
     return () => {
@@ -172,6 +171,15 @@ export function ForthApp({
   // Provision exactly when the authenticated identity changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudUser?.uid, hydrated]);
+
+  // Look up pending invitations independently of workspace provisioning so a
+  // recipient always sees (and can act on) an invite even if their own guild
+  // sync is degraded.
+  useEffect(() => {
+    if (!cloudUser) return;
+    void refreshPendingInvites(cloudUser);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudUser?.uid]);
 
   useEffect(() => {
     if (!cloudUser || !activeWorkspaceId || !hydrated) return;

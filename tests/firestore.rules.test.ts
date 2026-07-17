@@ -189,6 +189,41 @@ describe("Firestore workspace rules", () => {
     await assertSucceeds(deleteDoc(doc(declinerDb, "workspaces", ownerId, "invites", declinerEmail)));
   });
 
+  it("lets a brand-new account provision its own default workspace", async () => {
+    const newUserId = "fresh-adventurer";
+    const newUserEmail = "fresh@example.com";
+    const db = testEnv.authenticatedContext(newUserId, { email: newUserEmail }).firestore();
+    // Mirrors createWorkspaceAt(): read own (non-existent) workspace first, then
+    // create it, the owner member document, and the initial state document.
+    await assertSucceeds(getDoc(doc(db, "workspaces", newUserId)));
+    await assertSucceeds(setDoc(doc(db, "workspaces", newUserId), {
+      ownerId: newUserId,
+      name: "Fresh guild",
+    }));
+    await assertSucceeds(setDoc(doc(db, "workspaces", newUserId, "members", newUserId), {
+      uid: newUserId,
+      email: newUserEmail,
+      role: "owner",
+    }));
+    await assertSucceeds(getDoc(doc(db, "workspaces", newUserId, "data", "current")));
+    await assertSucceeds(setDoc(doc(db, "workspaces", newUserId, "data", "current"), {
+      state: { version: 2 },
+    }));
+  });
+
+  it("does not let the own-workspace read rule expose another account's workspace", async () => {
+    // The uid-keyed read allowance must be scoped to the caller's own id only.
+    const stranger = testEnv.authenticatedContext("stranger", { email: "stranger@example.com" }).firestore();
+    await assertFails(getDoc(doc(stranger, "workspaces", "someone-elses-uid")));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", "someone-elses-uid"), {
+        ownerId: "someone-elses-uid",
+        name: "Private guild",
+      });
+    });
+    await assertFails(getDoc(doc(stranger, "workspaces", "someone-elses-uid")));
+  });
+
   it("rejects a member self-join without an email-matched invite", async () => {
     const memberDb = testEnv.authenticatedContext("uninvited", { email: "uninvited@example.com" }).firestore();
     await assertFails(setDoc(doc(memberDb, "workspaces", ownerId, "members", "uninvited"), {

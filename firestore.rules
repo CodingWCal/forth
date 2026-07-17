@@ -13,6 +13,7 @@ service cloud.firestore {
 
     function ownsWorkspace(workspaceId) {
       return signedIn()
+        && exists(/databases/$(database)/documents/workspaces/$(workspaceId))
         && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
@@ -40,7 +41,13 @@ service cloud.firestore {
     }
 
     match /workspaces/{workspaceId} {
-      allow read: if belongsToWorkspace(workspaceId) || ownsWorkspace(workspaceId);
+      // A signed-in person may always read the workspace whose id equals their
+      // own uid (their default guild). This lets first-run provisioning check
+      // for existence before creating it, without exposing anyone else's data
+      // because no other account can hold that document id.
+      allow read: if belongsToWorkspace(workspaceId)
+        || ownsWorkspace(workspaceId)
+        || (signedIn() && workspaceId == request.auth.uid);
       allow create: if signedIn()
         && request.resource.data.ownerId == request.auth.uid;
       allow update: if ownsWorkspace(workspaceId)

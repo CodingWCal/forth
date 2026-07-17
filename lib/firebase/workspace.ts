@@ -44,6 +44,19 @@ function requireServices() {
   return services;
 }
 
+// A brand-new account cannot read a workspace document that does not exist yet
+// under the owner-scoped rules, so a pre-create existence check can be denied.
+// Treat any failed/denied read as "not created yet" and let the create attempt
+// (which is governed by the create rule) decide. This keeps first-run
+// provisioning working without loosening authorization.
+async function documentExists(reference: Parameters<typeof getDoc>[0]) {
+  try {
+    return (await getDoc(reference)).exists();
+  } catch {
+    return false;
+  }
+}
+
 function normalizedEmail(user: User) {
   const email = user.email?.trim().toLowerCase();
   if (!email) throw new Error("Your Google account needs a verified email address to join a guild.");
@@ -75,8 +88,7 @@ async function createWorkspaceAt(
   const services = requireServices();
   const workspaceRef = doc(services.db, "workspaces", workspaceId);
   const stateRef = doc(workspaceRef, "data", "current");
-  const existingWorkspace = await getDoc(workspaceRef);
-  if (!existingWorkspace.exists()) {
+  if (!(await documentExists(workspaceRef))) {
     await setDoc(workspaceRef, {
       ownerId: user.uid,
       name,
@@ -91,8 +103,7 @@ async function createWorkspaceAt(
     role: "owner",
     joinedAt: serverTimestamp(),
   }, { merge: true });
-  const existingState = await getDoc(stateRef);
-  if (!existingState.exists()) {
+  if (!(await documentExists(stateRef))) {
     await setDoc(stateRef, { state: initialState, updatedAt: serverTimestamp() });
   }
   return workspaceId;
