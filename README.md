@@ -34,7 +34,7 @@ In engineering terms, Forth combines capacity planning, a WIP limit, determinist
 - Move work through Quest Log, In Forge, Camped, and Shipped.
 - Drag tickets between columns with a pixel-sword cursor on desktop.
 - Use explicit move buttons on keyboard and touch devices.
-- Create, rename, prioritize, focus, and delete tickets.
+- Create, fully edit, assign, prioritize, focus, move, and delete tickets.
 
 ### Chronicle — Proof ledger
 
@@ -162,7 +162,7 @@ Vercel imports the GitHub repository and deploys the `main` branch with the stan
 
 ## Known limitations
 
-- The current private beta provisions one owner-scoped workspace per account; invitations and multi-user collaboration are not exposed in the UI.
+- Tickets can be assigned to named guildmates, but the current private beta still provisions one owner-scoped workspace per account; invitations, authenticated member discovery, and multi-user collaboration are not exposed in the UI.
 - Firestore synchronization uses whole-workspace, last-write-wins documents; simultaneous multi-device editing has no conflict-resolution interface yet.
 - Google popup authentication is the only configured sign-in path.
 - Desktop supports native drag and drop; touch and keyboard users use the explicit ticket movement buttons.

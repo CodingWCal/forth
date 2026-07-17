@@ -104,12 +104,28 @@ describe("workspace state", () => {
     const renamed = workspaceReducer(seed, {
       type: "UPDATE_TASK",
       taskId: target.id,
-      changes: { title: "New quest title", priority: "high", dueDate: "2026-08-01" },
+      changes: {
+        title: "New quest title",
+        description: "New acceptance criteria",
+        projectId: seed.projects[1].id,
+        priority: "high",
+        dueDate: "2026-08-01",
+        meaning: "New product purpose",
+        weight: 3,
+        assignee: "Jon",
+        isFocus: false,
+      },
     });
     expect(renamed.tasks.find((task) => task.id === target.id)).toMatchObject({
       title: "New quest title",
+      description: "New acceptance criteria",
+      projectId: seed.projects[1].id,
       priority: "high",
       dueDate: "2026-08-01",
+      meaning: "New product purpose",
+      weight: 3,
+      assignee: "Jon",
+      isFocus: false,
     });
     expect(workspaceReducer(renamed, { type: "DELETE_TASK", taskId: target.id }).tasks)
       .toHaveLength(seed.tasks.length - 1);
@@ -179,6 +195,7 @@ describe("workspace state", () => {
       isFocus: true,
       description: "  Include the complete QA matrix.  ",
       dueDate: "",
+      assignee: "  Maya  ",
     });
 
     expect(task).toMatchObject({
@@ -187,6 +204,7 @@ describe("workspace state", () => {
       dueDate: undefined,
       status: "ready",
       isFocus: true,
+      assignee: "Maya",
     });
     expect(Number.isNaN(Date.parse(task.createdAt))).toBe(false);
   });

@@ -211,6 +211,7 @@ export function createTask(input: {
   description?: string;
   priority?: Task["priority"];
   dueDate?: string;
+  assignee?: string;
 }): Task {
   const id =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -222,7 +223,7 @@ export function createTask(input: {
     projectId: input.projectId,
     meaning: input.meaning.trim(),
     weight: input.weight,
-    assignee: "Calvin",
+    assignee: input.assignee?.trim() || "Calvin",
     status: "ready",
     isFocus: input.isFocus,
     createdAt: new Date().toISOString(),
