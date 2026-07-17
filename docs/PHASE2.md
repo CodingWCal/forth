@@ -11,7 +11,9 @@ The new visual layer is a restrained 8-bit fantasy guild theme. A ticket can be 
 ## Included in this phase
 
 - Google sign-in through Firebase Authentication.
-- One private Firestore workspace per signed-in owner.
+- Owner-created Firestore guild workspaces with email-matched invitations.
+- Invite acceptance after Google sign-in, using a shared guild code and a matching invite email.
+- Campaign creation inside the active guild workspace.
 - Ticket title, description, project, priority, due date, effort, focus state, and status.
 - Search, rename, deletion, and ticket status transitions.
 - A guild-rank HUD and gold earned from completed ticket effort.
@@ -49,7 +51,7 @@ workspaces/{ownerUid}
     state: WorkspaceState
 ```
 
-This is appropriate for a personal private-beta workspace. Membership and shared-team collaboration are explicitly deferred; they need emulator-tested rules and conflict-aware update design before activation.
+This supports a deliberately small shared-team beta. The invitation is matched against the signed-in Google email before that account can create its own member record. The whole-workspace snapshot remains a private-beta tradeoff, so simultaneous edits can still resolve last-write-wins.
 
 ## Security boundary
 
@@ -63,8 +65,9 @@ This is appropriate for a personal private-beta workspace. Membership and shared
 
 1. A visitor can still use the app locally without Firebase configuration.
 2. A configured visitor can sign in with Google from Settings.
-3. A first sign-in provisions only that user's workspace.
+3. A first sign-in provisions the user's owner guild and membership record.
 4. Signing out removes cloud access but leaves the browser fallback usable.
 5. A ticket with priority, due date, and description survives refresh and cloud sync.
 6. Completing a ticket updates Proof and the deterministic guild-progress HUD.
-7. A different authenticated user cannot read or write another owner's workspace.
+7. An uninvited authenticated user cannot read or write another guild's workspace.
+8. An invited account can use the owner-shared guild code to join only the workspace addressed to its Google email.

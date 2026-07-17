@@ -7,7 +7,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { collectionGroup, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from "firebase/firestore";
 
 const projectId = "forth-rules-test";
 const ownerId = "guild-owner";
@@ -49,11 +49,15 @@ describe("Firestore workspace rules", () => {
     }));
   });
 
-  it("binds a new workspace to the authenticated owner's uid", async () => {
+  it("binds a new workspace owner to the authenticated identity", async () => {
     const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
     await assertFails(setDoc(doc(ownerDb, "workspaces", "borrowed-id"), {
-      ownerId,
+      ownerId: outsiderId,
       name: "Wrong path",
+    }));
+    await assertSucceeds(setDoc(doc(ownerDb, "workspaces", "another-guild"), {
+      ownerId,
+      name: "A second guild",
     }));
   });
 
@@ -103,5 +107,39 @@ describe("Firestore workspace rules", () => {
   it("denies unauthenticated access", async () => {
     const anonymousDb = testEnv.unauthenticatedContext().firestore();
     await assertFails(getDoc(doc(anonymousDb, "workspaces", ownerId)));
+  });
+
+  it("lets an invited account discover and accept only its own invite", async () => {
+    const memberId = "invitee";
+    const memberEmail = "invitee@example.com";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", ownerId), { ownerId, name: "Owner guild" });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "invites", memberEmail), {
+        email: memberEmail,
+        workspaceName: "Owner guild",
+      });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "data", "current"), { state: { version: 2 } });
+    });
+
+    const memberDb = testEnv.authenticatedContext(memberId, { email: memberEmail }).firestore();
+    await assertSucceeds(getDoc(doc(memberDb, "workspaces", ownerId, "invites", memberEmail)));
+    await assertSucceeds(setDoc(doc(memberDb, "workspaces", ownerId, "members", memberId), {
+      uid: memberId,
+      email: memberEmail,
+      role: "member",
+    }));
+    await assertSucceeds(deleteDoc(doc(memberDb, "workspaces", ownerId, "invites", memberEmail)));
+    await assertSucceeds(getDocs(query(collectionGroup(memberDb, "members"), where("uid", "==", memberId))));
+    await assertSucceeds(getDoc(doc(memberDb, "workspaces", ownerId, "data", "current")));
+  });
+
+  it("rejects a member self-join without an email-matched invite", async () => {
+    const memberDb = testEnv.authenticatedContext("uninvited", { email: "uninvited@example.com" }).firestore();
+    await assertFails(setDoc(doc(memberDb, "workspaces", ownerId, "members", "uninvited"), {
+      uid: "uninvited",
+      email: "uninvited@example.com",
+      role: "member",
+    }));
   });
 });

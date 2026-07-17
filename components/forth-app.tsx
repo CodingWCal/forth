@@ -24,6 +24,8 @@ import {
   Trash2,
   Search,
   GripVertical,
+  UserPlus,
+  Scroll,
 } from "lucide-react";
 import { type DragEvent, FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Image from "next/image";
@@ -31,6 +33,11 @@ import { BrandMark } from "@/components/brand-mark";
 import { hasFirebaseConfig } from "@/lib/firebase/config";
 import type { User } from "firebase/auth";
 import {
+  acceptGuildInvite,
+  createGuildWorkspace,
+  type GuildWorkspace,
+  inviteGuildMember,
+  listGuildWorkspaces,
   provisionWorkspace,
   saveWorkspace,
   signInWithGoogle,
@@ -42,6 +49,7 @@ import { createSeedWorkspace } from "@/lib/seed";
 import type { Pace, Project, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
 import {
   createTask,
+  createProject,
   getFocusTasks,
   getMomentumDays,
   getPlannedWeight,
@@ -96,9 +104,12 @@ export function ForthApp({
   const [cloudUser, setCloudUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(hasFirebaseConfig);
   const [syncState, setSyncState] = useState<"local" | "syncing" | "synced" | "error">("local");
+  const [guilds, setGuilds] = useState<GuildWorkspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const cloudReadyRef = useRef(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
+  const campaignDialogRef = useRef<HTMLDialogElement>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   useEffect(() => {
@@ -124,6 +135,8 @@ export function ForthApp({
         setSyncState("syncing");
       } else {
         cloudReadyRef.current = false;
+        setGuilds([]);
+        setActiveWorkspaceId(null);
         setSyncState("local");
       }
     }) ?? undefined;
@@ -132,48 +145,61 @@ export function ForthApp({
   useEffect(() => {
     if (!cloudUser || !hydrated) return;
     let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
     void provisionWorkspace(cloudUser, state)
-      .then(() => {
+      .then(async () => {
         if (cancelled) return;
-        unsubscribe = watchWorkspace(
-          cloudUser,
-          (cloudState) => {
-            cloudReadyRef.current = false;
-            dispatch({ type: "RESET", state: cloudState });
-            window.requestAnimationFrame(() => {
-              cloudReadyRef.current = true;
-              setSyncState("synced");
-            });
-          },
-          () => setSyncState("error"),
-        ) ?? undefined;
+        const availableGuilds = await listGuildWorkspaces(cloudUser);
+        if (cancelled) return;
+        setGuilds(availableGuilds);
+        const storedWorkspaceId = window.localStorage.getItem(`forth.active-workspace.${cloudUser.uid}`);
+        const selectedWorkspaceId = availableGuilds.some((guild) => guild.id === storedWorkspaceId)
+          ? storedWorkspaceId!
+          : cloudUser.uid;
+        setActiveWorkspaceId(selectedWorkspaceId);
       })
       .catch(() => setSyncState("error"));
     return () => {
       cancelled = true;
-      unsubscribe?.();
     };
   // Provision exactly when the authenticated identity changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudUser?.uid, hydrated]);
 
   useEffect(() => {
-    if (!cloudUser || !cloudReadyRef.current) return;
+    if (!cloudUser || !activeWorkspaceId || !hydrated) return;
+    window.localStorage.setItem(`forth.active-workspace.${cloudUser.uid}`, activeWorkspaceId);
+    const unsubscribe = watchWorkspace(
+      activeWorkspaceId,
+      (cloudState) => {
+        cloudReadyRef.current = false;
+        dispatch({ type: "RESET", state: cloudState });
+        window.requestAnimationFrame(() => {
+          cloudReadyRef.current = true;
+          setSyncState("synced");
+        });
+      },
+      () => setSyncState("error"),
+    ) ?? undefined;
+    return () => unsubscribe?.();
+  }, [activeWorkspaceId, cloudUser, hydrated]);
+
+  useEffect(() => {
+    if (!cloudUser || !activeWorkspaceId || !cloudReadyRef.current) return;
     setSyncState("syncing");
     const timeout = window.setTimeout(() => {
-      void saveWorkspace(cloudUser, state)
+      void saveWorkspace(activeWorkspaceId, state)
         .then(() => setSyncState("synced"))
         .catch(() => setSyncState("error"));
     }, 450);
     return () => window.clearTimeout(timeout);
-  }, [cloudUser, state]);
+  }, [activeWorkspaceId, cloudUser, state]);
 
   const focusTasks = getFocusTasks(state);
   const plannedWeight = getPlannedWeight(state);
   const capacity = PACE_CAPACITY[state.pace];
   const activeProject =
     state.projects.find((project) => project.id === activeProjectId) ?? state.projects[0];
+  const activeGuild = guilds.find((guild) => guild.id === activeWorkspaceId) ?? null;
 
   function announce(message: string) {
     setToast(message);
@@ -193,6 +219,15 @@ export function ForthApp({
 
   function openAddDialog() {
     dialogRef.current?.showModal();
+  }
+
+  function openCampaignDialog() {
+    campaignDialogRef.current?.showModal();
+  }
+
+  async function refreshGuildDirectory(user: User) {
+    const availableGuilds = await listGuildWorkspaces(user);
+    setGuilds(availableGuilds);
   }
 
   function openEditDialog(task: Task) {
@@ -224,6 +259,47 @@ export function ForthApp({
     if (window.confirm(`Delete “${task.title}”? This cannot be undone.`)) {
       dispatch({ type: "DELETE_TASK", taskId: task.id });
       announce("Ticket deleted.");
+    }
+  }
+
+  async function createGuild(name: string) {
+    if (!cloudUser) {
+      announce("Sign in with Google before creating a shared guild.");
+      setView("settings");
+      return;
+    }
+    try {
+      const workspaceId = await createGuildWorkspace(cloudUser, name, createSeedWorkspace());
+      await refreshGuildDirectory(cloudUser);
+      setActiveWorkspaceId(workspaceId);
+      setActiveProjectId("project-forth");
+      setView("board");
+      announce(`Guild founded: ${name.trim()}.`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "The guild could not be created.");
+    }
+  }
+
+  async function inviteGuildmate(email: string) {
+    if (!cloudUser || !activeGuild) return;
+    try {
+      await inviteGuildMember(cloudUser, activeGuild, email);
+      announce(`Invitation prepared for ${email.trim().toLowerCase()}. They can join after Google sign-in.`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "The invitation could not be sent.");
+    }
+  }
+
+  async function joinGuild(workspaceId: string) {
+    if (!cloudUser) return;
+    try {
+      const joinedGuild = await acceptGuildInvite(cloudUser, workspaceId);
+      await refreshGuildDirectory(cloudUser);
+      setActiveWorkspaceId(joinedGuild.workspaceId);
+      setView("today");
+      announce(`Joined ${joinedGuild.workspaceName}.`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "The guild invitation could not be accepted.");
     }
   }
 
@@ -267,6 +343,9 @@ export function ForthApp({
               <span>{project.title}</span>
             </button>
           ))}
+          <button className="project-link project-link--new" onClick={openCampaignDialog}>
+            <Plus size={13} /> <span>New campaign</span>
+          </button>
         </div>
 
         <div className="rail-foot">
@@ -352,6 +431,13 @@ export function ForthApp({
             user={cloudUser}
             authLoading={authLoading}
             syncState={syncState}
+            activeGuild={activeGuild}
+            guilds={guilds}
+            onSelectGuild={setActiveWorkspaceId}
+            onCreateGuild={createGuild}
+            onInviteGuildmate={inviteGuildmate}
+            onJoinGuild={joinGuild}
+            onOpenCampaign={openCampaignDialog}
             onSignIn={async () => {
               try {
                 await signInWithGoogle();
@@ -430,6 +516,18 @@ export function ForthApp({
           });
           editDialogRef.current?.close();
           announce(`Quest revised: ${input.title.trim()}`);
+        }}
+      />
+
+      <AddCampaignDialog
+        dialogRef={campaignDialogRef}
+        onSubmit={(input) => {
+          const campaign = createProject(input);
+          dispatch({ type: "ADD_PROJECT", project: campaign });
+          setActiveProjectId(campaign.id);
+          campaignDialogRef.current?.close();
+          setView("board");
+          announce(`Campaign chartered: ${campaign.title}.`);
         }}
       />
 
@@ -1000,6 +1098,13 @@ function SettingsView({
   user,
   authLoading,
   syncState,
+  activeGuild,
+  guilds,
+  onSelectGuild,
+  onCreateGuild,
+  onInviteGuildmate,
+  onJoinGuild,
+  onOpenCampaign,
   onSignIn,
   onSignOut,
 }: {
@@ -1007,6 +1112,13 @@ function SettingsView({
   user: User | null;
   authLoading: boolean;
   syncState: "local" | "syncing" | "synced" | "error";
+  activeGuild: GuildWorkspace | null;
+  guilds: GuildWorkspace[];
+  onSelectGuild: (workspaceId: string) => void;
+  onCreateGuild: (name: string) => Promise<void>;
+  onInviteGuildmate: (email: string) => Promise<void>;
+  onJoinGuild: (workspaceId: string) => Promise<void>;
+  onOpenCampaign: () => void;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
@@ -1033,6 +1145,18 @@ function SettingsView({
         <span className={user && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{user ? syncState : "Local"}</span>
       </section>
 
+      {user && (
+        <GuildHallCard
+          activeGuild={activeGuild}
+          guilds={guilds}
+          onSelectGuild={onSelectGuild}
+          onCreateGuild={onCreateGuild}
+          onInviteGuildmate={onInviteGuildmate}
+          onJoinGuild={onJoinGuild}
+          onOpenCampaign={onOpenCampaign}
+        />
+      )}
+
       <section className="settings-card">
         <div className="settings-icon"><Target size={22} /></div>
         <div>
@@ -1052,6 +1176,116 @@ function SettingsView({
         <button className="button button--danger" onClick={onReset}><RotateCcw size={16} /> {user ? "Restore guild seed" : "Restore local seed"}</button>
       </section>
     </div>
+  );
+}
+
+function GuildHallCard({
+  activeGuild,
+  guilds,
+  onSelectGuild,
+  onCreateGuild,
+  onInviteGuildmate,
+  onJoinGuild,
+  onOpenCampaign,
+}: {
+  activeGuild: GuildWorkspace | null;
+  guilds: GuildWorkspace[];
+  onSelectGuild: (workspaceId: string) => void;
+  onCreateGuild: (name: string) => Promise<void>;
+  onInviteGuildmate: (email: string) => Promise<void>;
+  onJoinGuild: (workspaceId: string) => Promise<void>;
+  onOpenCampaign: () => void;
+}) {
+  const [guildName, setGuildName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [guildCode, setGuildCode] = useState("");
+
+  return (
+    <section className="guild-card">
+      <div className="settings-icon"><UserPlus size={22} /></div>
+      <div>
+        <p className="eyebrow">Guild roster</p>
+        <h3>Build campaigns with real guildmates.</h3>
+        <p>Invite a teammate by the Google email they will use for Forth. Share this guild code with them; after Google sign-in, they enter it here to join this shared workspace.</p>
+        {activeGuild?.role === "owner" && <p className="guild-code">Guild code: <code>{activeGuild.id}</code></p>}
+
+        <label className="field guild-field">
+          <span>Active guild</span>
+          <select value={activeGuild?.id ?? ""} onChange={(event) => onSelectGuild(event.target.value)}>
+            {guilds.map((guild) => <option value={guild.id} key={guild.id}>{guild.name} · {guild.role}</option>)}
+          </select>
+        </label>
+
+        <div className="guild-actions">
+          <button type="button" className="button button--quiet" onClick={onOpenCampaign}><Scroll size={15} /> New campaign</button>
+        </div>
+
+        <form className="guild-inline-form" onSubmit={(event) => {
+          event.preventDefault();
+          if (!guildName.trim()) return;
+          void onCreateGuild(guildName).then(() => setGuildName(""));
+        }}>
+          <label className="field"><span>Found another guild</span><input value={guildName} onChange={(event) => setGuildName(event.target.value)} placeholder="Platform guild" maxLength={60} /></label>
+          <button className="button button--quiet" type="submit">Found guild</button>
+        </form>
+
+        {activeGuild?.role === "owner" && (
+          <form className="guild-inline-form" onSubmit={(event) => {
+            event.preventDefault();
+            if (!inviteEmail.trim()) return;
+            void onInviteGuildmate(inviteEmail).then(() => setInviteEmail(""));
+          }}>
+            <label className="field"><span>Invite a guildmate</span><input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="teammate@example.com" /></label>
+            <button className="button button--primary" type="submit">Send invite</button>
+          </form>
+        )}
+
+        <form className="guild-inline-form" onSubmit={(event) => {
+          event.preventDefault();
+          if (!guildCode.trim()) return;
+          void onJoinGuild(guildCode).then(() => setGuildCode(""));
+        }}>
+          <label className="field"><span>Join with a guild code</span><input value={guildCode} onChange={(event) => setGuildCode(event.target.value)} placeholder="guild-…" /></label>
+          <button className="button button--primary" type="submit">Join guild</button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function AddCampaignDialog({
+  dialogRef,
+  onSubmit,
+}: {
+  dialogRef: React.RefObject<HTMLDialogElement | null>;
+  onSubmit: (input: { title: string; code: string; outcome: string; targetDate: string; color: Project["color"] }) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [code, setCode] = useState("");
+  const [outcome, setOutcome] = useState("");
+  const [targetDate, setTargetDate] = useState("");
+  const [color, setColor] = useState<Project["color"]>("moss");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!title.trim() || !outcome.trim() || !targetDate) return;
+    onSubmit({ title, code, outcome, targetDate, color });
+    setTitle(""); setCode(""); setOutcome(""); setTargetDate(""); setColor("moss");
+  }
+
+  return (
+    <dialog className="move-dialog" ref={dialogRef} onClick={(event) => {
+      if (event.target === dialogRef.current) dialogRef.current?.close();
+    }}>
+      <form onSubmit={submit}>
+        <header className="dialog-head"><div><p className="eyebrow">Campaign charter</p><h2>Begin a new engineering campaign</h2></div><button type="button" className="icon-button" onClick={() => dialogRef.current?.close()} aria-label="Close campaign dialog"><X size={19} /></button></header>
+        <label className="field"><span>Campaign name</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Harden the release gate" required maxLength={60} autoFocus /></label>
+        <label className="field"><span>Campaign code</span><input value={code} onChange={(event) => setCode(event.target.value)} placeholder="RELEASE" maxLength={8} /></label>
+        <label className="field"><span>Outcome</span><textarea value={outcome} onChange={(event) => setOutcome(event.target.value)} placeholder="What will be true when this campaign lands?" required maxLength={180} rows={3} /></label>
+        <div className="field-pair"><label className="field"><span>Target date</span><input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} required /></label><label className="field"><span>Heraldic color</span><select value={color} onChange={(event) => setColor(event.target.value as Project["color"])}><option value="moss">Moss</option><option value="clay">Clay</option><option value="slate">Slate</option></select></label></div>
+        <footer className="dialog-foot"><button type="button" className="button button--quiet" onClick={() => dialogRef.current?.close()}>Cancel</button><button className="button button--primary" type="submit">Charter campaign <Scroll size={16} /></button></footer>
+      </form>
+    </dialog>
   );
 }
 

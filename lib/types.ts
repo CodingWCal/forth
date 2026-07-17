@@ -37,6 +37,7 @@ export type WorkspaceState = {
 
 export type WorkspaceAction =
   | { type: "SET_PACE"; pace: Pace }
+  | { type: "ADD_PROJECT"; project: Project }
   | { type: "ADD_TASK"; task: Task }
   | { type: "UPDATE_TASK"; taskId: string; changes: Partial<Omit<Task, "id" | "createdAt">> }
   | { type: "DELETE_TASK"; taskId: string }

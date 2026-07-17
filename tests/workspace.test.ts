@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createSeedWorkspace } from "../lib/seed";
 import {
   createTask,
+  createProject,
   getFocusTasks,
   getMomentumDays,
   getPlannedWeight,
@@ -151,6 +152,28 @@ describe("workspace state", () => {
     expect(added.tasks[0]).toEqual(task);
     expect(removed.tasks.find((item) => item.id === focusedTask.id)?.isFocus).toBe(false);
     expect(workspaceReducer(removed, { type: "RESET", state: seed })).toEqual(seed);
+  });
+
+  it("creates a campaign charter and adds it without touching existing work", () => {
+    const seed = createSeedWorkspace();
+    const project = createProject({
+      title: "  Harden private beta  ",
+      code: " private beta! ",
+      outcome: "  Invitations are safe to accept.  ",
+      targetDate: "2026-08-12",
+      color: "slate",
+    });
+    const next = workspaceReducer(seed, { type: "ADD_PROJECT", project });
+
+    expect(project).toMatchObject({
+      title: "Harden private beta",
+      code: "PRIVATEB",
+      outcome: "Invitations are safe to accept.",
+      targetDate: "2026-08-12",
+      color: "slate",
+    });
+    expect(next.projects.at(-1)).toEqual(project);
+    expect(next.tasks).toEqual(seed.tasks);
   });
 
   it("adds focus below the limit and rejects missing or completed targets", () => {
