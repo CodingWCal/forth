@@ -1296,7 +1296,14 @@ function PendingInvitesCard({
           </>
         )}
         {inviteStatus === "ready" && pendingInvites.length === 0 && (
-          <p>No invitations are waiting for you. When a guild leader invites this Google email, the summons appears here.</p>
+          <>
+            <p>No invitations are waiting for you. When a guild leader invites this Google email, the summons appears here.</p>
+            <div className="guild-actions">
+              <button type="button" className="button button--quiet" onClick={onRetryInvites}>
+                <RotateCcw size={15} /> Check again
+              </button>
+            </div>
+          </>
         )}
         {inviteStatus === "ready" && pendingInvites.length > 0 && (
           <div className="invite-list">
