@@ -34,10 +34,13 @@ import { hasFirebaseConfig } from "@/lib/firebase/config";
 import type { User } from "firebase/auth";
 import {
   acceptGuildInvite,
+  cancelGuildInvite,
   createGuildWorkspace,
   declineGuildInvite,
+  type GuildInviteSummary,
   type GuildWorkspace,
   inviteGuildMember,
+  listGuildInvites,
   listGuildWorkspaces,
   listPendingGuildInvites,
   type PendingGuildInvite,
@@ -111,6 +114,7 @@ export function ForthApp({
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [pendingInvites, setPendingInvites] = useState<PendingGuildInvite[]>([]);
   const [inviteStatus, setInviteStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [sentInvites, setSentInvites] = useState<GuildInviteSummary[]>([]);
   const cloudReadyRef = useRef(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
@@ -144,6 +148,7 @@ export function ForthApp({
         setActiveWorkspaceId(null);
         setPendingInvites([]);
         setInviteStatus("idle");
+        setSentInvites([]);
         setSyncState("local");
       }
     }) ?? undefined;
@@ -180,6 +185,15 @@ export function ForthApp({
     void refreshPendingInvites(cloudUser);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudUser?.uid]);
+
+  // Owners see the invitations they have already sent for the active guild so
+  // they can cancel a typo or a stale invite. Refreshed when the guild changes.
+  useEffect(() => {
+    if (!cloudUser) return;
+    const guild = guilds.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
+    void refreshSentInvites(cloudUser, guild);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudUser?.uid, activeWorkspaceId, guilds]);
 
   useEffect(() => {
     if (!cloudUser || !activeWorkspaceId || !hydrated) return;
@@ -257,6 +271,18 @@ export function ForthApp({
     }
   }
 
+  async function refreshSentInvites(user: User, guild: GuildWorkspace | null) {
+    if (!guild || guild.role !== "owner") {
+      setSentInvites([]);
+      return;
+    }
+    try {
+      setSentInvites(await listGuildInvites(user, guild));
+    } catch {
+      setSentInvites([]);
+    }
+  }
+
   function openEditDialog(task: Task) {
     setEditingTask(task);
     window.requestAnimationFrame(() => editDialogRef.current?.showModal());
@@ -312,8 +338,21 @@ export function ForthApp({
     try {
       await inviteGuildMember(cloudUser, activeGuild, email);
       announce(`Invitation recorded for ${email.trim().toLowerCase()}. It appears in their Guild Hall after Google sign-in.`);
+      await refreshSentInvites(cloudUser, activeGuild);
     } catch (error) {
       announce(error instanceof Error ? error.message : "The invitation could not be sent.");
+    }
+  }
+
+  async function cancelInvite(email: string) {
+    if (!cloudUser || !activeGuild) return;
+    try {
+      await cancelGuildInvite(cloudUser, activeGuild, email);
+      setSentInvites((current) => current.filter((invite) => invite.email !== email));
+      announce(`Invitation to ${email} cancelled.`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "The invitation could not be cancelled. Try again.");
+      await refreshSentInvites(cloudUser, activeGuild);
     }
   }
 
@@ -491,6 +530,8 @@ export function ForthApp({
             onCreateGuild={createGuild}
             onInviteGuildmate={inviteGuildmate}
             onJoinGuild={joinGuild}
+            sentInvites={sentInvites}
+            onCancelInvite={cancelInvite}
             pendingInvites={pendingInvites}
             inviteStatus={inviteStatus}
             onAcceptInvite={acceptPendingInvite}
@@ -1165,6 +1206,8 @@ function SettingsView({
   onCreateGuild,
   onInviteGuildmate,
   onJoinGuild,
+  sentInvites,
+  onCancelInvite,
   pendingInvites,
   inviteStatus,
   onAcceptInvite,
@@ -1184,6 +1227,8 @@ function SettingsView({
   onCreateGuild: (name: string) => Promise<void>;
   onInviteGuildmate: (email: string) => Promise<void>;
   onJoinGuild: (workspaceId: string) => Promise<void>;
+  sentInvites: GuildInviteSummary[];
+  onCancelInvite: (email: string) => Promise<void>;
   pendingInvites: PendingGuildInvite[];
   inviteStatus: "idle" | "loading" | "ready" | "error";
   onAcceptInvite: (invite: PendingGuildInvite) => Promise<void>;
@@ -1234,6 +1279,8 @@ function SettingsView({
           onCreateGuild={onCreateGuild}
           onInviteGuildmate={onInviteGuildmate}
           onJoinGuild={onJoinGuild}
+          sentInvites={sentInvites}
+          onCancelInvite={onCancelInvite}
           onOpenCampaign={onOpenCampaign}
         />
       )}
@@ -1319,24 +1366,29 @@ function PendingInvitesCard({
               <div className="invite-row" key={invite.workspaceId}>
                 <div>
                   <strong>{invite.workspaceName}</strong>
-                  <small>Invited by {invite.invitedBy}</small>
+                  <small>
+                    Invited by {invite.invitedBy}
+                    {invite.expired ? " · This invitation has expired" : ""}
+                  </small>
                 </div>
                 <div className="guild-actions">
-                  <button
-                    type="button"
-                    className="button button--primary"
-                    disabled={busyWorkspaceId === invite.workspaceId}
-                    onClick={() => void act(invite, onAcceptInvite)}
-                  >
-                    <Check size={15} /> Accept
-                  </button>
+                  {!invite.expired && (
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      disabled={busyWorkspaceId === invite.workspaceId}
+                      onClick={() => void act(invite, onAcceptInvite)}
+                    >
+                      <Check size={15} /> Accept
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="button button--quiet"
                     disabled={busyWorkspaceId === invite.workspaceId}
                     onClick={() => void act(invite, onDeclineInvite)}
                   >
-                    <X size={15} /> Decline
+                    <X size={15} /> {invite.expired ? "Dismiss" : "Decline"}
                   </button>
                 </div>
               </div>
@@ -1355,6 +1407,8 @@ function GuildHallCard({
   onCreateGuild,
   onInviteGuildmate,
   onJoinGuild,
+  sentInvites,
+  onCancelInvite,
   onOpenCampaign,
 }: {
   activeGuild: GuildWorkspace | null;
@@ -1363,11 +1417,23 @@ function GuildHallCard({
   onCreateGuild: (name: string) => Promise<void>;
   onInviteGuildmate: (email: string) => Promise<void>;
   onJoinGuild: (workspaceId: string) => Promise<void>;
+  sentInvites: GuildInviteSummary[];
+  onCancelInvite: (email: string) => Promise<void>;
   onOpenCampaign: () => void;
 }) {
   const [guildName, setGuildName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [guildCode, setGuildCode] = useState("");
+  const [cancelingEmail, setCancelingEmail] = useState<string | null>(null);
+
+  async function cancel(email: string) {
+    setCancelingEmail(email);
+    try {
+      await onCancelInvite(email);
+    } finally {
+      setCancelingEmail(null);
+    }
+  }
 
   return (
     <section className="guild-card">
@@ -1407,6 +1473,28 @@ function GuildHallCard({
             <label className="field"><span>Invite a guildmate</span><input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="teammate@example.com" /></label>
             <button className="button button--primary" type="submit">Send invite</button>
           </form>
+        )}
+
+        {activeGuild?.role === "owner" && sentInvites.length > 0 && (
+          <div className="invite-list">
+            <p className="eyebrow">Invitations sent</p>
+            {sentInvites.map((invite) => (
+              <div className="invite-row" key={invite.email}>
+                <div>
+                  <strong>{invite.email}</strong>
+                  <small>{invite.expired ? "Expired — awaiting cleanup" : "Pending · awaiting sign-in"}</small>
+                </div>
+                <button
+                  type="button"
+                  className="button button--quiet"
+                  disabled={cancelingEmail === invite.email}
+                  onClick={() => void cancel(invite.email)}
+                >
+                  <X size={15} /> Cancel
+                </button>
+              </div>
+            ))}
+          </div>
         )}
 
         <form className="guild-inline-form" onSubmit={(event) => {

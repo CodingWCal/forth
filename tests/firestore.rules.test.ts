@@ -232,4 +232,75 @@ describe("Firestore workspace rules", () => {
       role: "member",
     }));
   });
+
+  it("lets an owner cancel a pending invite but blocks outsiders (TICKET-008)", async () => {
+    const inviteEmail = "cancel-me@example.com";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", ownerId), { ownerId, name: "Owner guild" });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "invites", inviteEmail), {
+        email: inviteEmail,
+        workspaceId: ownerId,
+        workspaceName: "Owner guild",
+      });
+    });
+    const outsiderDb = testEnv.authenticatedContext(outsiderId, { email: "outsider@example.com" }).firestore();
+    await assertFails(deleteDoc(doc(outsiderDb, "workspaces", ownerId, "invites", inviteEmail)));
+    const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+    await assertSucceeds(deleteDoc(doc(ownerDb, "workspaces", ownerId, "invites", inviteEmail)));
+  });
+
+  it("blocks accepting an expired invite but allows a live one (TICKET-008)", async () => {
+    const email = "timed@example.com";
+    const memberId = "timed-user";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", ownerId), { ownerId, name: "Owner guild" });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "invites", email), {
+        email,
+        workspaceId: ownerId,
+        workspaceName: "Owner guild",
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+    });
+    const memberDb = testEnv.authenticatedContext(memberId, { email }).firestore();
+    await assertFails(setDoc(doc(memberDb, "workspaces", ownerId, "members", memberId), {
+      uid: memberId,
+      email,
+      role: "member",
+    }));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "workspaces", ownerId, "invites", email), {
+        email,
+        workspaceId: ownerId,
+        workspaceName: "Owner guild",
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+    });
+    await assertSucceeds(setDoc(doc(memberDb, "workspaces", ownerId, "members", memberId), {
+      uid: memberId,
+      email,
+      role: "member",
+    }));
+  });
+
+  it("still accepts a legacy invite that has no expiry field (TICKET-008)", async () => {
+    const email = "legacy@example.com";
+    const memberId = "legacy-user";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", ownerId), { ownerId, name: "Owner guild" });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "invites", email), {
+        email,
+        workspaceId: ownerId,
+        workspaceName: "Owner guild",
+      });
+    });
+    const memberDb = testEnv.authenticatedContext(memberId, { email }).firestore();
+    await assertSucceeds(setDoc(doc(memberDb, "workspaces", ownerId, "members", memberId), {
+      uid: memberId,
+      email,
+      role: "member",
+    }));
+  });
 });

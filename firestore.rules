@@ -24,6 +24,14 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(inviteEmail));
     }
 
+    // Authoritative, server-clock expiry check. Only call after confirming the
+    // invite exists (get() on a missing doc errors). Invites written before the
+    // expiry field existed default to far-future so they stay acceptable.
+    function inviteNotExpired(workspaceId, inviteEmail) {
+      return get(/databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(inviteEmail))
+        .data.get('expiresAt', request.time + duration.value(3650, 'd')) > request.time;
+    }
+
     // A signed-in person may discover only member documents whose UID is
     // their own. This powers the guild switcher without exposing rosters
     // from unrelated workspaces through a collection-group query.
@@ -64,7 +72,8 @@ service cloud.firestore {
             && request.resource.data.uid == request.auth.uid
             && request.resource.data.email == request.auth.token.email
             && request.resource.data.role == "member"
-            && hasInviteForCurrentUser(workspaceId, request.auth.token.email));
+            && hasInviteForCurrentUser(workspaceId, request.auth.token.email)
+            && inviteNotExpired(workspaceId, request.auth.token.email));
         allow update, delete: if ownsWorkspace(workspaceId);
       }
 
