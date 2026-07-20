@@ -3,13 +3,17 @@ import { createSeedWorkspace } from "../lib/seed";
 import {
   createTask,
   createProject,
+  getDaysUntilDue,
+  getDueSoonTasks,
   getFocusTasks,
   getMomentumDays,
   getPlannedWeight,
   getProjectProgress,
+  getTaskTiming,
   parseStoredWorkspace,
   workspaceReducer,
 } from "../lib/workspace";
+import type { Task } from "../lib/types";
 
 describe("workspace state", () => {
   it("restores only valid versioned state", () => {
@@ -257,5 +261,69 @@ describe("workspace state", () => {
 
     expect(momentum.at(-2)?.weight).toBe(tasks[0].weight);
     expect(momentum.at(-1)?.weight).toBe(0);
+  });
+});
+
+describe("due-date timing", () => {
+  // Local noon so the calendar-day math is stable regardless of the test machine's zone.
+  const now = new Date("2026-07-20T12:00:00");
+
+  function questWithDue(dueDate: string | undefined, overrides: Partial<Task> = {}): Task {
+    const base = createSeedWorkspace().tasks[0];
+    return { ...base, id: `t-${dueDate ?? "none"}-${overrides.status ?? "ready"}`, dueDate, ...overrides };
+  }
+
+  it("counts whole calendar days to the due date, signed for overdue", () => {
+    expect(getDaysUntilDue(questWithDue("2026-07-20"), now)).toBe(0);
+    expect(getDaysUntilDue(questWithDue("2026-07-23"), now)).toBe(3);
+    expect(getDaysUntilDue(questWithDue("2026-07-18"), now)).toBe(-2);
+    expect(getDaysUntilDue(questWithDue(undefined), now)).toBeNull();
+  });
+
+  it("classifies timing into overdue, due-today, due-soon, later, and none", () => {
+    expect(getTaskTiming(questWithDue("2026-07-18"), now).category).toBe("overdue");
+    expect(getTaskTiming(questWithDue("2026-07-20"), now).category).toBe("due-today");
+    expect(getTaskTiming(questWithDue("2026-07-22"), now).category).toBe("due-soon");
+    expect(getTaskTiming(questWithDue("2026-07-23"), now).category).toBe("due-soon");
+    expect(getTaskTiming(questWithDue("2026-07-24"), now).category).toBe("later");
+    expect(getTaskTiming(questWithDue(undefined), now).category).toBe("none");
+  });
+
+  it("honors a custom due-soon window", () => {
+    expect(getTaskTiming(questWithDue("2026-07-27"), now, 7).category).toBe("due-soon");
+    expect(getTaskTiming(questWithDue("2026-07-28"), now, 7).category).toBe("later");
+  });
+
+  it("collects only unshipped, dated quests inside the window, most pressing first", () => {
+    const state = {
+      version: 2 as const,
+      pace: "steady" as const,
+      projects: createSeedWorkspace().projects,
+      tasks: [
+        questWithDue("2026-07-22", { id: "soon" }), // due-soon (+2)
+        questWithDue("2026-07-17", { id: "overdue" }), // overdue (-3)
+        questWithDue("2026-07-20", { id: "today" }), // due-today (0)
+        questWithDue("2026-08-15", { id: "later" }), // outside window
+        questWithDue(undefined, { id: "undated" }), // no due date
+        questWithDue("2026-07-19", { id: "shipped", status: "done", completedAt: now.toISOString() }), // shipped
+      ],
+    };
+    const due = getDueSoonTasks(state, now);
+    expect(due.map((entry) => entry.task.id)).toEqual(["overdue", "today", "soon"]);
+    expect(due.map((entry) => entry.category)).toEqual(["overdue", "due-today", "due-soon"]);
+    expect(due[0].daysUntilDue).toBe(-3);
+  });
+
+  it("breaks same-day ties by heavier weight, then title", () => {
+    const state = {
+      version: 2 as const,
+      pace: "steady" as const,
+      projects: createSeedWorkspace().projects,
+      tasks: [
+        questWithDue("2026-07-22", { id: "light", title: "Amber", weight: 1 }),
+        questWithDue("2026-07-22", { id: "heavy", title: "Zephyr", weight: 3 }),
+      ],
+    };
+    expect(getDueSoonTasks(state, now).map((entry) => entry.task.id)).toEqual(["heavy", "light"]);
   });
 });
