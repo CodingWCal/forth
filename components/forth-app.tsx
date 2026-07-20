@@ -56,6 +56,7 @@ import type { Pace, Project, Task, TaskPriority, TaskStatus, WorkspaceState } fr
 import {
   createTask,
   createProject,
+  getDueSoonTasks,
   getFocusTasks,
   getMomentumDays,
   getPlannedWeight,
@@ -65,6 +66,7 @@ import {
   STATUS_LABELS,
   STORAGE_KEY,
   workspaceReducer,
+  type DueSoonEntry,
 } from "@/lib/workspace";
 
 type View = "today" | "board" | "proof" | "settings";
@@ -649,6 +651,15 @@ function EnvironmentBadge() {
   );
 }
 
+function dueLabel(entry: DueSoonEntry): string {
+  if (entry.category === "due-today") return "Due today";
+  if (entry.category === "overdue") {
+    const days = Math.abs(entry.daysUntilDue);
+    return `${days} day${days === 1 ? "" : "s"} overdue`;
+  }
+  return `Due in ${entry.daysUntilDue} day${entry.daysUntilDue === 1 ? "" : "s"}`;
+}
+
 function TodayView({
   state,
   activeProject,
@@ -682,6 +693,7 @@ function TodayView({
   const maxMomentum = Math.max(...momentum.map((day) => day.weight), 1);
   const progress = getProjectProgress(state, activeProject.id);
   const completedToday = momentum[momentum.length - 1]?.weight ?? 0;
+  const nearing = getDueSoonTasks(state, now);
   const overPlan = plannedWeight > capacity;
   const totalGold = state.tasks.filter((task) => task.status === "done").reduce((sum, task) => sum + task.weight * 10, 0);
   const level = Math.floor(totalGold / 100) + 1;
@@ -777,6 +789,42 @@ function TodayView({
             )}
           </div>
         </section>
+
+        {nearing.length > 0 && (
+          <section className="nearing-panel" aria-labelledby="nearing-title">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Mind the horizon</p>
+                <h2 id="nearing-title">Nearing the moon</h2>
+              </div>
+              <span className="quiet-stat">
+                <strong>{nearing.length}</strong> {nearing.length === 1 ? "quest" : "quests"} near due
+              </span>
+            </div>
+            <ul className="nearing-list">
+              {nearing.map((entry) => {
+                const project = state.projects.find((item) => item.id === entry.task.projectId);
+                return (
+                  <li key={entry.task.id} className={`nearing-row is-${entry.category}`}>
+                    <button
+                      type="button"
+                      className="nearing-main"
+                      onClick={() => onEdit(entry.task)}
+                      aria-label={`Edit quest ${entry.task.title} — ${dueLabel(entry)}`}
+                    >
+                      <span className="nearing-dot" aria-hidden="true" />
+                      <span className="nearing-copy">
+                        <strong>{entry.task.title}</strong>
+                        {project && <small>{project.code} · {STATUS_LABELS[entry.task.status]}</small>}
+                      </span>
+                    </button>
+                    <span className={`due-badge is-${entry.category}`}>{dueLabel(entry)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
         <section className="momentum-panel" aria-labelledby="momentum-title">
           <div className="section-heading">

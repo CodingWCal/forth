@@ -204,6 +204,83 @@ export function getMomentumDays(tasks: Task[], now = new Date(), useUtc = false)
   });
 }
 
+export const DUE_SOON_DAYS = 3;
+
+export type DueCategory = "overdue" | "due-today" | "due-soon" | "later" | "none";
+
+export type DueTiming = {
+  category: DueCategory;
+  /** Whole calendar days until the due date: negative when overdue, 0 today, null when no due date. */
+  daysUntilDue: number | null;
+};
+
+export type DueSoonEntry = {
+  task: Task;
+  category: Extract<DueCategory, "overdue" | "due-today" | "due-soon">;
+  daysUntilDue: number;
+};
+
+/**
+ * Whole calendar days between now and a task's due date, in the viewer's local
+ * zone — matching how due dates are rendered on cards. Anchored at local noon so
+ * daylight-saving shifts never move a date across a day boundary.
+ */
+export function getDaysUntilDue(task: Task, now = new Date()): number | null {
+  if (!task.dueDate) return null;
+  const due = new Date(`${task.dueDate}T12:00:00`);
+  if (Number.isNaN(due.getTime())) return null;
+  const dueMidnight = new Date(due);
+  dueMidnight.setHours(0, 0, 0, 0);
+  const nowMidnight = new Date(now);
+  nowMidnight.setHours(0, 0, 0, 0);
+  return Math.round((dueMidnight.getTime() - nowMidnight.getTime()) / 86_400_000);
+}
+
+/** Classify a task's due date relative to now. Pure — no shame states, just timing. */
+export function getTaskTiming(
+  task: Task,
+  now = new Date(),
+  withinDays = DUE_SOON_DAYS,
+): DueTiming {
+  const daysUntilDue = getDaysUntilDue(task, now);
+  if (daysUntilDue === null) return { category: "none", daysUntilDue: null };
+  if (daysUntilDue < 0) return { category: "overdue", daysUntilDue };
+  if (daysUntilDue === 0) return { category: "due-today", daysUntilDue };
+  if (daysUntilDue <= withinDays) return { category: "due-soon", daysUntilDue };
+  return { category: "later", daysUntilDue };
+}
+
+/**
+ * Active (unshipped) quests that are overdue or due within `withinDays`, most
+ * pressing first. Shipped work never appears — proof is not pressure.
+ */
+export function getDueSoonTasks(
+  state: WorkspaceState,
+  now = new Date(),
+  withinDays = DUE_SOON_DAYS,
+): DueSoonEntry[] {
+  return state.tasks
+    .filter((task) => task.status !== "done" && Boolean(task.dueDate))
+    .map((task) => ({ task, timing: getTaskTiming(task, now, withinDays) }))
+    .filter(
+      (entry): entry is { task: Task; timing: DueTiming & { daysUntilDue: number } } =>
+        entry.timing.category === "overdue" ||
+        entry.timing.category === "due-today" ||
+        entry.timing.category === "due-soon",
+    )
+    .map(({ task, timing }) => ({
+      task,
+      category: timing.category as DueSoonEntry["category"],
+      daysUntilDue: timing.daysUntilDue,
+    }))
+    .sort(
+      (a, b) =>
+        a.daysUntilDue - b.daysUntilDue ||
+        b.task.weight - a.task.weight ||
+        a.task.title.localeCompare(b.task.title),
+    );
+}
+
 export function createTask(input: {
   title: string;
   projectId: string;

@@ -508,10 +508,109 @@ h3 {
 
 .pace-panel,
 .focus-panel,
+.nearing-panel,
 .momentum-panel {
   min-width: 0;
   padding: 28px 0 31px;
   border-bottom: 1px solid var(--rule);
+}
+
+.nearing-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.nearing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--gold);
+  background: rgba(233, 217, 183, 0.5);
+}
+
+.nearing-row.is-overdue {
+  border-left-color: var(--warning);
+}
+
+.nearing-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: var(--cursor-sword);
+  color: inherit;
+}
+
+.nearing-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  background: var(--gold);
+  box-shadow: 1px 1px 0 rgba(46, 34, 20, 0.4);
+}
+
+.nearing-row.is-overdue .nearing-dot {
+  background: var(--warning);
+}
+
+.nearing-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.nearing-copy strong {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nearing-copy small {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.nearing-main:hover .nearing-copy strong {
+  text-decoration: underline;
+}
+
+.due-badge {
+  flex: none;
+  padding: 3px 8px;
+  border: 1px solid var(--rule-dark);
+  background: var(--gold);
+  color: var(--night);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.due-badge.is-overdue {
+  background: var(--warning);
+  color: var(--paper-bright);
+}
+
+.due-badge.is-due-today {
+  background: var(--clay);
+  color: var(--paper-bright);
 }
 
 .pace-panel {
@@ -2241,6 +2340,7 @@ body {
 
 .pace-panel,
 .focus-panel,
+.nearing-panel,
 .momentum-panel,
 .signal-card,
 .field-note-card,
@@ -2257,6 +2357,7 @@ body {
 
 .pace-panel,
 .focus-panel,
+.nearing-panel,
 .momentum-panel {
   margin-bottom: 20px;
   padding: 24px;
