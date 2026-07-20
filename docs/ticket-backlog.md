@@ -30,6 +30,14 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-008 | Implemented on `agent/invite-lifecycle` | Cancel/decline/expiry and rule tests pass; not yet released to production. |
 | TICKET-009 | Planned | Optional email delivery must remain downstream of a reliable in-app invitation flow. |
 
+## External Contribution Intake
+
+| Contribution | Status | Primary backlog mapping | Related quality gates | Recommendation |
+|---|---|---|---|---|
+| [PR #13 — Surface due-soon & overdue quests on Today](https://github.com/CodingWCal/forth/pull/13) | Open and mergeable; 1 commit, 4 files, 5 focused unit test cases supplied | TICKET-013 | TICKET-014, TICKET-015, TICKET-019, TICKET-022, TICKET-025 | Treat Roger's selectors and tests as a strong implementation candidate. Reconcile the new panel with the task-first hierarchy, literal labels, non-color urgency cues, responsive/browser coverage, and safe external-preview policy before merging. Do not create a duplicate feature ticket. |
+
+PR #13's calm, no-shame due-date philosophy matches Forth's product intent: shipped work is excluded, overdue work is signaled without streak punishment, and urgency is derived in the domain layer. The main integration risk is information density: adding another full Today panel without TICKET-013's hierarchy work could reinforce the exact navigation problem identified by peer review.
+
 ## Recommended Delivery Order
 
 1. **Identity and data safety:** TICKET-010, TICKET-001, TICKET-024, TICKET-011, TICKET-002.
@@ -495,7 +503,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Area: Quest Log, desktop sidebar, mobile first screen
 - Effort: L
 - Confidence: High
-- Evidence: Production’s first screen includes rank/gold, provisions, focused quests, seven-day expedition, campaign charter, tavern dispatch, and guild oath. The peer review and browser audit both found the functional task path obscured by thematic chrome.
+- Evidence: Production’s first screen includes rank/gold, provisions, focused quests, seven-day expedition, campaign charter, tavern dispatch, and guild oath. The peer review and browser audit both found the functional task path obscured by thematic chrome. Roger's open PR #13 contributes pure due-date selectors, five focused test cases, and a “Nearing the moon” Today panel; the behavior is valuable, but another full panel must be reconciled with this task-first hierarchy rather than simply stacked above existing modules.
 - Plain English: Keep the magic, but put “What am I doing today?” and “Add a ticket” ahead of decorative story modules.
 - Learning brief (layman terms):
   - What is happening now: Many equally prominent panels compete for attention.
@@ -505,6 +513,9 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Engineering framing: Establish a task-first visual hierarchy, reduce above-the-fold competing regions, persist optional panel disclosure, and retain literal semantics alongside themed labels.
 - Scope:
   - Make Today’s quests and a prominent Add ticket action the primary region.
+  - Integrate overdue, due-today, and due-soon work into that primary task region or one compact disclosure; do not create another equally prominent dashboard module.
+  - Reuse or adapt PR #13's storage-agnostic timing selectors and calm rule that completed work is never nagged.
+  - Document the default due-soon window and let future notification settings consume the same domain policy instead of duplicating urgency logic.
   - Collapse rank/history/dispatch/oath into one optional “Guild progress” drawer or secondary route.
   - Show current workspace and save mode near the page title.
   - Add a first-use pointer to Realm Map without a blocking product tour.
@@ -512,6 +523,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - Removing the fantasy system, XP/proof model, or Chronicle.
 - Acceptance criteria:
   - A first-time tester can locate add, edit, move, and find-ticket actions within five seconds.
+  - Active dated tickets clearly expose overdue, due-today, and due-soon timing in urgency order without relying on color or shame-based language; completed tickets never appear as overdue.
   - At 375px, the first focused ticket begins within the initial viewport or one short scroll.
   - Theme modules remain available but never interrupt ticket operations.
   - Usability testing with at least three cohort members, including one less-technical/older participant, records task completion time and confusion points.
@@ -520,7 +532,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - `app/globals.css`
   - `docs/DESIGN.md`
 - Validation:
-  - Desktop/mobile visual regression, keyboard navigation, 200% zoom, and moderated five-task usability script.
+  - Preserve PR #13's calendar-day, custom-window, filtering, ordering, and tie-break unit cases; add DST/time-zone boundary cases plus desktop/mobile browser coverage, keyboard navigation, 200% zoom, and a moderated five-task usability script.
 - Subagent prompt:
   > Implement TICKET-013 as a task-first Quest Log redesign. Preserve the fantasy identity through materials, typography, and optional progress modules while making core PM actions unmistakable.
 
@@ -531,7 +543,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Area: Global design tokens, controls, dialogs, navigation
 - Effort: L
 - Confidence: High
-- Evidence: `app/globals.css` uses many 6–11px labels; browser inspection found visible task buttons at 38px tall. The theme relies heavily on uppercase monospace microcopy and fantasy-only context, which can reduce readability for older and low-vision users.
+- Evidence: `app/globals.css` uses many 6–11px labels; browser inspection found visible task buttons at 38px tall. The theme relies heavily on uppercase monospace microcopy and fantasy-only context, which can reduce readability for older and low-vision users. PR #13 proposes oxblood, clay, and amber urgency states with text badges; integration must prove contrast and preserve equivalent non-color meaning.
 - Plain English: The interface should remain beautiful and independent to use for people with visual, hearing, motor, cognitive, speech, neurological, or age-related access needs.
 - Learning brief (layman terms):
   - What is happening now: Important supporting text is physically small and some buttons are below a comfortable touch target.
@@ -544,6 +556,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - Make interactive targets at least 44×44px where practical.
   - Audit contrast, focus order, dialog focus return, tabs, status announcements, and 200%/400% reflow.
   - Provide text equivalents for visual status, avoid color-only meaning, respect reduced motion, support switch/voice-friendly names, and keep instructions simple and consistent.
+  - Ensure due-date urgency is announced in text and assistive technology, with color used only as reinforcement.
   - Ensure sword cursor never replaces text or resize cursors and offer a standard-cursor preference.
 - Out of scope:
   - Formal third-party certification in the first pass.
@@ -552,6 +565,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - No essential label renders below the documented minimum.
   - Pages remain usable at 200% zoom and 320 CSS px without two-dimensional scrolling.
   - Screen-reader smoke tests announce page, workspace mode, dialog names, ticket status, and errors correctly.
+  - Due-today, due-soon, and overdue rows remain distinguishable in grayscale, forced-colors mode, and by screen reader.
 - Suggested files:
   - `app/globals.css`
   - `components/forth-app.tsx`
@@ -569,7 +583,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Area: GitHub Actions, Playwright, Firebase emulator
 - Effort: M
 - Confidence: High
-- Evidence: Lint, typecheck, unit, rules, build, and audit pass locally, but there is no committed `.github` quality workflow or browser E2E suite. README describes release QA that is currently manual.
+- Evidence: Lint, typecheck, unit, rules, build, and audit pass locally, but there is no committed `.github` quality workflow or browser E2E suite. README describes release QA that is currently manual. PR #13 adds five useful domain test cases and reports a green local gate, yet its Vercel preview is blocked pending team authorization and no automated browser result is attached.
 - Plain English: Contributors should learn within minutes—not after deployment—if a change broke sign-in, tickets, accessibility, or security rules.
 - Learning brief (layman terms):
   - What is happening now: Tests exist, but someone must remember to run them by hand.
@@ -579,6 +593,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Engineering framing: Add pinned GitHub Actions for install, lint, strict types, unit tests, Firestore emulator tests, production build, dependency review, and Playwright critical paths with cached toolchains and least-privilege permissions.
 - Scope:
   - Implement the existing TICKET-003 Playwright journeys and CI command.
+  - Run safe fork/external-contributor checks without exposing production or preview credentials; give maintainers a documented path to authorize an optional Vercel preview.
   - Add branch-required checks and artifact upload only on failure.
   - Use deterministic local/demo fixtures; keep live OAuth as a separate smoke test.
 - Out of scope:
@@ -587,6 +602,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - A fresh pull request runs all release gates without local machine state.
   - Failing rules, types, unit, build, or critical E2E blocks merge.
   - CI uses read-only/default-deny token permissions and no production Firebase credentials.
+  - External PRs receive deterministic unit/build/browser feedback even when Vercel preview authorization is withheld.
   - Maintainers can reproduce each check locally with documented commands.
 - Suggested files:
   - `.github/workflows/quality.yml`
@@ -716,7 +732,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Area: Repository collaboration, reviews, communication, releases
 - Effort: M
 - Confidence: High
-- Evidence: Other cohort fellows may contribute soon, but the Forth repository has no dedicated `CONTRIBUTING.md`, `CODEOWNERS`, issue/PR templates, decision log, branch naming policy, or documented communication path. Current critical changes live on an unreleased feature branch.
+- Evidence: Other cohort fellows may contribute soon, but the Forth repository has no dedicated `CONTRIBUTING.md`, `CODEOWNERS`, issue/PR templates, decision log, branch naming policy, or documented communication path. PR #13 is the first organizer contribution and its Vercel bot check is blocked because the external author is not authorized on the maintainer's Vercel team, demonstrating that preview ownership and credential boundaries are undocumented.
 - Plain English: Contributors should know what to work on, how to avoid colliding with your roadmap, and how to ask before changing security, data, or design foundations.
 - Learning brief (layman terms):
   - What is happening now: The repository explains the product but not the social contract for changing it.
@@ -729,6 +745,8 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - Require contributors to claim/link a ticket before implementation and communicate scope changes.
   - Define protected areas: `firestore.rules`, auth/persistence, domain types, deployment, and design tokens.
   - Require tests, screenshots for UI, plain/technical rationale, migration notes, and user action items.
+  - Document external-contributor preview behavior: automatic secret-free CI for every PR, maintainer-controlled Vercel authorization when a preview is necessary, and no requirement to add fellows to the production Vercel/Firebase team.
+  - Document how maintainers evaluate a valuable contribution that overlaps an existing roadmap ticket, including how its commits/tests can be adopted without duplicating backlog scope.
   - Add a welcoming communication path and response expectations.
 - Out of scope:
   - Giving outside contributors production Firebase/Vercel credentials or bypassing review for “small” changes.
@@ -736,6 +754,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - A new fellow can set up locally, claim a ticket, open a compliant PR, and identify the correct reviewer using repository docs alone.
   - Changes to protected paths automatically request maintainer review.
   - PR template includes QA, security/privacy, accessibility, screenshots, migration, rollback, and documentation checks.
+  - A fork/external PR receives useful checks without production secrets, and the contributor sees a clear message explaining who can authorize a Vercel preview and when.
   - Main requires passing CI and review before merge; direct pushes are disabled.
 - Suggested files:
   - `CONTRIBUTING.md`
@@ -831,7 +850,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Area: Navigation, status labels, onboarding, contextual help
 - Effort: M
 - Confidence: High
-- Evidence: Labels such as Quest Log, Realm Map, Chronicle, Guild Hall, provisions, expedition, forge, and camp are memorable but require translation. The peer review found the theme undercut the claim that status labels remain literal.
+- Evidence: Labels such as Quest Log, Realm Map, Chronicle, Guild Hall, provisions, expedition, forge, and camp are memorable but require translation. The peer review found the theme undercut the claim that status labels remain literal. PR #13's “Nearing the moon” heading preserves the world-building but needs a nearby literal “Due soon and overdue” meaning for immediate comprehension.
 - Plain English: Keep the world-building, but never make someone decode the game before they can manage work.
 - Learning brief (layman terms):
   - What is happening now: The interface sometimes uses the fantasy metaphor as the only label.
@@ -841,6 +860,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Engineering framing: Create a centralized terminology map and accessible label contract; render theme-first plus literal subtitles or literal-first mode without branching domain status values.
 - Scope:
   - Define canonical labels: Quest Log/Ready, In Forge/In progress, Camped/Paused or blocked, Shipped/Done, Realm Map/Board, Chronicle/Completed work, Guild Hall/Workspace settings.
+  - Define due-date terminology: “Nearing the moon”/Due soon and overdue, while preserving literal row badges such as Due today and 2 days overdue.
   - Add contextual help and a persistent “Plain language” preference.
   - Keep screen-reader names literal even when decorative labels remain.
 - Out of scope:
@@ -849,6 +869,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - A new user can explain every navigation item and work status without external coaching.
   - Plain-language mode changes terminology without losing functionality or data.
   - Accessible names remain literal and tests cover both preferences.
+  - Due-date urgency is understandable without knowing the fantasy metaphor.
 - Suggested files:
   - `lib/types.ts`
   - `lib/workspace.ts`
@@ -957,7 +978,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - Concept to learn: Product parity is outcome parity—helping users complete the same important jobs—not cloning every competitor feature.
 - Engineering framing: Run a JTBD/capability matrix against Linear and Jira, define table-stakes vs differentiators, create epics with data/API/permission implications, and protect performance/accessibility budgets. Preserve Forth’s pace/proof differentiator.
 - Scope:
-  - Phase A table stakes: issue hierarchy/subtasks, labels, comments/mentions, attachments, dependencies/blockers, cycles/sprints/backlog, notifications, saved filters/views, bulk operations.
+  - Phase A table stakes: issue hierarchy/subtasks, labels, comments/mentions, attachments, dependencies/blockers, due-date awareness and reminders, cycles/sprints/backlog, notifications, saved filters/views, bulk operations.
   - Phase B team operations: project updates/health, templates, workload/capacity, dashboards, automation rules, import/export, GitHub integration, webhooks/API.
   - Phase C advanced evaluation: roadmaps, custom fields/workflows, service requests, time/estimation reports, enterprise admin only if cohort evidence demands them.
   - Create separate implementation tickets with owner, effort, dependencies, acceptance criteria, and non-goals.
@@ -966,6 +987,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Acceptance criteria:
   - A documented capability matrix cites current Forth behavior and competitor/user evidence.
   - At least ten representative cohort workflows are tested end to end and mapped to gaps.
+  - The capability matrix records PR #13's calm due-date awareness as an existing Forth differentiator/candidate, then separately evaluates configurable reminders, calendar views, and notification delivery.
   - Every accepted gap becomes a bounded ticket/epic with data, auth, accessibility, performance, and migration impact.
   - The roadmap explicitly identifies features Forth will not build and why.
   - Cohort teams can complete agreed daily PM workflows without a second ticketing tool before “replacement-ready” is claimed.
