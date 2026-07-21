@@ -33,6 +33,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-019 | Repository policy merged via PRs [#19](https://github.com/CodingWCal/forth/pull/19) and [#20](https://github.com/CodingWCal/forth/pull/20) | Human/agent contribution contract, ownership, templates, security reporting, decision log, and backlog-ownership policy are on `main`; hosted branch-protection settings and a fresh-contributor dry run still require maintainer verification. |
 | TICKET-022 | Ready PR [#21](https://github.com/CodingWCal/forth/pull/21) | Roger's original PR #18 commit and authorship are preserved. The guide distinguishes authenticated cloud data from disposable demo data, pairs core fantasy terms with literal PM language, passes automated gates, and passed the maintainer's live authenticated preview smoke test. The centralized terminology map and plain-language preference remain planned. |
 | TICKET-029 | Planned | Add an optional, accessible two-minute coach-mark tour after PR #21 lands; keep it separate so the verified static guide remains a reliable fallback. |
+| TICKET-030 | Planned quick fix | Keep the daily energy meter and note inside the provisions card at every supported viewport; screenshot evidence shows the grid item crossing beneath the campaign rail. |
 
 ## External Contribution Intake
 
@@ -49,11 +50,11 @@ PR #18's themed walkthrough and contextual-help entry point have been reconciled
 
 1. **Identity and data safety:** TICKET-010, TICKET-001, TICKET-024, TICKET-011, TICKET-002.
 2. **Complete the PM contract:** TICKET-028, TICKET-012, TICKET-006, TICKET-005, then discovery epic TICKET-025.
-3. **Make daily use obvious and inclusive:** TICKET-013, TICKET-014, TICKET-022, TICKET-029, TICKET-027, TICKET-004, TICKET-026.
+3. **Make daily use obvious and inclusive:** TICKET-030, TICKET-013, TICKET-014, TICKET-022, TICKET-029, TICKET-027, TICKET-004, TICKET-026.
 4. **Prove and operate it:** TICKET-003/TICKET-015, TICKET-016, TICKET-017, TICKET-018, TICKET-020, TICKET-021.
 5. **Expand engagement safely:** TICKET-023, then TICKET-009 and later notification work.
 
-Active inventory after this audit: **4 P0**, **15 P1**, and **8 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
+Active inventory after this audit: **4 P0**, **16 P1**, and **8 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
 
 ## Priority Guide
 
@@ -1190,3 +1191,41 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **8 P2** tickets, pl
   - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `pnpm build`.
 - Subagent prompt:
   > Implement TICKET-029 after PR #21 merges. Preserve the verified quick-start dialog as a fallback, add an optional accessible coach-mark tour over the real Forth controls, never mutate user data for demonstration, and prove responsive, keyboard, screen-reader, persistence, and missing-anchor behavior with focused tests.
+
+### TICKET-030: Contain the daily energy meter inside its responsive card
+
+- Priority: P1 High
+- Type: Bug/UI/Responsive/A11y
+- Area: Quest Log provisions panel and capacity meter
+- Effort: S
+- Confidence: High
+- Evidence: The maintainer's desktop preview screenshot shows the capacity bar and “energy remain” note leaving the left provisions card and drawing underneath the right campaign rail. `app/globals.css` defines `.pace-row` as `minmax(420px, 1.3fr) minmax(210px, 0.7fr)`, but its `.capacity-wrap` grid item has no explicit `min-width: 0` or overflow-safe wrapping contract. The current E2E suite checks page-level horizontal overflow, which does not detect overlap between sibling grid regions.
+- Plain English: The energy bar should resize or stack inside its own parchment card instead of stretching underneath neighboring content.
+- Learning brief (layman terms):
+  - What is happening now: The page itself may still fit the browser, but one child section is wider than the space its card gave it.
+  - Why it matters: Overlapping panels make the interface look broken and can hide text or controls even when no horizontal scrollbar appears.
+  - What changing it means: Let the energy area shrink and wrap, and stack it below the pace buttons before it can cross the card boundary.
+  - Concept to learn: A grid item's default minimum width can be based on its content. `min-width: 0` explicitly permits that child to shrink within its assigned CSS Grid column instead of overflowing into a sibling.
+- Engineering framing: Correct the `.pace-row`/`.capacity-wrap` intrinsic sizing contract, add a content-aware stacking breakpoint or container rule, and test element-to-container bounds rather than relying only on document `scrollWidth`.
+- Scope:
+  - Keep `.capacity-wrap`, `.capacity-track`, and `.capacity-note` fully inside `.pace-panel` at all supported widths.
+  - Add `min-width: 0`, safe text wrapping, and a breakpoint/container behavior that stacks the meter when the two-column row is too narrow.
+  - Preserve the current 8-bit bar styling, progressbar semantics, numeric energy text, and over-capacity warning.
+  - Add a stable test selector only if semantic roles and nearby labels cannot identify the elements reliably.
+- Out of scope:
+  - Redesigning capacity mathematics, changing pace choices, or folding the broader TICKET-013 information-architecture work into this small fix.
+- Acceptance criteria:
+  - The capacity track and note remain within the provisions card with no overlap at 320, 375, 768, 1024, 1280, and 1440px.
+  - The meter stacks below pace choices before either region falls below a readable width.
+  - Long localized or warning copy wraps without increasing document-level horizontal overflow.
+  - The progressbar retains its accessible name and correct min/max/current values.
+  - A Playwright assertion compares the energy region bounds with the provisions-card bounds and fails on the screenshot's current overlap regression.
+- Suggested files:
+  - `app/globals.css`
+  - `components/forth-app.tsx` only if a stable semantic/test hook is required
+  - `tests/e2e/auth-entry.spec.ts`
+- Validation:
+  - Run the focused Playwright responsive matrix, keyboard/accessibility smoke, `pnpm lint`, `pnpm typecheck`, and `pnpm build`.
+  - Inspect the normal and over-capacity states at desktop, tablet, and phone widths.
+- Subagent prompt:
+  > Implement TICKET-030 as a small responsive regression fix. Keep the energy meter and note inside the provisions card, preserve the fantasy styling and progressbar semantics, add element-boundary browser assertions across the supported viewports, and do not expand into the TICKET-013 redesign.
