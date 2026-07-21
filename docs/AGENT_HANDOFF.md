@@ -5,48 +5,48 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 ## Current checkpoint
 
 - Date: 2026-07-21
-- Worktree: `C:\Users\calvi\Documents\Codex\forth-staging`
-- Branch: `staging`
-- Production baseline: `origin/main` at merge commit `d547e4b` after PR #21
-- Staging commits: `94a7492` (stable staging marker) and `3574584` (TICKET-030 backlog entry)
-- Active ticket: TICKET-013 task-first Quest Log redesign; TICKET-030 is a planned responsive quick fix
-- Release state: PR #21 merged and deployed successfully; production and stable staging both return HTTP 200
+- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket032`
+- Branch: `codex/ticket-032-patch-sharp`
+- Base: `origin/staging` at `9ace9c5`
+- Active ticket: TICKET-032, patch the transitive sharp/libvips advisory
+- Parallel active work: draft PR #22 implements TICKET-013/TICKET-030 on `codex/ticket-013-task-first-quest-log`; do not mix or reimplement its UI changes here
+- Release state: dependency patch is locally validated; commit, push, Vercel preview, and maintainer approval remain
 - Stable staging URL: https://forth-git-staging-calvintrinhvan-2763s-projects.vercel.app/
 
 ## Implemented in this checkpoint
 
-- Reconciled Roger's first-visit welcome guide with Forth's authenticated-entry architecture instead of merging the outdated local-first assumptions.
-- Opens the cloud guide only after a verified Firestore snapshot; demo copy explicitly states that sample tickets remain disposable and browser-local.
-- Stores welcome state safely and separately for demo mode and each authenticated account on a shared device.
-- Pairs the core fantasy labels with literal PM terms for daily capacity, tickets, Kanban status, and completed work.
-- Keeps the native dialog keyboard/backdrop/close behavior, returns focus to the Guild Hall help trigger, and enforces 44px actions.
-- Documents the feature in README and records PR #13/#18 intake status in the canonical backlog.
+- Confirmed that stable Next.js 16.2.11 and canary 16.3.0-canary.92 still request `sharp ^0.34.5`, so a framework patch alone does not resolve GHSA-f88m-g3jw-g9cj.
+- Added a root pnpm 11 override in `pnpm-workspace.yaml` that resolves Next 16.2.10's optional image dependency to patched `sharp 0.35.0` while preserving the existing postcss override and trusted-build policy.
+- Regenerated `pnpm-lock.yaml`; the resolved production graph contains `next@16.2.10 -> sharp@0.35.0` and no `sharp@0.34.5` lock entry.
+- Loaded the installed runtime directly and confirmed `sharp 0.35.0` with libvips `8.18.3`.
+- Built and started the production server, then requested `/_next/image` for the code-squire sprite; Next returned HTTP 200 and `image/png` through the patched optimizer.
 
 ## Validation at handoff
 
-- `pnpm install --frozen-lockfile`: passed; 455 packages reused from the locked store.
-- `pnpm run lint`: passed.
-- `pnpm run typecheck`: passed.
-- `pnpm run test`: passed, 50/50 unit tests.
-- `pnpm run test:rules`: passed, 17/17 Firestore emulator tests.
-- `pnpm run test:e2e`: passed, 7/7 Playwright tests across 320, 375, 768, and 1440px viewports.
-- `pnpm run build`: passed.
-- `pnpm audit --prod`: no known vulnerabilities.
+- `pnpm install --frozen-lockfile`: passed.
+- `pnpm audit --prod`: passed; no known vulnerabilities.
+- Resolved dependency check: `next@16.2.10 -> sharp@0.35.0`.
+- Runtime version check: `sharp 0.35.0`, libvips `8.18.3`.
+- `pnpm lint`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm test`: passed, 50/50 unit tests.
+- `pnpm test:e2e`: passed, 7/7 browser tests on the staging baseline.
+- `pnpm build`: passed.
+- Local production image optimizer: HTTP 200, `Content-Type: image/png`, 3,864-byte optimized response.
+- `pnpm test:rules`: not rerun because this branch changes no Firebase adapter, schema, authentication, membership, or Firestore rules behavior; staging baseline is 17/17.
 - `git diff --check`: passed.
-- Added-line credential-pattern scan: passed.
-- Hosted GitGuardian and Vercel checks on draft PR #21: passed.
-- Live authenticated preview guide (cloud timing, copy, close/reopen behavior): passed by maintainer on 2026-07-21.
+- Added-line credential-pattern scan: passed; zero matches.
 
 ## Next delivery sequence
 
-1. Implement TICKET-013 on a dedicated branch based on `staging` and open a draft PR into `staging`.
-2. Keep TICKET-030 as a separately reviewable responsive quick fix.
-3. Start TICKET-029 only after the task-first hierarchy is stable so tour anchors do not immediately become stale.
-4. Promote `staging` to `main` only after automated QA, authenticated staging smoke, and explicit maintainer approval.
+1. Run final diff and credential checks, commit the isolated override/lock/docs patch, and push a draft PR into `staging`.
+2. Require a successful Vercel clean-install preview and verify the sprite renders before merge.
+3. Merge only after maintainer approval; do not promote to production until draft PR #22 and the remaining release gates are separately accepted.
+4. Remove this override when a supported Next.js release accepts `sharp >=0.35.0`; do not let the temporary compatibility pin become invisible permanent policy.
 
 ## Known next risk
 
-Firebase Authentication requires an exact authorized hostname. The stable staging hostname needs to be added once; temporary feature-preview hostnames should not be added after every push. The centralized terminology map and persistent plain-language preference remain future TICKET-022 work.
+The override crosses Next's declared `^0.34.5` range because upstream has not yet adopted sharp 0.35. Local compatibility is proven for build and image optimization, but the Vercel runtime must still pass. A rollback reintroduces the vulnerability, so rollback means holding release while waiting for an upstream-compatible patch rather than silently shipping `sharp 0.34.5`.
 
 ## Required end-of-session update
 
