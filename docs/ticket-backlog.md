@@ -30,7 +30,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-008 | Implemented on `agent/invite-lifecycle` | Cancel/decline/expiry and rule tests pass; not yet released to production. |
 | TICKET-009 | Planned | Optional email delivery must remain downstream of a reliable in-app invitation flow. |
 | TICKET-010 | Implemented on `codex/ticket-010-auth-entry` | Automated gates pass; live Google/GitHub two-account smoke testing remains a release requirement. |
-| TICKET-019 | In progress on `codex/ticket-019-contributor-guide` | Human/agent contribution contract, ownership, templates, security reporting, and decision log added; repository branch-protection settings still require maintainer verification. |
+| TICKET-019 | Draft PR [#19](https://github.com/CodingWCal/forth/pull/19) | Human/agent contribution contract, ownership, templates, security reporting, and decision log added; repository branch-protection settings still require maintainer verification. |
 
 ## External Contribution Intake
 

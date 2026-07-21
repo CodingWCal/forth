@@ -7,9 +7,11 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Date: 2026-07-21
 - Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket019`
 - Branch: `codex/ticket-019-contributor-guide`
+- Implementation commit: `2462019`
 - Base checkpoint: `codex/ticket-010-auth-entry` (`90198d7`), represented by draft PR #17
+- Draft PR: https://github.com/CodingWCal/forth/pull/19
 - Active ticket: TICKET-019 - safe fellow-contributor workflow and ownership policy
-- Release state: documentation-only stacked work in progress; not merged or deployed
+- Release state: pushed as a documentation-only stacked draft PR; not merged or deployed
 
 ## Implemented in this checkpoint
 
@@ -27,9 +29,9 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 
 ## Remaining before merge/deploy
 
-1. Review the complete staged documentation diff.
-2. Push a stacked draft PR targeting `codex/ticket-010-auth-entry`.
-3. After PR #17 lands, retarget this PR to `main`, verify branch protection requires CODEOWNERS review, and dry-run the guide with a fresh contributor.
+1. Review draft PR #19.
+2. After PR #17 lands, retarget PR #19 to `main`.
+3. Verify branch protection requires CODEOWNERS review, confirm hosted issue-form rendering, and dry-run the guide with a fresh contributor.
 
 ## Known next risk
 
