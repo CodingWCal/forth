@@ -1898,8 +1898,64 @@ h3 {
   backdrop-filter: blur(2px);
 }
 
-.move-dialog form {
+.move-dialog form,
+.welcome-body {
   padding: 26px 28px 23px;
+}
+
+.welcome-lead {
+  margin: 0 0 18px;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.welcome-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 15px;
+}
+
+.welcome-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 13px;
+  align-items: start;
+}
+
+.welcome-step-num {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--night);
+  background: var(--gold);
+  border: 1px solid var(--rule-dark);
+  box-shadow: 2px 2px 0 rgba(46, 34, 20, 0.28);
+}
+
+.welcome-step strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.welcome-step p {
+  margin: 3px 0 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
 }
 
 .dialog-head {
@@ -3645,7 +3701,8 @@ body {
     max-height: calc(100vh - 20px);
   }
 
-  .move-dialog form {
+  .move-dialog form,
+  .welcome-body {
     padding: 23px 19px 20px;
   }
 
