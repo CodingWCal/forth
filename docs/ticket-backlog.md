@@ -34,6 +34,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-022 | Ready PR [#21](https://github.com/CodingWCal/forth/pull/21) | Roger's original PR #18 commit and authorship are preserved. The guide distinguishes authenticated cloud data from disposable demo data, pairs core fantasy terms with literal PM language, passes automated gates, and passed the maintainer's live authenticated preview smoke test. The centralized terminology map and plain-language preference remain planned. |
 | TICKET-029 | Planned | Add an optional, accessible two-minute coach-mark tour after PR #21 lands; keep it separate so the verified static guide remains a reliable fallback. |
 | TICKET-030 | Planned quick fix | Keep the daily energy meter and note inside the provisions card at every supported viewport; screenshot evidence shows the grid item crossing beneath the campaign rail. |
+| TICKET-031 | Planned quick feature | After authentication, eligible Cursor Boston fellows can join the designated cohort guild from one explicit button without copying a guild code; authorization must be enforced beyond the client UI. |
 
 ## External Contribution Intake
 
@@ -48,13 +49,13 @@ PR #18's themed walkthrough and contextual-help entry point have been reconciled
 
 ## Recommended Delivery Order
 
-1. **Identity and data safety:** TICKET-010, TICKET-001, TICKET-024, TICKET-011, TICKET-002.
+1. **Identity and data safety:** TICKET-010, TICKET-001, TICKET-024, TICKET-011, TICKET-002, then the scoped cohort-entry path in TICKET-031.
 2. **Complete the PM contract:** TICKET-028, TICKET-012, TICKET-006, TICKET-005, then discovery epic TICKET-025.
 3. **Make daily use obvious and inclusive:** TICKET-030, TICKET-013, TICKET-014, TICKET-022, TICKET-029, TICKET-027, TICKET-004, TICKET-026.
 4. **Prove and operate it:** TICKET-003/TICKET-015, TICKET-016, TICKET-017, TICKET-018, TICKET-020, TICKET-021.
 5. **Expand engagement safely:** TICKET-023, then TICKET-009 and later notification work.
 
-Active inventory after this audit: **4 P0**, **16 P1**, and **8 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
+Active inventory after this audit: **4 P0**, **17 P1**, and **8 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
 
 ## Priority Guide
 
@@ -1229,3 +1230,47 @@ Active inventory after this audit: **4 P0**, **16 P1**, and **8 P2** tickets, pl
   - Inspect the normal and over-capacity states at desktop, tablet, and phone widths.
 - Subagent prompt:
   > Implement TICKET-030 as a small responsive regression fix. Keep the energy meter and note inside the provisions card, preserve the fantasy styling and progressbar semantics, add element-boundary browser assertions across the supported viewports, and do not expand into the TICKET-013 redesign.
+
+### TICKET-031: Add a safe one-click Cursor Boston guild join path
+
+- Priority: P1 High
+- Type: Feature/Auth/Membership/Security
+- Area: Authenticated onboarding, guild membership, Firestore rules
+- Effort: M
+- Confidence: Medium
+- Depends on: TICKET-007 invitation acceptance, TICKET-011 real member identity, and an explicit maintainer decision about the authoritative Cursor Boston eligibility source.
+- Evidence: Current members must receive an email-matched invitation or copy a guild code after sign-in. The maintainer requested a quick button that lets Cursor Boston users join the shared Forth guild directly after authentication.
+- Plain English: An eligible fellow should be able to sign in, press one obvious “Join the Cursor Boston guild” button, and enter the right shared workspace—without hunting for a code or asking the maintainer to repeat setup steps.
+- Learning brief (layman terms):
+  - What is happening now: The app knows who signed in, but it does not have a trusted, automatic way to know whether that person belongs to the cohort.
+  - Why it matters: A public join button with only a hidden client check would let outsiders bypass the intended invitation boundary.
+  - What changing it means: Choose a trustworthy cohort allowlist or signed invitation source, verify eligibility in the backend/security layer, then expose one clear join action to eligible accounts.
+  - Concept to learn: Authentication proves who a user is; authorization decides what that identified user is allowed to join or change.
+- Engineering framing: Add an idempotent cohort-membership enrollment transition backed by a server-controlled eligibility record or equivalent verifiable claim. Enforce the transition in Firestore rules or a trusted server endpoint, bind the resulting member record to `request.auth.uid`, and make repeated clicks safe.
+- Scope:
+  - Show a literal “Join the Cursor Boston guild” action after Google or GitHub authentication when the account is eligible and not already a member.
+  - Define the canonical guild/workspace ID in safe configuration rather than hard-coding a temporary preview value in presentation code.
+  - Choose and document the eligibility source (for example, a maintainer-managed Firestore allowlist keyed by verified email/UID, or a trusted cohort-platform claim).
+  - Create membership once, open the cohort workspace, and show clear already-joined, not-eligible, loading, retry, and permission-denied states.
+  - Preserve the existing invitation/code path for other private guilds.
+- Out of scope:
+  - Letting every authenticated internet user join, trusting a client-side email-domain check, exposing the cohort roster publicly, or silently enrolling someone without an explicit button press.
+- Acceptance criteria:
+  - An eligible new account can sign in and join the designated cohort guild with one explicit action and no copied guild code.
+  - An ineligible authenticated account is denied by the backend/rules even if it manually calls the write operation.
+  - Repeated clicks or refreshes do not duplicate membership, overwrite another role, or corrupt the workspace.
+  - Existing members see “Open Cursor Boston guild” rather than another join mutation.
+  - Google and GitHub accounts follow the same UID-bound authorization contract; account-linking edge cases receive actionable copy.
+  - Two-account emulator/browser tests cover eligible, ineligible, already-member, retry, and concurrent-click behavior.
+- Suggested files:
+  - `components/forth-app.tsx`
+  - `lib/firebase/workspace.ts`
+  - `firestore.rules`
+  - `tests/firestore.rules.test.ts`
+  - `tests/e2e/auth-entry.spec.ts`
+  - `docs/PHASE2.md`
+- Validation:
+  - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:rules`, `pnpm test:e2e`, and `pnpm build`.
+  - Perform a live staging smoke with one eligible fresh account and one ineligible account without exposing roster data or credentials.
+- Subagent prompt:
+  > Implement TICKET-031 as a one-click, explicitly confirmed Cursor Boston guild join flow. Use a trusted eligibility source, enforce UID-bound membership server-side or in Firestore rules, keep repeated attempts idempotent, preserve normal private-guild invitations, and prove eligible/ineligible boundaries with rules and two-account browser tests.
