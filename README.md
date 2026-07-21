@@ -177,7 +177,7 @@ Vercel imports the GitHub repository and deploys the `main` branch with the stan
 - GitHub sign-in requires the external OAuth provider configuration documented above; code alone cannot enable it in Firebase.
 - Desktop supports native drag and drop; touch and keyboard users use the explicit ticket movement buttons.
 - There is no notification system, analytics dashboard, audit log, backup/restore console, or operational error monitoring yet.
-- Unit and Firestore-rule suites are automated; UI flow verification is currently a release QA procedure rather than a committed Playwright suite.
+- Unit, Firestore-rule, and auth-entry Playwright suites are automated; full in-app workflow coverage is still incomplete and remains a release QA requirement.
 
 These are intentionally scoped private-beta boundaries, not hidden production claims. Future work is tracked in [`docs/ticket-backlog.md`](docs/ticket-backlog.md).
 
@@ -201,8 +201,11 @@ This README contains each required description section. Creating the cohort-repo
 
 ## Project documentation
 
+- [Contribution guide](CONTRIBUTING.md)
 - [Product requirements](docs/PRD.md)
 - [Design direction](docs/DESIGN.md)
 - [Phase 2 private-beta contract](docs/PHASE2.md)
 - [Future ticket backlog](docs/ticket-backlog.md)
 - [Agent operating instructions](AGENTS.md)
+- [Security policy](SECURITY.md)
+- [Decision log](docs/DECISIONS.md)

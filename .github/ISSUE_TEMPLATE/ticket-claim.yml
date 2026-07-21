@@ -1,0 +1,62 @@
+name: Ticket claim
+description: Coordinate a backlog ticket or slice before implementation.
+title: "[Claim] TICKET-### - "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping with Forth. Read `CONTRIBUTING.md`, `AGENTS.md`, the agent handoff, and the backlog before claiming work. Please wait for an explicit **scope confirmed** reply before implementation.
+  - type: input
+    id: ticket
+    attributes:
+      label: Backlog ticket
+      description: Link or name the existing TICKET-### entry.
+      placeholder: TICKET-022
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Proposed user outcome
+      description: Explain in plain language what will be better for the user.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Proposed implementation slice
+      description: Name the acceptance criteria, likely files, and technical approach.
+    validations:
+      required: true
+  - type: textarea
+    id: exclusions
+    attributes:
+      label: Deliberately out of scope
+      description: State what this contribution will not change.
+    validations:
+      required: true
+  - type: textarea
+    id: overlap
+    attributes:
+      label: Overlap and dependencies
+      description: List related issues, PRs, branches, or protected areas you checked.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: List automated checks, browser sizes, accessibility checks, or security-rule tests.
+    validations:
+      required: true
+  - type: checkboxes
+    id: agreement
+    attributes:
+      label: Coordination agreement
+      options:
+        - label: I will wait for explicit scope confirmation before coding.
+          required: true
+        - label: I will not deploy, change production services, or request production secrets.
+          required: true
+        - label: My coding agent, if used, will read the repository instructions before editing.
+          required: true

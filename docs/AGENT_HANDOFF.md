@@ -4,43 +4,36 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 
 ## Current checkpoint
 
-- Date: 2026-07-20
-- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket010`
-- Branch: `codex/ticket-010-auth-entry`
-- Implementation commit: `e9632dc`
-- Base checkpoint: `codex/pr13-qa-fixes` (`f769978`), represented by draft PR #16
-- Draft PR: https://github.com/CodingWCal/forth/pull/17
-- Active ticket: TICKET-010 — authenticated landing, explicit disposable demo, and clean zero-ticket onboarding
-- Release state: pushed as a stacked draft PR; not merged or deployed
+- Date: 2026-07-21
+- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket019`
+- Branch: `codex/ticket-019-contributor-guide`
+- Base checkpoint: `codex/ticket-010-auth-entry` (`90198d7`), represented by draft PR #17
+- Active ticket: TICKET-019 - safe fellow-contributor workflow and ownership policy
+- Release state: documentation-only stacked work in progress; not merged or deployed
 
 ## Implemented in this checkpoint
 
-- Authenticated-first landing with Google and GitHub choices plus full-page redirect recovery.
-- No ticket content before authentication resolves or the visitor explicitly enters demo mode.
-- Demo persistence is isolated from cloud/legacy state; real workspaces start with one user-defined campaign and zero tickets.
-- Save-before-switch/sign-out behavior, a first-snapshot editing gate, retry state, and safe browser-storage fallbacks.
-- Atomic invitation acceptance, strict new guild IDs, and a rule blocking another user from pre-claiming a UID workspace path.
-- Older-user readability/touch-target improvements and Playwright coverage at 320, 375, 768, and 1440px.
+- Human-facing `CONTRIBUTING.md` with ticket claims, explicit scope confirmation, protected areas, validation, external-preview boundaries, and agent instructions.
+- Repository ownership, PR template, ticket-claim and bug-report forms, security reporting, and a durable decision-log format.
+- `AGENTS.md` coordination rules that require agents to inspect active work and honor the confirmed ticket slice.
+- PR #18 intake mapped to existing tickets without merging its outdated pre-authentication assumptions.
 
 ## Validation at handoff
 
-- `pnpm test`: 50/50 passed.
-- `pnpm test:rules`: 17/17 passed.
-- `pnpm typecheck`: passed.
-- `pnpm build`: passed after the final integrity changes.
-- `pnpm audit`: no known vulnerabilities.
-- `pnpm test:e2e`: 6/6 passed across 320, 375, 768, and 1440px viewports.
-- `pnpm lint`: passed.
+- `git diff --check`: passed.
+- Secret-pattern scan: passed; only policy prose mentioning credential categories was found.
+- Issue-form YAML received a manual structure review. No local YAML parser is installed, so hosted GitHub rendering remains the final syntax check after push.
+- No application runtime code changed; full application suites remain inherited from PR #17.
 
 ## Remaining before merge/deploy
 
-1. Manually smoke-test Google and GitHub sign-in plus a two-account invitation on an authorized preview domain.
-2. Merge PR #16, then retarget/rebase PR #17 onto `main` and rerun its checks.
-3. Review and merge PR #17 only after the live auth/invitation gate passes; deployment remains a separate explicit action.
+1. Review the complete staged documentation diff.
+2. Push a stacked draft PR targeting `codex/ticket-010-auth-entry`.
+3. After PR #17 lands, retarget this PR to `main`, verify branch protection requires CODEOWNERS review, and dry-run the guide with a fresh contributor.
 
 ## Known next risk
 
-TICKET-001 remains the next P0: Firestore still saves one last-write-wins workspace snapshot across simultaneous users. The ordered client queue prevents same-tab save races, but it is not multi-user conflict control.
+CODEOWNERS and templates communicate policy in the repository, but GitHub branch-protection settings must enforce required checks and review externally. TICKET-001 remains the next product P0 after the active authentication and governance stacks land.
 
 ## Required end-of-session update
 
