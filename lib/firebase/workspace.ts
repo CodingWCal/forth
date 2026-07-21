@@ -19,6 +19,9 @@ import {
   Timestamp,
   writeBatch,
   where,
+  type DocumentData,
+  type DocumentSnapshot,
+  type FirestoreError,
   type Unsubscribe,
 } from "firebase/firestore";
 import type { WorkspaceState } from "@/lib/types";
@@ -105,7 +108,7 @@ export function watchAuth(callback: (session: CloudSession) => void): Unsubscrib
   const services = getFirebaseServices();
   if (!services) return null;
   callback({ user: null, loading: true });
-  return onAuthStateChanged(services.auth, (user) => callback({ user, loading: false }));
+  return onAuthStateChanged(services.auth, (user: User | null) => callback({ user, loading: false }));
 }
 
 export async function signInWithProvider(provider: ForthAuthProvider) {
@@ -359,11 +362,11 @@ export function watchWorkspace(
 ): Unsubscribe | null {
   const services = getFirebaseServices();
   if (!services) return null;
-  return onSnapshot(doc(services.db, "workspaces", workspaceId, "data", "current"), (snapshot) => {
+  return onSnapshot(doc(services.db, "workspaces", workspaceId, "data", "current"), (snapshot: DocumentSnapshot<DocumentData>) => {
     const state = parseStoredWorkspace(JSON.stringify(snapshot.data()?.state ?? null));
     if (state) onState(state);
     else onError(new Error("The cloud workspace contains missing or invalid ticket data."));
-  }, onError);
+  }, (error: FirestoreError) => onError(new Error(error.message)));
 }
 
 export async function saveWorkspace(workspaceId: string, state: WorkspaceState) {

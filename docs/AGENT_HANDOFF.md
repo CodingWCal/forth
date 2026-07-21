@@ -9,19 +9,20 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Branch: `codex/ticket-013-task-first-quest-log`
 - Production baseline: `origin/main` at merge commit `d547e4b` after PR #21
 - Staging baseline at branch creation: `30e71f4`; canonical `staging` has since added TICKET-031 and TICKET-032 backlog commits
-- Active ticket: TICKET-013 task-first Quest Log redesign; local implementation and QA pass
+- Active ticket: TICKET-013 task-first Dashboard redesign, including the TICKET-030 responsive-capacity fix
 - Draft PR: https://github.com/CodingWCal/forth/pull/22 (targets `staging`)
-- Implementation commit: `7c10e00`
+- Previous implementation commit: `7c10e00`; the current branch tip contains the revised, locally validated usability implementation
 - Release state: PR #21 merged and deployed successfully; production and stable staging both return HTTP 200
 - Stable staging URL: https://forth-git-staging-calvintrinhvan-2763s-projects.vercel.app/
 
 ## Implemented in this checkpoint
 
-- Reordered the Quest Log so todayâ€™s three tickets plus literal Add ticket / Find tickets actions appear before capacity and game-layer modules.
-- Integrated due-today, due-soon, and overdue work into a compact disclosure inside the primary ticket region.
-- Added a dismissible first-use Realm Map pointer and an account/demo-scoped persisted Guild progress disclosure for rank, gold, campaign context, dispatch, oath, and seven-day history.
-- Added responsive hierarchy and persistence browser tests at 320, 375, 768, and 1440px.
-- Updated the Iron & Parchment design contract and canonical agent handoff for the new hierarchy.
+- Replaced fantasy-first navigation with literal `Dashboard`, `Tickets`, `Activity`, and `Workspace & team` labels; fantasy wording is now secondary flavor.
+- Reduced Dashboard to two responsibilities: today's selected tickets and daily capacity. Deadlines moved to Tickets; avatar/rank/gold/history moved to Activity; fake campaign, dispatch, and oath modules were removed.
+- Consolidated ticket creation into one global `New ticket` action and added a persistent `Exit demo` control, so neither action must be rediscovered in another view.
+- Replaced visible quest/status jargon with ticket language and `Ready`, `In progress`, `Paused`, and `Done` while preserving the parchment-and-pixel art direction.
+- Fixed the capacity meter's intrinsic sizing so it stacks before colliding with neighboring content, and added element-boundary regression coverage at 320, 375, 768, 1024, 1280, and 1440px.
+- Updated browser tests and the design/backlog contracts to reflect the revised information architecture.
 
 ## Validation at handoff
 
@@ -30,20 +31,21 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - `pnpm run typecheck`: passed.
 - `pnpm run test`: passed, 50/50 unit tests.
 - `pnpm run test:rules`: not rerun because this branch changes no Firebase adapter, schema, or rules behavior; the staging baseline passed 17/17.
-- `pnpm run test:e2e`: passed, 8/8 Playwright tests across 320, 375, 768, and 1440px viewports.
+- `pnpm run test:e2e`: passed, 10/10 Playwright tests across 320, 375, 768, 1024, 1280, and 1440px viewports.
 - `pnpm run build`: passed.
 - `pnpm audit --prod`: reports one newly published high-severity transitive `sharp@0.34.5` advisory; independently verified as GHSA-f88m-g3jw-g9cj and recorded as TICKET-032 on canonical `staging` rather than mixed into this UX branch.
 - `git diff --check`: passed.
 - Added-line credential-pattern scan: passed.
-- Fresh 375px and 1440px local visual captures inspected: ticket operations are primary, the first mobile ticket begins within the initial viewport, and the closed Guild progress drawer remains available without competing above the fold.
-- Hosted GitGuardian and initial Vercel preview deployment for PR #22: passed; maintainer usability smoke remains.
+- Fresh 375px and 1440px local visual captures inspected: one New ticket action and Exit demo are visible, the first ticket begins within the initial phone viewport, and only today's tickets plus capacity remain on Dashboard.
+- Hosted GitGuardian and the previous Vercel deployment for PR #22 passed; the revised commit still needs a fresh hosted preview and maintainer smoke.
 
 ## Next delivery sequence
 
-1. Run a maintainer visual/usability smoke on PR #22's hosted feature preview, then merge into `staging` only after approval.
-2. After merge, use the stable staging hostname for authenticated cloud testing; do not authorize the temporary feature URL in Firebase.
-3. Keep TICKET-030 as a separately reviewable responsive quick fix.
-4. Start TICKET-029 only after the task-first hierarchy is stable so tour anchors do not immediately become stale.
+1. Commit and push the revised TICKET-013 implementation to draft PR #22, then wait for a fresh hosted preview.
+2. Run a maintainer visual/usability smoke on that preview; merge into `staging` only after explicit approval.
+3. After merge, use the stable staging hostname for authenticated cloud testing; do not authorize the temporary feature URL in Firebase.
+4. Conduct the still-unverified three-person usability exercise, including a third account and one less-technical/older cohort member.
+5. Start TICKET-029 only after this information architecture is accepted so guided-tour anchors do not immediately become stale.
 
 ## Known next risk
 
