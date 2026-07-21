@@ -9,9 +9,9 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Branch: `codex/integrate-pr18-onboarding`
 - Integration commits: `99e9613` (Roger's original PR #18 commit, preserving authorship) and `c49f1e4` (maintainer reconciliation and QA)
 - Base: `origin/main` at `7aeb3c2` after merged PR #20
-- Draft PR: pending publication
+- Draft PR: https://github.com/CodingWCal/forth/pull/21
 - Active ticket: TICKET-022 first-visit/contextual-help slice
-- Release state: committed locally; not yet pushed, merged, or deployed
+- Release state: pushed as draft PR #21; original PR #18 closed as superseded; not merged or deployed
 
 ## Implemented in this checkpoint
 
@@ -37,10 +37,9 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 
 ## Remaining before merge/deploy
 
-1. Push this branch and open the replacement draft PR against `main`.
-2. Link the replacement from the backlog/handoff, then close original PR #18 as superseded with contribution credit preserved.
-3. Inspect hosted checks and manually verify the authenticated cloud-guide copy in the preview with a real Firebase account.
-4. Do not merge or deploy until the maintainer reviews the draft and explicitly approves release.
+1. Inspect hosted checks and manually verify the authenticated cloud-guide copy in the preview with a real Firebase account.
+2. Review draft PR #21, then mark it ready and merge only after the manual cloud check passes.
+3. Do not deploy until the maintainer explicitly approves release from updated `main`.
 
 ## Known next risk
 
