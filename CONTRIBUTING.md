@@ -32,6 +32,8 @@ Use the **Ticket claim** issue form. A useful claim states:
 
 Small documentation corrections and obvious typo fixes do not need a full claim, but they still need a focused PR.
 
+The backlog and agent handoff are canonical maintainer status files. External contributors and their agents should read them, but should report progress in the claim issue and PR instead of editing those files. Only edit `docs/ticket-backlog.md` or `docs/AGENT_HANDOFF.md` when the maintainer explicitly includes that documentation in the confirmed scope.
+
 ## Branch and commit workflow
 
 After scope is confirmed:
@@ -128,6 +130,7 @@ Agents must:
 
 - preserve contributor and maintainer changes already in the worktree;
 - use the confirmed issue/ticket as the scope boundary;
+- report contribution progress in the claim issue and PR rather than changing canonical backlog or handoff status;
 - stop and ask when the requested work conflicts with an active branch or protected area;
 - keep product rules in the reducer/domain layer and authorization in Firestore rules;
 - update tests and relevant documentation with behavioral changes;
