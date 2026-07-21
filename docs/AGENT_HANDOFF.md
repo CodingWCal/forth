@@ -11,7 +11,7 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Base: `origin/main` at `7aeb3c2` after merged PR #20
 - Draft PR: https://github.com/CodingWCal/forth/pull/21
 - Active ticket: TICKET-022 first-visit/contextual-help slice
-- Release state: pushed as draft PR #21; original PR #18 closed as superseded; not merged or deployed
+- Release state: pushed as draft PR #21; GitGuardian and Vercel checks passed; original PR #18 closed as superseded; not merged or deployed
 
 ## Implemented in this checkpoint
 
@@ -34,10 +34,11 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - `pnpm audit --prod`: no known vulnerabilities.
 - `git diff --check`: passed.
 - Added-line credential-pattern scan: passed.
+- Hosted GitGuardian and Vercel checks on draft PR #21: passed.
 
 ## Remaining before merge/deploy
 
-1. Inspect hosted checks and manually verify the authenticated cloud-guide copy in the preview with a real Firebase account.
+1. Manually verify the authenticated cloud-guide copy with a real Firebase account at `https://forth-git-codex-integrate-f27009-calvintrinhvan-2763s-projects.vercel.app` (authorize that exact preview hostname in Firebase Auth first if needed).
 2. Review draft PR #21, then mark it ready and merge only after the manual cloud check passes.
 3. Do not deploy until the maintainer explicitly approves release from updated `main`.
 
