@@ -75,7 +75,9 @@ Rules:
 
 ## Layout and interaction
 
-- Desktop: dark guild rail, parchment workspace, optional campaign context rail.
+- Quest Log hierarchy: todayâ€™s tickets and literal Add ticket / Find tickets actions come first in reading and keyboard order; deadlines sit inside that work region, capacity follows, and campaign/reward/history modules live in one optional Guild progress disclosure.
+- The Guild progress disclosure is closed by default for new users and remembers its state separately for the disposable demo and each authenticated account.
+- Desktop: dark guild rail and a task-first parchment workspace; campaign context appears inside the optional progress disclosure rather than competing with ticket triage.
 - Tablet: compact rail plus the main ledger; context moves into the document flow.
 - Mobile: guild masthead, single-column quest log, fixed four-item bottom menu.
 - Board columns may scroll horizontally inside the board only.
@@ -91,7 +93,9 @@ Rules:
 
 - Guild rail and mobile menu
 - Cloud-rune environment badge
-- Code-squire rank HUD
+- Task-first Today ledger with Add ticket and Find tickets actions
+- Compact due-today, due-soon, and overdue disclosure
+- Optional Guild progress disclosure containing the code-squire rank HUD and campaign context
 - Expedition/energy selector
 - Today’s three-quest party
 - Campaign charter

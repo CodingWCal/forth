@@ -110,6 +110,8 @@ const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge }> = [
 
 /** Device-local flag: the welcome guide has been seen. Kept out of WorkspaceState (never synced). */
 const WELCOME_SEEN_KEY = "forth.welcome.v2";
+const GUILD_PROGRESS_KEY = "forth.guild-progress.v1";
+const REALM_MAP_HINT_KEY = "forth.realm-map-hint.v1";
 
 const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
   light: { label: "Scout", hint: "A short expedition" },
@@ -180,6 +182,7 @@ export function ForthApp({
   const welcomeSeenKey = mode === "cloud"
     ? `${WELCOME_SEEN_KEY}.cloud.${cloudUser.uid}`
     : `${WELCOME_SEEN_KEY}.demo`;
+  const interfaceStorageScope = mode === "cloud" ? `cloud.${cloudUser.uid}` : "demo";
 
   const queueCloudSave = useCallback(async (
     targetRevision: number,
@@ -499,7 +502,7 @@ export function ForthApp({
 
   const title =
     view === "today"
-      ? "Choose today’s three quests."
+      ? "Today’s quests."
       : view === "board"
         ? "Survey the engineering realm."
         : view === "proof"
@@ -774,8 +777,11 @@ export function ForthApp({
 
         {view === "today" && (
           <TodayView
+            key={interfaceStorageScope}
             state={state}
             activeProject={activeProject}
+            workspaceName={activeGuild?.name ?? "Disposable demo"}
+            interfaceStorageScope={interfaceStorageScope}
             focusTasks={focusTasks}
             plannedWeight={plannedWeight}
             capacity={capacity}
@@ -953,6 +959,8 @@ function dueLabel(entry: DueSoonEntry): string {
 function TodayView({
   state,
   activeProject,
+  workspaceName,
+  interfaceStorageScope,
   focusTasks,
   plannedWeight,
   capacity,
@@ -968,6 +976,8 @@ function TodayView({
 }: {
   state: WorkspaceState;
   activeProject: Project;
+  workspaceName: string;
+  interfaceStorageScope: string;
   focusTasks: Task[];
   plannedWeight: number;
   capacity: number;
@@ -981,7 +991,15 @@ function TodayView({
   onDelete: (task: Task) => void;
   onGoToBoard: () => void;
 }) {
+  const guildProgressKey = `${GUILD_PROGRESS_KEY}.${interfaceStorageScope}`;
+  const realmMapHintKey = `${REALM_MAP_HINT_KEY}.${interfaceStorageScope}`;
   const [showAllDue, setShowAllDue] = useState(false);
+  const [guildProgressOpen, setGuildProgressOpen] = useState(
+    () => readBrowserStorage(guildProgressKey).value === "open",
+  );
+  const [showRealmMapHint, setShowRealmMapHint] = useState(
+    () => readBrowserStorage(realmMapHintKey).value !== "dismissed",
+  );
   const momentum = getMomentumDays(state.tasks, now, useUtc);
   const maxMomentum = Math.max(...momentum.map((day) => day.weight), 1);
   const progress = getProjectProgress(state, activeProject.id);
@@ -994,29 +1012,120 @@ function TodayView({
   const level = Math.floor(totalGold / 100) + 1;
   const levelProgress = totalGold % 100;
 
+  function openRealmMap() {
+    writeBrowserStorage(realmMapHintKey, "dismissed");
+    setShowRealmMapHint(false);
+    onGoToBoard();
+  }
+
   return (
     <div className="today-layout">
       <div className="today-main">
-        <section className="adventurer-hud" aria-label="Guild progress">
-          <div className="pixel-portrait" aria-hidden="true">
-            <Image src="/sprites/code-squire.png" alt="" width={76} height={76} unoptimized priority />
+        <p className="workspace-context"><strong>Workspace:</strong> {workspaceName}</p>
+
+        <section className="focus-panel focus-panel--primary" aria-labelledby="focus-title">
+          <div className="section-heading focus-heading">
+            <div>
+              <p className="eyebrow">I · Choose the next work</p>
+              <h2 id="focus-title">Today’s three quests</h2>
+            </div>
+            <span className="quiet-stat"><strong>{focusTasks.length}</strong> of 3 selected</span>
           </div>
-          <div className="adventurer-copy">
-            <p className="eyebrow">Engineer class · Rank {level}</p>
-            <h2>Code Squire</h2>
-            <div className="xp-track" role="progressbar" aria-label="Progress to next level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
-            <small>{100 - levelProgress} craft XP until the next rank</small>
+
+          <div className="quest-primary-actions" aria-label="Ticket actions">
+            <button className="button button--primary" onClick={onOpenAdd}><Plus size={16} /> Add ticket</button>
+            <button className="button button--quiet" onClick={openRealmMap}><Search size={16} /> Find tickets</button>
           </div>
-          <dl className="reward-stats">
-            <div><dt><Coins size={14} /> Gold</dt><dd>{totalGold}</dd></div>
-            <div><dt><ScrollText size={14} /> Quests</dt><dd>{state.tasks.filter((task) => task.status === "done").length}</dd></div>
-          </dl>
+
+          <div className="focus-list">
+            {focusTasks.map((task, index) => (
+              <FocusTaskRow
+                key={task.id}
+                task={task}
+                project={state.projects.find((project) => project.id === task.projectId)!}
+                index={index}
+                onSetStatus={onSetStatus}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            ))}
+            {focusTasks.length < 3 && (
+              <button className="empty-focus" onClick={onOpenAdd}>
+                <Plus size={18} />
+                <span><strong>Add a ticket to today</strong><small>Keep the active plan to three meaningful tasks.</small></span>
+              </button>
+            )}
+          </div>
+
+          {nearing.length > 0 && (
+            <details className="deadline-drawer">
+              <summary>
+                <span><strong>Deadlines needing attention</strong><small>Due today, due soon, and overdue · {nearing.length}</small></span>
+                <ArrowRight size={15} aria-hidden="true" />
+              </summary>
+              <ul className="nearing-list" id="due-task-summary">
+                {visibleNearing.map((entry) => {
+                  const project = state.projects.find((item) => item.id === entry.task.projectId);
+                  return (
+                    <li key={entry.task.id} className={`nearing-row is-${entry.category}`}>
+                      <button
+                        type="button"
+                        className="nearing-main"
+                        onClick={() => onEdit(entry.task)}
+                        aria-label={`Edit quest ${entry.task.title} — ${dueLabel(entry)}`}
+                      >
+                        <span className="nearing-dot" aria-hidden="true" />
+                        <span className="nearing-copy">
+                          <strong>{entry.task.title}</strong>
+                          {project && <small>{project.code} · {STATUS_LABELS[entry.task.status]}</small>}
+                        </span>
+                        <time dateTime={entry.task.dueDate} className={`due-badge is-${entry.category}`}>{dueLabel(entry)}</time>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {nearing.length > DUE_PANEL_LIMIT && (
+                <button
+                  type="button"
+                  className="nearing-view-all"
+                  aria-controls="due-task-summary"
+                  aria-expanded={showAllDue}
+                  onClick={() => setShowAllDue((current) => !current)}
+                >
+                  <span>
+                    <strong>{showAllDue ? `Show first ${DUE_PANEL_LIMIT} due quests` : `View all ${nearing.length} due quests`}</strong>
+                    <small>{showAllDue ? "Collapse this deadline summary" : `${hiddenNearingCount} more beyond this summary`}</small>
+                  </span>
+                  <ArrowRight size={15} aria-hidden="true" />
+                </button>
+              )}
+            </details>
+          )}
+
+          {showRealmMapHint && (
+            <div className="realm-map-hint" role="note">
+              <MapIcon size={19} aria-hidden="true" />
+              <p><strong>Need the full backlog?</strong><span>Find, filter, and move every ticket on the Realm Map (Kanban board).</span></p>
+              <button type="button" onClick={openRealmMap}>Open Realm Map</button>
+              <button
+                type="button"
+                className="hint-dismiss"
+                aria-label="Dismiss Realm Map tip"
+                onClick={() => {
+                  writeBrowserStorage(realmMapHintKey, "dismissed");
+                  setShowRealmMapHint(false);
+                }}
+              ><X size={16} /></button>
+            </div>
+          )}
         </section>
+
         <section className="pace-panel" aria-labelledby="pace-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">I · Choose provisions</p>
-              <h2 id="pace-title">How far can the party travel?</h2>
+              <p className="eyebrow">II · Set today’s capacity</p>
+              <h2 id="pace-title">How much work fits today?</h2>
             </div>
             <span className="capacity-number"><strong>{plannedWeight}</strong> / {capacity} energy</span>
           </div>
@@ -1055,88 +1164,38 @@ function TodayView({
           </div>
         </section>
 
-        <section className="focus-panel" aria-labelledby="focus-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">II · Ready the party</p>
-              <h2 id="focus-title">Today’s three quests</h2>
-            </div>
-            <button className="text-button" onClick={onGoToBoard}>Open realm map <ArrowRight size={15} /></button>
+        <details
+          className="guild-progress"
+          open={guildProgressOpen}
+          onToggle={(event) => {
+            const open = event.currentTarget.open;
+            setGuildProgressOpen(open);
+            writeBrowserStorage(guildProgressKey, open ? "open" : "closed");
+          }}
+        >
+          <summary>
+            <span><strong>Guild progress</strong><small>Rank, gold, campaign progress, and seven-day history</small></span>
+            <ArrowRight size={17} aria-hidden="true" />
+          </summary>
+          <div className="guild-progress-content">
+            <div className="guild-progress-main">
+              <section className="adventurer-hud" aria-label="Guild rank and rewards">
+          <div className="pixel-portrait" aria-hidden="true">
+            <Image src="/sprites/code-squire.png" alt="" width={76} height={76} unoptimized priority />
           </div>
-
-          <div className="focus-list">
-            {focusTasks.map((task, index) => (
-              <FocusTaskRow
-                key={task.id}
-                task={task}
-                project={state.projects.find((project) => project.id === task.projectId)!}
-                index={index}
-                onSetStatus={onSetStatus}
-                onEdit={onEdit}
-                onDelete={onDelete}
-              />
-            ))}
-            {focusTasks.length < 3 && (
-              <button className="empty-focus" onClick={onOpenAdd}>
-                <Plus size={18} />
-                <span><strong>Take another quest</strong><small>Only three may travel in the active party.</small></span>
-              </button>
-            )}
+          <div className="adventurer-copy">
+            <p className="eyebrow">Engineer class · Rank {level}</p>
+            <h2>Code Squire</h2>
+            <div className="xp-track" role="progressbar" aria-label="Progress to next level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
+            <small>{100 - levelProgress} craft XP until the next rank</small>
           </div>
-        </section>
+          <dl className="reward-stats">
+            <div><dt><Coins size={14} /> Gold</dt><dd>{totalGold}</dd></div>
+            <div><dt><ScrollText size={14} /> Quests</dt><dd>{state.tasks.filter((task) => task.status === "done").length}</dd></div>
+          </dl>
+              </section>
 
-        {nearing.length > 0 && (
-          <section className="nearing-panel" aria-labelledby="nearing-title">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Mind the horizon</p>
-                <h2 id="nearing-title">Due soon and overdue</h2>
-              </div>
-              <span className="quiet-stat">
-                Across all campaigns · <strong>{nearing.length}</strong> {nearing.length === 1 ? "quest" : "quests"}
-              </span>
-            </div>
-            <ul className="nearing-list" id="due-task-summary">
-              {visibleNearing.map((entry) => {
-                const project = state.projects.find((item) => item.id === entry.task.projectId);
-                return (
-                  <li key={entry.task.id} className={`nearing-row is-${entry.category}`}>
-                    <button
-                      type="button"
-                      className="nearing-main"
-                      onClick={() => onEdit(entry.task)}
-                      aria-label={`Edit quest ${entry.task.title} — ${dueLabel(entry)}`}
-                    >
-                      <span className="nearing-dot" aria-hidden="true" />
-                      <span className="nearing-copy">
-                        <strong>{entry.task.title}</strong>
-                        {project && <small>{project.code} · {STATUS_LABELS[entry.task.status]}</small>}
-                      </span>
-                      <time dateTime={entry.task.dueDate} className={`due-badge is-${entry.category}`}>{dueLabel(entry)}</time>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {nearing.length > DUE_PANEL_LIMIT && (
-              <button
-                type="button"
-                className="nearing-view-all"
-                aria-controls="due-task-summary"
-                aria-expanded={showAllDue}
-                onClick={() => setShowAllDue((current) => !current)}
-              >
-                <span>
-                  <strong>{showAllDue ? `Show first ${DUE_PANEL_LIMIT} due quests` : `View all ${nearing.length} due quests`}</strong>
-                  <small>{showAllDue ? "Collapse this deadline summary" : `${hiddenNearingCount} more beyond this summary`}</small>
-                </span>
-                <ArrowRight size={15} aria-hidden="true" />
-              </button>
-            )}
-          </section>
-        )}
-
-        <section className="momentum-panel" aria-labelledby="momentum-title">
+              <section className="momentum-panel" aria-labelledby="momentum-title">
           <div className="section-heading">
             <div>
               <p className="eyebrow">III · Read the campaign</p>
@@ -1161,10 +1220,10 @@ function TodayView({
               ))}
             </div>
           </div>
-        </section>
-      </div>
+              </section>
+            </div>
 
-      <aside className="context-rail">
+            <aside className="context-rail">
         <section className="signal-card">
           <div className="card-kicker"><Target size={16} /><span>Campaign charter</span></div>
           <p className="project-code">{activeProject.code} · QUESTING</p>
@@ -1199,7 +1258,10 @@ function TodayView({
           <p>Guild oath · II</p>
           <strong>Ship proof, share context, leave no engineer cursed by hidden state.</strong>
         </section>
-      </aside>
+            </aside>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }

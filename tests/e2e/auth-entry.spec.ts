@@ -63,8 +63,42 @@ for (const viewport of [
     }));
     expect(demoMetrics.scrollWidth).toBeLessThanOrEqual(demoMetrics.clientWidth + 1);
     await expect(page.getByRole("button", { name: "New quest" })).toBeVisible();
+
+    const focusPanel = page.locator(".focus-panel--primary");
+    const pacePanel = page.locator(".pace-panel");
+    const firstQuest = focusPanel.locator(".focus-task").first();
+    const focusBox = await focusPanel.boundingBox();
+    const paceBox = await pacePanel.boundingBox();
+    const firstQuestBox = await firstQuest.boundingBox();
+    expect(focusBox?.y ?? Number.MAX_SAFE_INTEGER).toBeLessThan(paceBox?.y ?? 0);
+    expect(firstQuestBox?.y ?? Number.MAX_SAFE_INTEGER).toBeLessThan(viewport.height * 1.75);
+    await expect(focusPanel.getByRole("button", { name: "Add ticket" })).toBeVisible();
+    await expect(focusPanel.getByRole("button", { name: "Find tickets" })).toBeVisible();
+    await expect(page.locator("details.guild-progress")).toHaveJSProperty("open", false);
   });
 }
+
+test("keeps task actions first and persists the optional Guild progress drawer", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Explore local demo" }).click();
+  await page.getByRole("dialog", { name: "Welcome to Forth" }).getByRole("button", { name: "Start planning" }).click();
+
+  const focusPanel = page.locator(".focus-panel--primary");
+  await expect(focusPanel.getByRole("heading", { name: "Today’s three quests" })).toBeVisible();
+  await expect(page.getByText("Workspace: Disposable demo")).toBeVisible();
+
+  const guildProgress = page.locator("details.guild-progress");
+  await expect(guildProgress).toHaveJSProperty("open", false);
+  await guildProgress.locator("summary").click();
+  await expect(guildProgress).toHaveJSProperty("open", true);
+  await expect(guildProgress.getByRole("heading", { name: "Code Squire" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("forth.guild-progress.v1.demo"))).toBe("open");
+
+  await page.getByRole("button", { name: "Guild Hall" }).click();
+  await page.getByRole("button", { name: "Exit demo" }).click();
+  await page.getByRole("button", { name: "Explore local demo" }).click();
+  await expect(page.locator("details.guild-progress")).toHaveJSProperty("open", true);
+});
 
 test("entry controls have a visible keyboard path", async ({ page }) => {
   await page.goto("/");
@@ -78,7 +112,7 @@ test("entry controls have a visible keyboard path", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Welcome to Forth" })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Choose today’s three quests." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Today’s quests." })).toBeVisible();
 });
 
 test("explains disposable demo data and reopens the guide from Guild Hall", async ({ page }) => {

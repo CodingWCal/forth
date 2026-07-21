@@ -3282,6 +3282,207 @@ body {
   50% { transform: translateY(-2px) scaleX(.985); }
 }
 
+/* TICKET-013: keep daily work primary and reveal the game layer on demand. */
+.today-layout {
+  display: block;
+  max-width: 1180px;
+}
+
+.workspace-context {
+  margin: -14px 0 14px;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+
+.workspace-context strong {
+  color: var(--ink);
+  text-transform: uppercase;
+}
+
+.focus-panel--primary {
+  padding-top: 24px;
+  border-top: 5px solid var(--moss);
+  background: rgba(250, 241, 216, .94);
+}
+
+.quest-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -5px 0 18px;
+}
+
+.quest-primary-actions .button {
+  min-height: 44px;
+}
+
+.focus-heading .quiet-stat {
+  padding-top: 0;
+}
+
+.deadline-drawer,
+.guild-progress {
+  margin-top: 18px;
+  border: 2px solid var(--rule-dark);
+  background: rgba(229, 210, 168, .62);
+  box-shadow: 3px 3px 0 rgba(83, 61, 35, .18);
+}
+
+.deadline-drawer > summary,
+.guild-progress > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 54px;
+  padding: 10px 14px;
+  color: var(--ink);
+  cursor: var(--cursor-sword);
+  list-style: none;
+}
+
+.deadline-drawer > summary::-webkit-details-marker,
+.guild-progress > summary::-webkit-details-marker {
+  display: none;
+}
+
+.deadline-drawer > summary > span,
+.guild-progress > summary > span {
+  display: grid;
+  min-width: 0;
+}
+
+.deadline-drawer > summary strong,
+.guild-progress > summary strong {
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.deadline-drawer > summary small,
+.guild-progress > summary small {
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.deadline-drawer > summary svg,
+.guild-progress > summary svg {
+  flex: none;
+  transition: transform 150ms ease;
+}
+
+.deadline-drawer[open] > summary svg,
+.guild-progress[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.deadline-drawer .nearing-list {
+  padding: 0 12px 12px;
+}
+
+.deadline-drawer .nearing-view-all {
+  width: calc(100% - 24px);
+  margin: 0 12px 12px;
+}
+
+.realm-map-hint {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 13px;
+  border: 1px dashed var(--rule-dark);
+  background: rgba(216, 193, 143, .48);
+}
+
+.realm-map-hint p,
+.realm-map-hint strong,
+.realm-map-hint span {
+  display: block;
+}
+
+.realm-map-hint p {
+  margin: 0;
+}
+
+.realm-map-hint strong {
+  font-size: 13px;
+}
+
+.realm-map-hint span {
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.realm-map-hint button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--rule-dark);
+  background: var(--paper-bright);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.realm-map-hint .hint-dismiss {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.guild-progress {
+  margin-top: 0;
+  background: rgba(224, 202, 154, .72);
+}
+
+.guild-progress > summary {
+  min-height: 66px;
+  padding: 13px 17px;
+}
+
+.guild-progress-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px;
+  gap: 22px;
+  min-width: 0;
+  padding: 0 17px 20px;
+  border-top: 1px solid var(--rule-dark);
+}
+
+.guild-progress-main {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-width: 0;
+  padding-top: 20px;
+}
+
+.guild-progress .adventurer-hud,
+.guild-progress .momentum-panel {
+  margin: 0;
+}
+
+.guild-progress .momentum-panel {
+  padding: 20px;
+}
+
+.guild-progress .context-rail {
+  padding-top: 20px;
+}
+
 @media (max-width: 1180px) {
   .main-canvas {
     padding-right: 30px;
@@ -3289,7 +3490,15 @@ body {
   }
 
   .today-layout {
+    display: block;
+  }
+
+  .guild-progress-content {
     grid-template-columns: 1fr;
+  }
+
+  .guild-progress .context-rail {
+    padding-top: 0;
   }
 
   .context-rail {
@@ -3552,6 +3761,49 @@ body {
 
   .section-heading h2 {
     font-size: 24px;
+  }
+
+  .workspace-context {
+    margin-top: -9px;
+    font-size: 11px;
+  }
+
+  .focus-panel--primary {
+    padding: 19px 14px;
+  }
+
+  .quest-primary-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .quest-primary-actions .button {
+    width: 100%;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .realm-map-hint {
+    grid-template-columns: auto minmax(0, 1fr) 44px;
+  }
+
+  .realm-map-hint > button:not(.hint-dismiss) {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .realm-map-hint .hint-dismiss {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .guild-progress-content {
+    padding: 0 12px 14px;
+  }
+
+  .guild-progress > summary {
+    padding-right: 13px;
+    padding-left: 13px;
   }
 
   .capacity-number,
