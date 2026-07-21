@@ -35,6 +35,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-029 | Planned | Add an optional, accessible two-minute coach-mark tour after PR #21 lands; keep it separate so the verified static guide remains a reliable fallback. |
 | TICKET-030 | Planned quick fix | Keep the daily energy meter and note inside the provisions card at every supported viewport; screenshot evidence shows the grid item crossing beneath the campaign rail. |
 | TICKET-031 | Planned quick feature | After authentication, eligible Cursor Boston fellows can join the designated cohort guild from one explicit button without copying a guild code; authorization must be enforced beyond the client UI. |
+| TICKET-032 | Planned security patch | GitHub advisory GHSA-f88m-g3jw-g9cj, published 2026-07-21, flags transitive `sharp@0.34.5`; update to a compatible patched path and rerun image/build/deploy QA before the next production promotion. |
 
 ## External Contribution Intake
 
@@ -49,13 +50,13 @@ PR #18's themed walkthrough and contextual-help entry point have been reconciled
 
 ## Recommended Delivery Order
 
-1. **Identity and data safety:** TICKET-010, TICKET-001, TICKET-024, TICKET-011, TICKET-002, then the scoped cohort-entry path in TICKET-031.
+1. **Identity and data safety:** TICKET-032, TICKET-010, TICKET-001, TICKET-024, TICKET-011, TICKET-002, then the scoped cohort-entry path in TICKET-031.
 2. **Complete the PM contract:** TICKET-028, TICKET-012, TICKET-006, TICKET-005, then discovery epic TICKET-025.
 3. **Make daily use obvious and inclusive:** TICKET-030, TICKET-013, TICKET-014, TICKET-022, TICKET-029, TICKET-027, TICKET-004, TICKET-026.
 4. **Prove and operate it:** TICKET-003/TICKET-015, TICKET-016, TICKET-017, TICKET-018, TICKET-020, TICKET-021.
 5. **Expand engagement safely:** TICKET-023, then TICKET-009 and later notification work.
 
-Active inventory after this audit: **4 P0**, **17 P1**, and **8 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
+Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
 
 ## Priority Guide
 
@@ -1274,3 +1275,34 @@ Active inventory after this audit: **4 P0**, **17 P1**, and **8 P2** tickets, pl
   - Perform a live staging smoke with one eligible fresh account and one ineligible account without exposing roster data or credentials.
 - Subagent prompt:
   > Implement TICKET-031 as a one-click, explicitly confirmed Cursor Boston guild join flow. Use a trusted eligibility source, enforce UID-bound membership server-side or in Firestore rules, keep repeated attempts idempotent, preserve normal private-guild invitations, and prove eligible/ineligible boundaries with rules and two-account browser tests.
+
+### TICKET-032: Patch the newly disclosed sharp/libvips vulnerability
+
+- Priority: P1 High
+- Type: Security/Dependency/Release
+- Area: Next.js image pipeline, lockfile, Vercel build/runtime
+- Effort: S
+- Confidence: High
+- Evidence: `pnpm audit --prod` on 2026-07-21 reports high-severity [GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj). The lockfile resolves Next.js to `sharp@0.34.5`; the official GitHub advisory marks versions below `0.35.0` vulnerable and lists `0.35.0` as the first patched version. Forth currently processes only trusted local sprite assets, which limits present exploitability but does not justify carrying the vulnerable production dependency.
+- Plain English: A newly announced flaw affects the image-processing library bundled under Next.js. Forth does not currently accept user image uploads, so immediate exposure is limited, but the dependency should be patched and proven compatible before the next production release.
+- Engineering framing: Select a Next.js-supported resolution to `sharp>=0.35.0` (prefer an upstream Next.js patch over a blind override), regenerate the pnpm lockfile, verify platform-specific optional packages, and exercise local/Vercel image optimization without weakening reproducibility.
+- Scope:
+  - Check for a compatible Next.js patch release or documented dependency update before adding an override.
+  - Resolve every production `sharp` path to a non-vulnerable version and keep the lockfile deterministic.
+  - Verify the code-squire sprite and all `next/image` render paths locally and on Vercel.
+  - Record the advisory, chosen remediation, and rollback in release notes/handoff.
+- Out of scope:
+  - Suppressing the audit, deleting image optimization without evidence, or bundling unrelated dependency upgrades.
+- Acceptance criteria:
+  - `pnpm audit --prod` reports no GHSA-f88m-g3jw-g9cj finding.
+  - `pnpm install --frozen-lockfile`, lint, typecheck, unit tests, E2E, and production build pass on a fresh install.
+  - Vercel preview succeeds and local/static sprite images render sharply at supported sizes.
+  - If upstream compatibility blocks the patch, the release is explicitly held or a documented temporary mitigation proves that untrusted images cannot reach sharp.
+- Suggested files:
+  - `package.json`
+  - `pnpm-lock.yaml`
+  - `docs/AGENT_HANDOFF.md`
+- Validation:
+  - Re-run the full release suite, `pnpm audit --prod`, and a Vercel preview image smoke test.
+- Subagent prompt:
+  > Implement TICKET-032 as an isolated security dependency patch. Prefer a Next.js-supported route to sharp 0.35.0 or newer, keep the lockfile reproducible, prove image rendering and the complete test/build suite, and do not suppress the official GitHub advisory.
