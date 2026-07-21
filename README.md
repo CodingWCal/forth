@@ -48,6 +48,7 @@ In engineering terms, Forth combines capacity planning, a WIP limit, determinist
 - Sign in with Google or GitHub to access authorized Firebase workspaces.
 - Start a first real workspace with a user-named campaign and zero sample tickets.
 - Explore sample content only through an explicitly labeled, disposable browser-local demo.
+- Follow a first-visit guide that explains cloud versus demo data and pairs fantasy labels with standard project-management terms; reopen it anytime from Guild Hall.
 - Synchronize the current workspace through Cloud Firestore.
 - Found additional guild workspaces and create new campaigns inside them.
 - Invite a teammate by their account email; pending invitations appear inside Forth after sign-in.

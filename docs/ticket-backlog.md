@@ -30,18 +30,19 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-008 | Implemented on `agent/invite-lifecycle` | Cancel/decline/expiry and rule tests pass; not yet released to production. |
 | TICKET-009 | Planned | Optional email delivery must remain downstream of a reliable in-app invitation flow. |
 | TICKET-010 | Implemented on `codex/ticket-010-auth-entry` | Automated gates pass; live Google/GitHub two-account smoke testing remains a release requirement. |
-| TICKET-019 | Draft PR [#19](https://github.com/CodingWCal/forth/pull/19) | Human/agent contribution contract, ownership, templates, security reporting, and decision log added; repository branch-protection settings still require maintainer verification. |
+| TICKET-019 | Repository policy merged via PRs [#19](https://github.com/CodingWCal/forth/pull/19) and [#20](https://github.com/CodingWCal/forth/pull/20) | Human/agent contribution contract, ownership, templates, security reporting, decision log, and backlog-ownership policy are on `main`; hosted branch-protection settings and a fresh-contributor dry run still require maintainer verification. |
+| TICKET-022 | First-visit guide slice integrated on `codex/integrate-pr18-onboarding` | Roger's original PR #18 commit and authorship are preserved. The guide now distinguishes authenticated cloud data from disposable demo data, pairs core fantasy terms with literal PM language, and has responsive/browser coverage. The centralized terminology map and plain-language preference remain planned. |
 
 ## External Contribution Intake
 
 | Contribution | Status | Primary backlog mapping | Related quality gates | Recommendation |
 |---|---|---|---|---|
-| [PR #18 - Add a first-visit welcome guide modal](https://github.com/CodingWCal/forth/pull/18) | Open; maintainer edits enabled; based on pre-TICKET-010 `main`; fork preview requires maintainer authorization | TICKET-022 | TICKET-005, TICKET-010, TICKET-019 | Do not merge the old local-first/seeded-board copy. After PR #17 lands, update the branch against `main`, preserve Roger's authorship, adapt the guide to authenticated workspaces and explicit demo mode, use safe browser storage, and run the missing open/dismiss/reopen browser flow. |
-| [PR #13 — Surface due-soon & overdue quests on Today](https://github.com/CodingWCal/forth/pull/13) | Open and mergeable; 1 commit, 4 files, 5 focused unit test cases supplied | TICKET-013 | TICKET-014, TICKET-015, TICKET-019, TICKET-022, TICKET-025 | Treat Roger's selectors and tests as a strong implementation candidate. Reconcile the new panel with the task-first hierarchy, literal labels, non-color urgency cues, responsive/browser coverage, and safe external-preview policy before merging. Do not create a duplicate feature ticket. |
+| [PR #18 - Add a first-visit welcome guide modal](https://github.com/CodingWCal/forth/pull/18) | Integrated on `codex/integrate-pr18-onboarding`; replacement draft PR pending | TICKET-022 | TICKET-005, TICKET-010, TICKET-019 | Roger's original commit and authorship are preserved. The reconciled implementation waits for the authenticated Firestore snapshot, distinguishes cloud from demo mode, uses account-aware safe browser storage, adds literal PM translations, and passes open/dismiss/reopen plus 320/375/768/1440px browser checks. Close the original PR as superseded once the replacement draft is published. |
+| [PR #13 — Surface due-soon & overdue quests on Today](https://github.com/CodingWCal/forth/pull/13) | Closed as superseded by merged PR [#16](https://github.com/CodingWCal/forth/pull/16), which preserves Roger's original commit/authorship and includes the integration QA fixes | TICKET-013 | TICKET-014, TICKET-015, TICKET-019, TICKET-022, TICKET-025 | Continue any future task-first hierarchy refinements under TICKET-013 rather than reopening or duplicating the original contribution. |
 
-PR #13's calm, no-shame due-date philosophy matches Forth's product intent: shipped work is excluded, overdue work is signaled without streak punishment, and urgency is derived in the domain layer. The main integration risk is information density: adding another full Today panel without TICKET-013's hierarchy work could reinforce the exact navigation problem identified by peer review.
+PR #13's calm, no-shame due-date philosophy is now represented on `main` through PR #16: shipped work is excluded, overdue work is signaled without streak punishment, and urgency is derived in the domain layer. TICKET-013 still owns the broader information-hierarchy refinement so future work does not stack competing Today modules.
 
-PR #18 contains a useful themed walkthrough and contextual-help entry point, but its copy assumes the superseded local-first architecture. Maintainer edits are enabled, so Forth can reconcile it after the authenticated-entry dependency lands without requiring the contributor to redo the rebase and without losing attribution.
+PR #18's themed walkthrough and contextual-help entry point have been reconciled onto current authenticated `main` without asking the contributor to redo the rebase. The original authored commit remains visible in history; maintainer follow-up limits the tour to verified cloud data or explicit demo data and adds accessibility/responsive regression coverage.
 
 ## Recommended Delivery Order
 
@@ -743,7 +744,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Area: Repository collaboration, reviews, communication, releases
 - Effort: M
 - Confidence: High
-- Implementation status: In progress on `codex/ticket-019-contributor-guide`; repository files are implemented, while hosted branch-protection enforcement and a fresh-contributor dry run remain before completion.
+- Implementation status: Repository policy merged through PRs #19 and #20; hosted branch-protection enforcement and a fresh-contributor dry run remain before completion.
 - Evidence: Other cohort fellows may contribute soon, but the Forth repository has no dedicated `CONTRIBUTING.md`, `CODEOWNERS`, issue/PR templates, decision log, branch naming policy, or documented communication path. PR #13 is the first organizer contribution and its Vercel bot check is blocked because the external author is not authorized on the maintainer's Vercel team, demonstrating that preview ownership and credential boundaries are undocumented.
 - Plain English: Contributors should know what to work on, how to avoid colliding with your roadmap, and how to ask before changing security, data, or design foundations.
 - Learning brief (layman terms):
@@ -862,6 +863,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Area: Navigation, status labels, onboarding, contextual help
 - Effort: M
 - Confidence: High
+- Implementation status: First-visit/contextual-help slice integrated on `codex/integrate-pr18-onboarding`; centralized terminology mapping and the persistent plain-language preference remain planned.
 - Evidence: Labels such as Quest Log, Realm Map, Chronicle, Guild Hall, provisions, expedition, forge, and camp are memorable but require translation. The peer review found the theme undercut the claim that status labels remain literal. PR #13's “Nearing the moon” heading preserves the world-building but needs a nearby literal “Due soon and overdue” meaning for immediate comprehension.
 - Plain English: Keep the world-building, but never make someone decode the game before they can manage work.
 - Learning brief (layman terms):

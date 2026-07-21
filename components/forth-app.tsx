@@ -177,7 +177,9 @@ export function ForthApp({
   const campaignDialogRef = useRef<HTMLDialogElement>(null);
   const welcomeDialogRef = useRef<HTMLDialogElement>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const welcomeSeenKey = `${WELCOME_SEEN_KEY}.${mode}`;
+  const welcomeSeenKey = mode === "cloud"
+    ? `${WELCOME_SEEN_KEY}.cloud.${cloudUser.uid}`
+    : `${WELCOME_SEEN_KEY}.demo`;
 
   const queueCloudSave = useCallback(async (
     targetRevision: number,
@@ -285,9 +287,9 @@ export function ForthApp({
     };
   }, []);
 
-  // The guide is tracked separately for cloud and demo mode. Someone who first
-  // explores sample data still receives the accurate signed-in explanation
-  // when they later enter a real workspace.
+  // Demo and each signed-in account keep separate seen-state. Someone who first
+  // explores sample data—or shares this device—still receives the accurate
+  // signed-in explanation when entering their own real workspace.
   useEffect(() => {
     if (!hydrated || (mode === "cloud" && !cloudSnapshotReady)) return;
     if (readBrowserStorage(welcomeSeenKey).value) return;
