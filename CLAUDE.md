@@ -10,4 +10,4 @@ Before changing code:
 4. Read [`docs/ticket-backlog.md`](docs/ticket-backlog.md) and continue the highest-priority in-progress ticket unless the user changes direction.
 5. Inspect `git status` and recent commits so you preserve work from Codex, Claude Code, the user, and external contributors.
 
-Before ending a session, update the shared handoff and backlog as required by `AGENTS.md`. Do not create a separate Claude-only backlog or silently mark incomplete work done.
+Before ending a maintainer-owned session, update the shared handoff and backlog as required by `AGENTS.md`. In an external contribution, report progress in the claim issue and PR instead; do not edit canonical status files unless the confirmed scope requires it. Do not create a separate Claude-only backlog or silently mark incomplete work done.

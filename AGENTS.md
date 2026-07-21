@@ -4,9 +4,9 @@
 
 - Treat this file as the cross-agent operating contract. `CLAUDE.md` points here; do not maintain conflicting assistant-specific rules.
 - At the start of every work session, read this file, `CONTRIBUTING.md`, `docs/AGENT_HANDOFF.md`, and `docs/ticket-backlog.md` before editing.
-- Continue the highest-priority in-progress backlog ticket unless the user explicitly changes priorities. Do not duplicate an existing ticket under a new name.
-- Before ending a session, update `docs/AGENT_HANDOFF.md` with branch/commit, completed work, validation results, uncommitted files, blockers, and the exact safest next step.
-- When ticket scope or status changes, update `docs/ticket-backlog.md` in the same checkpoint. Never mark a ticket complete until its acceptance criteria and listed checks pass.
+- In a maintainer-owned session, continue the highest-priority in-progress backlog ticket unless the user explicitly changes priorities. An external contributor agent works only on the ticket slice confirmed in its claim issue.
+- Maintainer agents update `docs/AGENT_HANDOFF.md` and `docs/ticket-backlog.md` when status changes. External contributor agents report status in their claim issue and PR; they do not edit either canonical file unless the confirmed scope explicitly requires it.
+- Never mark a ticket complete until its acceptance criteria and listed checks pass.
 - Inspect `git status`, recent commits, and the handoff before resuming work done by another assistant. Preserve user and contributor changes; do not reset or overwrite them.
 
 ## Contributor Coordination
@@ -14,6 +14,7 @@
 - Do not begin an external contribution until its GitHub claim issue has an explicit maintainer reply confirming the ticket, acceptance criteria, base branch, and protected areas in scope.
 - Search the backlog, handoff, open issues, open PRs, and local branches before proposing work. Draft and stacked PRs are active work.
 - Treat the confirmed ticket slice as a hard scope boundary. If implementation reveals adjacent work, report it instead of silently expanding the patch.
+- Do not edit the canonical backlog or shared agent handoff from an external contribution unless the maintainer explicitly included that documentation in the confirmed scope.
 - For overlapping work, preserve useful contributor commits and attribution through adaptation or cherry-picking; never merge outdated behavior merely to avoid revising a contribution.
 - Never deploy, authorize a Vercel preview, change Firebase/OAuth settings, migrate cloud data, or expose credentials unless the maintainer explicitly authorizes that external action.
 - Follow `CONTRIBUTING.md` for branch, PR, validation, screenshot, accessibility, security, and handoff expectations.
