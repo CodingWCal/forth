@@ -7,9 +7,10 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Date: 2026-07-20
 - Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket010`
 - Branch: `codex/ticket-010-auth-entry`
+- Implementation commit: `e9632dc`
 - Base checkpoint: `codex/pr13-qa-fixes` (`f769978`), represented by draft PR #16
 - Active ticket: TICKET-010 — authenticated landing, explicit disposable demo, and clean zero-ticket onboarding
-- Release state: local branch only; not merged or deployed
+- Release state: committed locally; not merged or deployed
 
 ## Implemented in this checkpoint
 
@@ -32,9 +33,8 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 
 ## Remaining before push
 
-1. Review `git diff --check` and confirm no generated test artifacts are tracked.
-2. Commit and push this branch; open a draft PR stacked on `codex/pr13-qa-fixes` until PR #16 merges.
-3. Manually smoke-test Google and GitHub sign-in plus a two-account invitation on an authorized preview domain before merge/deploy.
+1. Push this branch and open a draft PR stacked on `codex/pr13-qa-fixes` until PR #16 merges.
+2. Manually smoke-test Google and GitHub sign-in plus a two-account invitation on an authorized preview domain before merge/deploy.
 
 ## Known next risk
 
