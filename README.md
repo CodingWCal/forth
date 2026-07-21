@@ -157,7 +157,9 @@ Release QA also exercises Today, Realm Map, Chronicle, Guild Hall, ticket creati
 
 ## Deployment
 
-Vercel imports the GitHub repository and deploys the `main` branch with the standard Next.js build. The six Firebase browser variables are configured in Vercel for Production and Preview. Firebase Authentication authorizes `forth-bice.vercel.app`, and Firestore rules are deployed separately through Firebase tooling.
+Vercel imports the GitHub repository and deploys `main` to production with the standard Next.js build. Normal feature pull requests target `staging`, which has one stable pre-production URL for authenticated team QA. The maintainer promotes a tested release from `staging` to `main`; individual feature branches are not production releases.
+
+The six Firebase browser variables are configured in Vercel for Production and Preview. Firebase Authentication authorizes the production hostname and the one stable staging hostname; temporary per-commit previews use demo-mode QA unless a maintainer deliberately authorizes one. Firestore rules are deployed separately through Firebase tooling. See [`docs/STAGING.md`](docs/STAGING.md).
 
 ## Security model
 
@@ -210,3 +212,4 @@ This README contains each required description section. Creating the cohort-repo
 - [Agent operating instructions](AGENTS.md)
 - [Security policy](SECURITY.md)
 - [Decision log](docs/DECISIONS.md)
+- [Staging and release workflow](docs/STAGING.md)

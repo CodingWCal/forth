@@ -5,13 +5,13 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 ## Current checkpoint
 
 - Date: 2026-07-21
-- Worktree: `C:\Users\calvi\Documents\Codex\forth-contributor-agent-policy`
-- Branch: `codex/integrate-pr18-onboarding`
-- Integration commits: `99e9613` (Roger's original PR #18 commit, preserving authorship) and `c49f1e4` (maintainer reconciliation and QA)
-- Base: `origin/main` at `7aeb3c2` after merged PR #20
-- Draft PR: https://github.com/CodingWCal/forth/pull/21
-- Active ticket: TICKET-022 first-visit/contextual-help slice
-- Release state: pushed as PR #21; automated and hosted checks passed; maintainer reported the authenticated preview smoke test passed; original PR #18 closed as superseded; not merged or deployed
+- Worktree: `C:\Users\calvi\Documents\Codex\forth-staging`
+- Branch: `staging`
+- Production baseline: `origin/main` at merge commit `d547e4b` after PR #21
+- Staging commits: `94a7492` (stable staging marker) and `3574584` (TICKET-030 backlog entry)
+- Active ticket: TICKET-013 task-first Quest Log redesign; TICKET-030 is a planned responsive quick fix
+- Release state: PR #21 merged and deployed successfully; production and stable staging both return HTTP 200
+- Stable staging URL: https://forth-git-staging-calvintrinhvan-2763s-projects.vercel.app/
 
 ## Implemented in this checkpoint
 
@@ -37,15 +37,16 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Hosted GitGuardian and Vercel checks on draft PR #21: passed.
 - Live authenticated preview guide (cloud timing, copy, close/reopen behavior): passed by maintainer on 2026-07-21.
 
-## Remaining before merge/deploy
+## Next delivery sequence
 
-1. Review PR #21 and merge it when the maintainer is ready; all defined release gates for this slice have passed.
-2. Start TICKET-029 only from updated `main` after #21 merges; do not expand #21 with the interactive tour.
-3. Do not deploy until the maintainer explicitly approves release from updated `main`.
+1. Implement TICKET-013 on a dedicated branch based on `staging` and open a draft PR into `staging`.
+2. Keep TICKET-030 as a separately reviewable responsive quick fix.
+3. Start TICKET-029 only after the task-first hierarchy is stable so tour anchors do not immediately become stale.
+4. Promote `staging` to `main` only after automated QA, authenticated staging smoke, and explicit maintainer approval.
 
 ## Known next risk
 
-The automated suite covers signed-out protection, explicit demo entry, dialog behavior, keyboard focus, persistence, and responsive layouts. It does not automate a live third-party OAuth/Firestore session, so the cloud-guide timing still needs one manual preview smoke test. The centralized terminology map and persistent plain-language preference remain future TICKET-022 work.
+Firebase Authentication requires an exact authorized hostname. The stable staging hostname needs to be added once; temporary feature-preview hostnames should not be added after every push. The centralized terminology map and persistent plain-language preference remain future TICKET-022 work.
 
 ## Required end-of-session update
 
