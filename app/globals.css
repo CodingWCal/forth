@@ -72,7 +72,8 @@ textarea {
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-select:focus-visible {
+select:focus-visible,
+a:focus-visible {
   outline: 3px solid #e09a54;
   outline-offset: 3px;
 }
@@ -410,7 +411,7 @@ h3 {
   background: rgba(250, 247, 239, 0.68);
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -481,15 +482,15 @@ h3 {
 }
 
 .guild-card h3 { margin-bottom: 7px; font-family: var(--serif); font-size: 23px; }
-.guild-card > div:last-child > p { color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+.guild-card > div:last-child > p { color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
 .guild-field { max-width: 420px; margin-top: 17px; }
-.guild-actions { display: flex; gap: 9px; margin: 13px 0; }
+.guild-actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 13px 0; }
 .guild-inline-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; max-width: 580px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--rule-dark); }
 .guild-inline-form .field { margin: 0; }
 .invite-list { margin-top: 18px; padding-top: 14px; border-top: 2px solid var(--rule-dark); }
-.invite-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 0; border-bottom: 1px dashed var(--rule); }
+.invite-row { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 14px; padding: 10px 0; border-bottom: 1px dashed var(--rule); }
 .invite-row strong, .invite-row small { display: block; }
-.invite-row small { color: var(--slate); font-size: 10px; }
+.invite-row small { color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
 
 .today-layout {
   position: relative;
@@ -1464,7 +1465,8 @@ h3 {
   margin: -7px 0 11px;
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .bookmark-button {
@@ -1767,7 +1769,7 @@ h3 {
 
 .settings-intro > p:last-child {
   color: var(--slate);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -1810,15 +1812,16 @@ h3 {
   max-width: 650px;
   margin-bottom: 0;
   color: var(--slate);
-  font-size: 10px;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .settings-card ul {
   margin: 12px 0 0;
   padding-left: 18px;
   color: var(--slate);
-  font-size: 10px;
-  line-height: 1.8;
+  font-size: 14px;
+  line-height: 1.65;
 }
 
 .status-stamp {
@@ -1826,7 +1829,7 @@ h3 {
   border: 1px solid #cfa797;
   color: var(--warning);
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1843,6 +1846,38 @@ h3 {
   margin-top: 28px;
   border: 1px solid #d1aaa1;
   background: #f1e4dc;
+}
+
+/* Account, workspace, and invitation values can be longer than a card column.
+   Let them wrap instead of clipping or forcing horizontal page overflow. */
+.settings-card > div:nth-child(2),
+.reset-card > div,
+.guild-card > div:last-child,
+.invite-row > div,
+.entry-invite {
+  min-width: 0;
+}
+
+.settings-card h3,
+.settings-card p,
+.reset-card h3,
+.reset-card p,
+.guild-card h3,
+.guild-card p,
+.guild-code,
+.guild-code code,
+.invite-row strong,
+.invite-row small,
+.entry-invite h3,
+.entry-invite p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.settings-view .button,
+.guild-card .button {
+  min-height: 44px;
+  font-size: 12px;
 }
 
 /* Dialog */
@@ -1889,8 +1924,8 @@ h3 {
 .icon-button {
   display: grid;
   place-items: center;
-  width: 37px;
-  height: 37px;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--rule);
   border-radius: 50%;
   background: var(--paper);
@@ -1902,13 +1937,14 @@ h3 {
 
 .field {
   display: grid;
+  min-width: 0;
   gap: 6px;
   margin-bottom: 18px;
 }
 
 .field > span,
 .weight-field legend {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1916,7 +1952,7 @@ h3 {
 
 .field > span i {
   color: var(--slate);
-  font-size: 8px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 400;
 }
@@ -1943,12 +1979,14 @@ h3 {
 
 .field input::placeholder,
 .field textarea::placeholder {
-  color: #8e948f;
+  color: var(--ink-soft);
+  opacity: 1;
 }
 
 .field small {
-  color: var(--slate);
-  font-size: 9px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .weight-field {
@@ -2064,7 +2102,7 @@ h3 {
   background: var(--ink);
   color: #fff;
   box-shadow: var(--shadow-lift);
-  font-size: 11px;
+  font-size: 14px;
   opacity: 0;
   pointer-events: none;
   transform: translateY(12px);
@@ -2146,7 +2184,7 @@ h3 {
   background: transparent;
 }
 
-.field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .ticket-description { color: var(--ink-soft) !important; }
 .ticket-facts { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; color: var(--slate); font-size: 9px; }
 .priority { padding: 2px 6px; border: 1px solid currentColor; font-family: var(--mono); font-size: 8px; font-weight: 700; text-transform: uppercase; }
@@ -2800,6 +2838,376 @@ body {
   padding: 0;
 }
 
+/* Production entry boundary: practical product value first, restrained guild character second. */
+.entry-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  overflow-x: clip;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(rgba(102, 80, 52, .055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(102, 80, 52, .055) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.entry-masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: 14px clamp(20px, 5vw, 70px);
+  border-bottom: 3px double #536354;
+  background: var(--ink);
+  color: var(--paper-bright);
+}
+
+.entry-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.entry-product-label {
+  color: #c9d0c9;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.entry-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(330px, .82fr);
+  gap: clamp(36px, 7vw, 88px);
+  align-items: center;
+  width: min(1120px, 100%);
+  margin: auto;
+  padding: clamp(42px, 7vw, 92px) clamp(22px, 5vw, 58px);
+}
+
+.entry-intro h1,
+.entry-onboarding h1,
+.entry-status-card h1 {
+  margin-bottom: 20px;
+  font-family: var(--serif);
+  font-size: clamp(38px, 5.2vw, 66px);
+  letter-spacing: -.045em;
+  line-height: .98;
+}
+
+.entry-lede,
+.entry-card > p,
+.entry-status-card > p,
+.entry-onboarding > p,
+.entry-invites > p {
+  max-width: 64ch;
+  color: var(--ink-soft);
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.entry-benefits {
+  display: grid;
+  gap: 12px;
+  margin: 28px 0 32px;
+  padding: 0;
+  list-style: none;
+}
+
+.entry-benefits li {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-weight: 700;
+}
+
+.entry-benefits svg {
+  flex: none;
+  width: 20px;
+  color: var(--moss);
+}
+
+.entry-squire {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: fit-content;
+  padding: 7px 14px 7px 7px;
+  border: 1px solid var(--rule);
+  background: rgba(245, 232, 201, .58);
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.entry-squire img {
+  image-rendering: pixelated;
+}
+
+.entry-card,
+.entry-onboarding,
+.entry-invites,
+.entry-status-card {
+  border: 2px solid var(--rule-dark);
+  background: var(--paper-bright);
+  box-shadow: 7px 7px 0 rgba(61, 44, 24, .25);
+}
+
+.entry-card {
+  padding: clamp(26px, 4vw, 42px);
+}
+
+.entry-card h2,
+.entry-invites h2 {
+  margin-bottom: 10px;
+  font-family: var(--serif);
+  font-size: clamp(27px, 3vw, 36px);
+  line-height: 1.05;
+}
+
+.entry-provider-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 25px;
+}
+
+.entry-provider-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 50px;
+  padding: 10px 18px;
+  border: 2px solid var(--ink);
+  background: #fff8e8;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 3px 3px 0 var(--rule-dark);
+}
+
+.entry-provider-button:hover:not(:disabled) {
+  background: #fffdf6;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--rule-dark);
+}
+
+.entry-provider-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.entry-google-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--rule);
+  background: #fff;
+  font-family: Arial, sans-serif;
+  font-weight: 800;
+}
+
+.entry-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 23px 0;
+  color: var(--slate);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.entry-divider::before,
+.entry-divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+  content: "";
+}
+
+.entry-demo-note {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 13px;
+  padding: 18px;
+  border: 1px dashed var(--rule-dark);
+  background: #ead7aa;
+}
+
+.entry-demo-note h3 {
+  margin-bottom: 5px;
+  font-family: var(--serif);
+  font-size: 20px;
+}
+
+.entry-demo-note p {
+  margin-bottom: 14px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.entry-demo-button,
+.entry-primary-action {
+  min-height: 48px;
+}
+
+.entry-demo-button {
+  width: 100%;
+}
+
+.entry-error {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  margin: 20px 0;
+  padding: 14px;
+  border: 2px solid var(--warning);
+  background: #f2d8c4;
+  color: #5c211b;
+}
+
+.entry-error svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.entry-error strong,
+.entry-error p {
+  margin: 0;
+}
+
+.entry-status-page {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  width: 100%;
+  padding: 32px 20px;
+}
+
+.entry-status-card {
+  width: min(580px, 100%);
+  padding: clamp(30px, 6vw, 58px);
+  text-align: center;
+}
+
+.entry-status-card h1 {
+  margin-top: 15px;
+  font-size: clamp(31px, 5vw, 48px);
+}
+
+.entry-status-card > p {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.entry-spinner {
+  animation: entry-spin 850ms steps(8, end) infinite;
+}
+
+.entry-shell--onboarding {
+  grid-template-columns: minmax(0, 1.12fr) minmax(300px, .75fr);
+  align-items: start;
+}
+
+.entry-onboarding,
+.entry-invites {
+  padding: clamp(25px, 4vw, 42px);
+}
+
+.entry-onboarding h1 {
+  font-size: clamp(35px, 4.5vw, 56px);
+}
+
+.entry-workspace-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.entry-workspace-form .field input,
+.entry-workspace-form .field textarea {
+  min-height: 48px;
+  font-size: 16px;
+}
+
+.entry-workspace-form .field textarea {
+  min-height: 104px;
+}
+
+.entry-primary-action {
+  width: 100%;
+}
+
+.entry-invites {
+  box-shadow: 5px 5px 0 rgba(61, 44, 24, .2);
+}
+
+.entry-invite {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--rule-dark);
+}
+
+.entry-invite h3,
+.entry-invite p {
+  margin-bottom: 5px;
+}
+
+.entry-invite-expired {
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.entry-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.entry-invites .entry-inline-actions {
+  justify-content: flex-start;
+}
+
+.entry-text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 24px;
+  padding: 5px 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.entry-footer {
+  padding: 15px 20px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-align: center;
+}
+
+@keyframes entry-spin {
+  to { transform: rotate(360deg); }
+}
+
 @keyframes squire-step {
   0%, 100% { transform: translateY(1px) scaleX(1); }
   50% { transform: translateY(-2px) scaleX(.985); }
@@ -2902,6 +3310,52 @@ body {
     padding-bottom: 68px;
   }
 
+  body:has(.entry-page) {
+    padding-bottom: 0;
+  }
+
+  .entry-masthead {
+    min-height: 64px;
+    padding: 12px 18px;
+  }
+
+  .entry-product-label {
+    max-width: 145px;
+    font-size: 12px;
+    text-align: right;
+  }
+
+  .entry-shell,
+  .entry-shell--onboarding {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    align-items: start;
+    padding: 38px 18px 52px;
+  }
+
+  .entry-intro h1,
+  .entry-onboarding h1 {
+    font-size: clamp(36px, 10.5vw, 50px);
+  }
+
+  .entry-card,
+  .entry-onboarding,
+  .entry-invites {
+    padding: 26px 22px;
+  }
+
+  .entry-provider-button,
+  .entry-demo-button,
+  .entry-primary-action,
+  .entry-inline-actions .button {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .entry-inline-actions {
+    flex-direction: column;
+  }
+
   .app-shell {
     display: block;
     min-height: calc(100vh - 68px);
@@ -2930,11 +3384,20 @@ body {
   }
 
   .mobile-header .env-badge {
-    min-height: 29px;
+    min-height: 44px;
+    max-width: 52vw;
+    padding: 5px 8px;
     border-color: rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.07);
     color: #d9e0da;
-    font-size: 8px;
+    font-size: 12px;
+    line-height: 1.25;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .mobile-header .env-badge > span {
+    flex: none;
   }
 
   .mobile-nav {
@@ -2960,7 +3423,8 @@ body {
     min-height: 56px;
     background: transparent;
     color: inherit;
-    font-size: 8px;
+    font-size: 12px;
+    font-weight: 700;
   }
 
   .mobile-nav-link.is-active {
@@ -3222,6 +3686,33 @@ body {
 }
 
 @media (max-width: 430px) {
+  .entry-product-label {
+    display: none;
+  }
+
+  .entry-shell,
+  .entry-shell--onboarding {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+
+  .entry-card,
+  .entry-onboarding,
+  .entry-invites,
+  .entry-status-card {
+    padding: 23px 17px;
+    box-shadow: 4px 4px 0 rgba(61, 44, 24, .23);
+  }
+
+  .entry-demo-note {
+    grid-template-columns: 1fr;
+  }
+
+  .entry-squire {
+    align-items: flex-start;
+    width: 100%;
+  }
+
   .page-header h1 {
     max-width: 290px;
   }

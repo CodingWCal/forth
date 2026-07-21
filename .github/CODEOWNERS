@@ -1,0 +1,13 @@
+# Forth is maintainer-reviewed. GitHub branch protection should require this review.
+* @CodingWCal
+
+# Security, identity, data contracts, delivery, and global UX require explicit owner review.
+/firestore.rules @CodingWCal
+/lib/firebase/ @CodingWCal
+/lib/types.ts @CodingWCal
+/lib/workspace.ts @CodingWCal
+/app/globals.css @CodingWCal
+/next.config.* @CodingWCal
+/package.json @CodingWCal
+/pnpm-lock.yaml @CodingWCal
+/.github/ @CodingWCal

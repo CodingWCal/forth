@@ -29,14 +29,19 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-007 | Implemented on `main` | Pending invitations exist in code and rules; still needs live two-account E2E verification. |
 | TICKET-008 | Implemented on `agent/invite-lifecycle` | Cancel/decline/expiry and rule tests pass; not yet released to production. |
 | TICKET-009 | Planned | Optional email delivery must remain downstream of a reliable in-app invitation flow. |
+| TICKET-010 | Implemented on `codex/ticket-010-auth-entry` | Automated gates pass; live Google/GitHub two-account smoke testing remains a release requirement. |
+| TICKET-019 | Draft PR [#19](https://github.com/CodingWCal/forth/pull/19) | Human/agent contribution contract, ownership, templates, security reporting, and decision log added; repository branch-protection settings still require maintainer verification. |
 
 ## External Contribution Intake
 
 | Contribution | Status | Primary backlog mapping | Related quality gates | Recommendation |
 |---|---|---|---|---|
+| [PR #18 - Add a first-visit welcome guide modal](https://github.com/CodingWCal/forth/pull/18) | Open; maintainer edits enabled; based on pre-TICKET-010 `main`; fork preview requires maintainer authorization | TICKET-022 | TICKET-005, TICKET-010, TICKET-019 | Do not merge the old local-first/seeded-board copy. After PR #17 lands, update the branch against `main`, preserve Roger's authorship, adapt the guide to authenticated workspaces and explicit demo mode, use safe browser storage, and run the missing open/dismiss/reopen browser flow. |
 | [PR #13 — Surface due-soon & overdue quests on Today](https://github.com/CodingWCal/forth/pull/13) | Open and mergeable; 1 commit, 4 files, 5 focused unit test cases supplied | TICKET-013 | TICKET-014, TICKET-015, TICKET-019, TICKET-022, TICKET-025 | Treat Roger's selectors and tests as a strong implementation candidate. Reconcile the new panel with the task-first hierarchy, literal labels, non-color urgency cues, responsive/browser coverage, and safe external-preview policy before merging. Do not create a duplicate feature ticket. |
 
 PR #13's calm, no-shame due-date philosophy matches Forth's product intent: shipped work is excluded, overdue work is signaled without streak punishment, and urgency is derived in the domain layer. The main integration risk is information density: adding another full Today panel without TICKET-013's hierarchy work could reinforce the exact navigation problem identified by peer review.
+
+PR #18 contains a useful themed walkthrough and contextual-help entry point, but its copy assumes the superseded local-first architecture. Maintainer edits are enabled, so Forth can reconcile it after the authenticated-entry dependency lands without requiring the contributor to redo the rebase and without losing attribution.
 
 ## Recommended Delivery Order
 
@@ -384,6 +389,8 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 
 ### TICKET-010: Add an authenticated landing page with explicit demo entry
 
+- Status: Implemented on `codex/ticket-010-auth-entry`; pending draft-PR review and live OAuth/provider verification.
+
 - Priority: P0 Critical
 - Type: Product/Security/UX
 - Area: Root route, authentication, first-run routing
@@ -401,12 +408,16 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - Build a concise branded landing page that states Forth’s practical value before fantasy flavor.
   - Add Google and GitHub authentication, loading, popup-blocked, cancelled, unauthorized-domain, and retry states.
   - Require an explicit action to enter demo mode; never hydrate demo state into a new cloud workspace without confirmation.
+  - Start every newly authenticated account with an empty/onboarding-created real workspace; never present seeded example tickets as the user's work.
+  - Keep example campaigns and tickets behind an explicitly labeled, browser-local demo or an intentional onboarding choice, with a separate persistence namespace from authenticated data.
   - Redirect authenticated users into their last active guild or onboarding.
 - Out of scope:
   - Password authentication, SSO, billing, or public workspace discovery.
 - Acceptance criteria:
   - No workspace ticket data renders before auth resolution or explicit demo selection.
   - The page identifies demo data as disposable/local before entry.
+  - A new authenticated user sees onboarding for a clean first campaign with zero pre-completed or fake tickets.
+  - Seeded examples load only after an explicit demo/example-data choice, remain identifiable as samples, and can never silently sync into Firestore.
   - Google and GitHub users can sign in, sign out, and recover from cancelled/blocked popup flows.
   - Provider collisions give a safe account-linking explanation without exposing whether another email is registered.
   - Auth mode is keyboard accessible, responsive, and understandable without fantasy vocabulary.
@@ -732,6 +743,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 - Area: Repository collaboration, reviews, communication, releases
 - Effort: M
 - Confidence: High
+- Implementation status: In progress on `codex/ticket-019-contributor-guide`; repository files are implemented, while hosted branch-protection enforcement and a fresh-contributor dry run remain before completion.
 - Evidence: Other cohort fellows may contribute soon, but the Forth repository has no dedicated `CONTRIBUTING.md`, `CODEOWNERS`, issue/PR templates, decision log, branch naming policy, or documented communication path. PR #13 is the first organizer contribution and its Vercel bot check is blocked because the external author is not authorized on the maintainer's Vercel team, demonstrating that preview ownership and credential boundaries are undocumented.
 - Plain English: Contributors should know what to work on, how to avoid colliding with your roadmap, and how to ask before changing security, data, or design foundations.
 - Learning brief (layman terms):

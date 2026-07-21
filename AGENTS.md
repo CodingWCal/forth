@@ -1,10 +1,28 @@
 # AGENTS.md
 
+## Shared Agent Continuity (Codex + Claude Code)
+
+- Treat this file as the cross-agent operating contract. `CLAUDE.md` points here; do not maintain conflicting assistant-specific rules.
+- At the start of every work session, read this file, `CONTRIBUTING.md`, `docs/AGENT_HANDOFF.md`, and `docs/ticket-backlog.md` before editing.
+- Continue the highest-priority in-progress backlog ticket unless the user explicitly changes priorities. Do not duplicate an existing ticket under a new name.
+- Before ending a session, update `docs/AGENT_HANDOFF.md` with branch/commit, completed work, validation results, uncommitted files, blockers, and the exact safest next step.
+- When ticket scope or status changes, update `docs/ticket-backlog.md` in the same checkpoint. Never mark a ticket complete until its acceptance criteria and listed checks pass.
+- Inspect `git status`, recent commits, and the handoff before resuming work done by another assistant. Preserve user and contributor changes; do not reset or overwrite them.
+
+## Contributor Coordination
+
+- Do not begin an external contribution until its GitHub claim issue has an explicit maintainer reply confirming the ticket, acceptance criteria, base branch, and protected areas in scope.
+- Search the backlog, handoff, open issues, open PRs, and local branches before proposing work. Draft and stacked PRs are active work.
+- Treat the confirmed ticket slice as a hard scope boundary. If implementation reveals adjacent work, report it instead of silently expanding the patch.
+- For overlapping work, preserve useful contributor commits and attribution through adaptation or cherry-picking; never merge outdated behavior merely to avoid revising a contribution.
+- Never deploy, authorize a Vercel preview, change Firebase/OAuth settings, migrate cloud data, or expose credentials unless the maintainer explicitly authorizes that external action.
+- Follow `CONTRIBUTING.md` for branch, PR, validation, screenshot, accessibility, security, and handoff expectations.
+
 ## Project Overview
 
 - Build **Forth**, “project work with a pulse”: a motivational project-management app for small creative and product teams.
 - Preserve the central product loop: declare an honest pace → choose at most three meaningful moves → move work through Ready/Moving/Paused/Landed → keep completion in the Proof ledger.
-- Use TypeScript, React 19, Next.js 16 App Router, localStorage for the local MVP, and an optional Firebase Auth/Firestore boundary for private beta.
+- Use TypeScript, React 19, Next.js 16 App Router, isolated localStorage only for the explicit demo, and Firebase Auth/Firestore for real private-beta workspaces.
 - Read `docs/PRD.md` and `docs/DESIGN.md` before changing product scope, copy, navigation, or visual direction.
 
 ## Repository Layout
@@ -25,6 +43,8 @@ Run from the repository root:
 - Lint: `pnpm lint`
 - Typecheck: `pnpm typecheck`
 - Unit tests: `pnpm test`
+- Firestore rules: `pnpm test:rules`
+- Browser E2E: `pnpm test:e2e`
 - Production build: `pnpm build`
 - Production server after build: `pnpm start`
 
@@ -53,8 +73,8 @@ In a non-interactive Codex runtime where the `pnpm` wrapper attempts to reinstal
 ## Testing Instructions
 
 - Add or update Vitest coverage for reducer actions, persistence parsing, capacity math, WIP limits, or progress derivation.
-- For UI changes, run lint, typecheck, unit tests, and a production build, then exercise affected flows in a real browser.
-- Visually check 375×812, 768×1024, and 1440×1000. Test Today, Work map, Proof, Settings, and the add-move dialog when relevant.
+- For UI changes, run lint, typecheck, unit tests, browser E2E, and a production build, then exercise affected flows in a real browser.
+- Visually check 320×720, 375×812, 768×1024, and 1440×1000. Test Quest Log, Realm Map, Chronicle, Guild Hall, and affected dialogs.
 - Verify empty, paused, completed, over-capacity, corrupt-storage, keyboard, and reduced-motion states when the touched code affects them.
 - Do not hide a failing check. Classify whether it comes from the change, existing code, dependencies, or the environment.
 
@@ -62,7 +82,7 @@ In a non-interactive Codex runtime where the `pnpm` wrapper attempts to reinstal
 
 - Never commit `.env.local`, Firebase credentials beyond public web configuration, tokens, service-account JSON, or private keys.
 - Treat `NEXT_PUBLIC_*` values as public browser configuration, never as secrets.
-- Keep the app explicitly labeled “Local demo” until authentication, workspace provisioning, and live persistence are truly connected.
+- Never render cloud workspace tickets before authentication and authorization resolve. Keep sample tickets inside the explicitly labeled, isolated local demo.
 - Workspace creation must bind `ownerId` to `request.auth.uid`; only owners may manage membership in the current rules.
 - Test Firestore rules with the emulator before private beta. Client-side UI checks are never authorization.
 - Ask before creating Firebase projects, enabling providers, deploying, migrating data, or performing destructive cloud operations.

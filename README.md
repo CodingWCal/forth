@@ -1,6 +1,6 @@
 # Forth
 
-**Project work with a pulse.** Forth is a real, local-first ticketing and productivity app that helps software teams choose an honest pace, keep at most three meaningful quests close, move work visibly, and preserve shipped work as proof.
+**Project work with a pulse.** Forth is an authenticated team ticketing and productivity app that helps software teams choose an honest pace, keep at most three meaningful quests close, move work visibly, and preserve shipped work as proof. A separate, explicit local demo is available without an account.
 
 Built for the **Curious Boston × Hult International School AI Engineering Cohort — Week 1 Project**.
 
@@ -44,13 +44,15 @@ In engineering terms, Forth combines capacity planning, a WIP limit, determinist
 
 ### Guild Hall — Account and persistence
 
-- Work without an account using local browser persistence.
-- Sign in with Google to provision a private Firebase workspace.
+- Enter through a literal account boundary before any workspace tickets render.
+- Sign in with Google or GitHub to access authorized Firebase workspaces.
+- Start a first real workspace with a user-named campaign and zero sample tickets.
+- Explore sample content only through an explicitly labeled, disposable browser-local demo.
 - Synchronize the current workspace through Cloud Firestore.
 - Found additional guild workspaces and create new campaigns inside them.
-- Invite a teammate by their Google email; they join with the shared guild code after signing in.
-- Sign out while retaining a usable local fallback.
-- Restore the seeded campaign after an explicit, destination-aware confirmation.
+- Invite a teammate by their account email; pending invitations appear inside Forth after sign-in.
+- Sign out by immediately unmounting cloud workspace data and returning to the entry page.
+- Reset sample content only inside demo mode; seeded data is never silently copied into Firestore.
 
 ## Motivation and engagement design
 
@@ -68,21 +70,25 @@ There are no public rankings, random rewards, broken-streak warnings, shame stat
 
 ## Architecture summary
 
-**Plain English:** The screen does not make up its own task rules. User actions go through one predictable workspace rule set. The resulting state is saved locally and, after sign-in, synchronized to the user's private Firebase workspace.
+**Plain English:** Forth checks the account before loading team data. Real work is read from the selected authorized cloud workspace; sample work exists only in the separate demo chosen by the visitor.
 
-**Engineering terms:** Forth is a Next.js App Router client application with a reducer/selectors domain layer, runtime-validated `WorkspaceState`, localStorage adapter, Firebase Auth boundary, debounced Firestore persistence adapter, and Firestore Security Rules authorization boundary.
+**Engineering terms:** Forth is a Next.js App Router application with an explicit auth/entry state machine, reducer/selectors domain layer, runtime-validated `WorkspaceState`, isolated demo-storage adapter, Firebase Auth boundary, debounced Firestore persistence adapter, and Firestore Security Rules authorization boundary.
 
 ```text
+Entry boundary (`components/forth-entry.tsx`)
+        ├── Google / GitHub Firebase Auth
+        ├── explicit browser-local demo
+        └── authorized workspace loading
+                    │
+                    ▼
 React UI (`components/forth-app.tsx`)
         │ typed WorkspaceAction
         ▼
 Reducer + selectors (`lib/workspace.ts`)
         │
-        ├── versioned localStorage fallback
-        │
-        └── Firebase boundary
-              ├── Google Authentication
-              ├── workspaces/{ownerUid}/data/current
+        ├── demo-only localStorage namespace
+        └── Firebase workspace boundary
+              ├── workspaces/{workspaceId}/data/current
               └── owner/member Firestore Security Rules
 ```
 
@@ -115,7 +121,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Firebase is optional for local development; with no environment values, Forth starts in safe local-camp mode.
+Open [http://localhost:3000](http://localhost:3000). Firebase is optional for local development; without environment values, account buttons are disabled and the clearly labeled local demo remains available.
 
 ### Optional Firebase configuration
 
@@ -132,7 +138,7 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 
 `NEXT_PUBLIC_*` values are public browser configuration, not secrets. Actual authorization is enforced by `firestore.rules`. Never add a service-account JSON file, private key, or Firebase Admin credential to this repository.
 
-For Google sign-in, enable the Google provider and add the deployed hostname to Firebase Authentication's authorized domains.
+For account entry, enable the Google provider and the GitHub provider in Firebase Authentication. GitHub also requires a GitHub OAuth App whose callback URL is the Firebase handler shown in the Firebase console. Add every production or preview hostname used for sign-in to Firebase Authentication's authorized domains.
 
 ## Quality and verification
 
@@ -154,22 +160,24 @@ Vercel imports the GitHub repository and deploys the `main` branch with the stan
 
 ## Security model
 
-- Anonymous users can use only their browser's local copy.
+- Signed-out visitors cannot see workspace ticket data.
+- Anonymous visitors enter sample content only after explicitly choosing the browser-local demo.
 - Firebase reads and writes require authentication.
 - Workspace creation is bound to its authenticated owner, while invited accounts may create only their own member record after a matching email invitation exists.
 - Workspace ownership cannot be reassigned through a client update.
 - Outsiders cannot read or write another workspace.
 - Client-side visibility is never treated as authorization.
 - Stored local or cloud state is runtime-validated before the UI accepts it.
+- Demo storage uses a separate key and is never passed to cloud workspace creation.
 
 ## Known limitations
 
 - Firestore synchronization uses whole-workspace, last-write-wins documents; simultaneous multi-device editing has no conflict-resolution interface yet.
 - Invitations are delivered by the owner sharing the displayed guild code out of band; Forth does not send transactional email.
-- Google popup authentication is the only configured sign-in path.
+- GitHub sign-in requires the external OAuth provider configuration documented above; code alone cannot enable it in Firebase.
 - Desktop supports native drag and drop; touch and keyboard users use the explicit ticket movement buttons.
 - There is no notification system, analytics dashboard, audit log, backup/restore console, or operational error monitoring yet.
-- Unit and Firestore-rule suites are automated; UI flow verification is currently a release QA procedure rather than a committed Playwright suite.
+- Unit, Firestore-rule, and auth-entry Playwright suites are automated; full in-app workflow coverage is still incomplete and remains a release QA requirement.
 
 These are intentionally scoped private-beta boundaries, not hidden production claims. Future work is tracked in [`docs/ticket-backlog.md`](docs/ticket-backlog.md).
 
@@ -193,8 +201,11 @@ This README contains each required description section. Creating the cohort-repo
 
 ## Project documentation
 
+- [Contribution guide](CONTRIBUTING.md)
 - [Product requirements](docs/PRD.md)
 - [Design direction](docs/DESIGN.md)
 - [Phase 2 private-beta contract](docs/PHASE2.md)
 - [Future ticket backlog](docs/ticket-backlog.md)
 - [Agent operating instructions](AGENTS.md)
+- [Security policy](SECURITY.md)
+- [Decision log](docs/DECISIONS.md)

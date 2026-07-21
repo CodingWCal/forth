@@ -1,14 +1,5 @@
-import { ForthApp } from "@/components/forth-app";
-import { createSeedWorkspace } from "@/lib/seed";
-
-export const dynamic = "force-dynamic";
+import { ForthEntry } from "@/components/forth-entry";
 
 export default function Home() {
-  const renderedAt = new Date();
-  return (
-    <ForthApp
-      initialState={createSeedWorkspace(renderedAt)}
-      renderedAt={renderedAt.toISOString()}
-    />
-  );
+  return <ForthEntry />;
 }

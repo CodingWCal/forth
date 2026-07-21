@@ -1,7 +1,7 @@
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   type User,
 } from "firebase/auth";
@@ -17,12 +17,29 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  writeBatch,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
 import type { WorkspaceState } from "@/lib/types";
+import {
+  createForthAuthProvider,
+  requireAuthEmail,
+  type ForthAuthProvider,
+} from "@/lib/firebase/auth";
 import { getFirebaseServices } from "@/lib/firebase/config";
 import { parseStoredWorkspace } from "@/lib/workspace";
+
+export {
+  AUTH_PROVIDER_OPTIONS,
+  classifyAuthFailure,
+  getAuthFailureMessage,
+  getAuthProviderLabel,
+  requireAuthEmail,
+  type AuthFailure,
+  type AuthFailureKind,
+  type ForthAuthProvider,
+} from "@/lib/firebase/auth";
 
 export type CloudSession = { user: User | null; loading: boolean };
 
@@ -84,12 +101,6 @@ async function documentExists(reference: Parameters<typeof getDoc>[0]) {
   }
 }
 
-function normalizedEmail(user: User) {
-  const email = user.email?.trim().toLowerCase();
-  if (!email) throw new Error("Your Google account needs a verified email address to join a guild.");
-  return email;
-}
-
 export function watchAuth(callback: (session: CloudSession) => void): Unsubscribe | null {
   const services = getFirebaseServices();
   if (!services) return null;
@@ -97,8 +108,12 @@ export function watchAuth(callback: (session: CloudSession) => void): Unsubscrib
   return onAuthStateChanged(services.auth, (user) => callback({ user, loading: false }));
 }
 
-export async function signInWithGoogle() {
-  return signInWithPopup(requireServices().auth, new GoogleAuthProvider());
+export async function signInWithProvider(provider: ForthAuthProvider) {
+  return signInWithPopup(requireServices().auth, createForthAuthProvider(provider));
+}
+
+export async function signInWithRedirectProvider(provider: ForthAuthProvider) {
+  return signInWithRedirect(requireServices().auth, createForthAuthProvider(provider));
 }
 
 export async function signOutOfForth() {
@@ -113,37 +128,48 @@ async function createWorkspaceAt(
   initialState: WorkspaceState,
 ) {
   const services = requireServices();
+  // Validate all identity data before the first write. In particular, GitHub
+  // accounts can hide their email; failing early prevents a partial workspace
+  // root from being left behind without its owner membership document.
+  const email = requireAuthEmail(user);
   const workspaceRef = doc(services.db, "workspaces", workspaceId);
+  const memberRef = doc(workspaceRef, "members", user.uid);
   const stateRef = doc(workspaceRef, "data", "current");
-  if (!(await documentExists(workspaceRef))) {
+
+  // Firestore rules cannot safely authorize a brand-new root and its child
+  // documents in one client batch without weakening existing-guild access.
+  // Write the discoverable owner membership last: if an earlier write fails,
+  // the incomplete random guild cannot appear in the user's directory. A
+  // best-effort cleanup removes any unreachable partial documents.
+  try {
     await setDoc(workspaceRef, {
       ownerId: user.uid,
       name,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-  }
-  await setDoc(doc(workspaceRef, "members", user.uid), {
-    uid: user.uid,
-    email: normalizedEmail(user),
-    displayName: user.displayName ?? "Guild leader",
-    role: "owner",
-    joinedAt: serverTimestamp(),
-  }, { merge: true });
-  if (!(await documentExists(stateRef))) {
     await setDoc(stateRef, { state: initialState, updatedAt: serverTimestamp() });
+    await setDoc(memberRef, {
+      uid: user.uid,
+      email,
+      displayName: user.displayName ?? "Guild leader",
+      role: "owner",
+      joinedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    await deleteDoc(memberRef).catch(() => undefined);
+    await deleteDoc(stateRef).catch(() => undefined);
+    await deleteDoc(workspaceRef).catch(() => undefined);
+    throw error;
   }
   return workspaceId;
 }
 
-export async function provisionWorkspace(user: User, initialState: WorkspaceState) {
-  return createWorkspaceAt(user, user.uid, `${user.displayName ?? "My"}'s guild`, initialState);
-}
-
 export async function createGuildWorkspace(user: User, name: string, initialState: WorkspaceState) {
-  const id = typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? `guild-${crypto.randomUUID()}`
-    : `guild-${Date.now()}`;
+  if (typeof crypto === "undefined" || typeof crypto.randomUUID !== "function") {
+    throw new Error("This browser cannot safely create a guild identifier. Update the browser and try again.");
+  }
+  const id = `guild-${crypto.randomUUID()}`;
   return createWorkspaceAt(user, id, name.trim(), initialState);
 }
 
@@ -154,10 +180,11 @@ export async function listGuildWorkspaces(user: User): Promise<GuildWorkspace[]>
   // (for example while indexes/rules propagate). This also keeps the owner
   // path usable so the invitation controls do not disappear.
   const ownerWorkspace = await getDoc(doc(services.db, "workspaces", user.uid));
-  const ownerGuild: GuildWorkspace[] = ownerWorkspace.exists()
+  const ownerData = ownerWorkspace.exists() ? ownerWorkspace.data() : null;
+  const ownerGuild: GuildWorkspace[] = ownerData?.ownerId === user.uid
     ? [{
         id: ownerWorkspace.id,
-        name: typeof ownerWorkspace.data().name === "string" ? ownerWorkspace.data().name : "My guild",
+        name: typeof ownerData.name === "string" ? ownerData.name : "My guild",
         ownerId: user.uid,
         role: "owner",
       }]
@@ -167,7 +194,8 @@ export async function listGuildWorkspaces(user: User): Promise<GuildWorkspace[]>
   try {
     memberSnapshots = await getDocs(query(collectionGroup(services.db, "members"), where("uid", "==", user.uid)));
   } catch {
-    return ownerGuild;
+    if (ownerGuild.length > 0) return ownerGuild;
+    throw new Error("Forth could not check your shared-workspace memberships. Try again before creating a new workspace.");
   }
   const workspaces = await Promise.all(memberSnapshots.docs.map(async (member) => {
     const workspaceRef = member.ref.parent.parent;
@@ -233,7 +261,7 @@ export async function cancelGuildInvite(user: User, workspace: GuildWorkspace, e
 
 export async function listPendingGuildInvites(user: User): Promise<PendingGuildInvite[]> {
   const services = requireServices();
-  const email = normalizedEmail(user);
+  const email = requireAuthEmail(user);
   const snapshots = await getDocs(query(collectionGroup(services.db, "invites"), where("email", "==", email)));
   return snapshots.docs
     .map((invite) => {
@@ -257,13 +285,13 @@ export async function listPendingGuildInvites(user: User): Promise<PendingGuildI
 
 export async function declineGuildInvite(user: User, workspaceId: string) {
   const services = requireServices();
-  const email = normalizedEmail(user);
+  const email = requireAuthEmail(user);
   await deleteDoc(doc(services.db, "workspaces", workspaceId.trim(), "invites", email));
 }
 
 export async function acceptGuildInvite(user: User, workspaceId: string) {
   const services = requireServices();
-  const email = normalizedEmail(user);
+  const email = requireAuthEmail(user);
   const id = workspaceId.trim();
   const inviteRef = doc(services.db, "workspaces", id, "invites", email);
   const memberRef = doc(services.db, "workspaces", id, "members", user.uid);
@@ -274,25 +302,54 @@ export async function acceptGuildInvite(user: User, workspaceId: string) {
     if (await documentExists(memberRef)) {
       return { workspaceId: id, workspaceName: "the guild", alreadyMember: true };
     }
-    throw new Error("No invitation for this Google email was found in that guild.");
+    throw new Error("No invitation for this account email was found in that guild.");
   }
   const inviteData = invite.data();
   if (isExpired(readTimestampMs(inviteData.expiresAt))) {
     throw new Error("This invitation has expired. Ask the guild owner to send a new one.");
   }
-  await setDoc(memberRef, {
+
+  // Repair an old partially accepted invite without overwriting the existing
+  // membership. A repeated call after the new atomic flow follows the missing-
+  // invite branch above and is also treated as success.
+  if (await documentExists(memberRef)) {
+    await deleteDoc(inviteRef);
+    return {
+      workspaceId: id,
+      workspaceName: typeof inviteData.workspaceName === "string" ? inviteData.workspaceName : "the guild",
+      alreadyMember: true,
+    };
+  }
+
+  // Membership creation and invite consumption are one transaction boundary:
+  // both writes commit or neither does. The security rules also reject a
+  // standalone membership create while the invite would remain present.
+  const batch = writeBatch(services.db);
+  batch.set(memberRef, {
     uid: user.uid,
     email,
     displayName: user.displayName ?? email,
     role: "member",
     joinedAt: serverTimestamp(),
   });
-  await deleteDoc(inviteRef);
+  batch.delete(inviteRef);
+  await batch.commit();
   return {
     workspaceId: id,
     workspaceName: typeof inviteData.workspaceName === "string" ? inviteData.workspaceName : "the guild",
     alreadyMember: false,
   };
+}
+
+export async function loadWorkspaceState(workspaceId: string): Promise<WorkspaceState | null> {
+  const services = requireServices();
+  const snapshot = await getDoc(doc(services.db, "workspaces", workspaceId, "data", "current"));
+  if (!snapshot.exists()) return null;
+
+  // Firestore data is an untrusted persistence boundary. Reuse the same
+  // runtime parser as local storage and leave missing/invalid state explicit;
+  // the caller decides whether to show onboarding, an error, or a demo.
+  return parseStoredWorkspace(JSON.stringify(snapshot.data().state ?? null));
 }
 
 export function watchWorkspace(
@@ -305,6 +362,7 @@ export function watchWorkspace(
   return onSnapshot(doc(services.db, "workspaces", workspaceId, "data", "current"), (snapshot) => {
     const state = parseStoredWorkspace(JSON.stringify(snapshot.data()?.state ?? null));
     if (state) onState(state);
+    else onError(new Error("The cloud workspace contains missing or invalid ticket data."));
   }, onError);
 }
 

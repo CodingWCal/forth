@@ -17,6 +17,13 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
+    function isNewGuildId(workspaceId) {
+      // New roots use a namespaced UUID v4. Existing uid-keyed/legacy roots
+      // remain readable and updatable, but can no longer be created by a
+      // different signed-in account claiming that path first.
+      return workspaceId.matches('guild-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}');
+    }
+
     function hasInviteForCurrentUser(workspaceId, inviteEmail) {
       return signedIn()
         && request.auth.token.email != null
@@ -57,6 +64,7 @@ service cloud.firestore {
         || ownsWorkspace(workspaceId)
         || (signedIn() && workspaceId == request.auth.uid);
       allow create: if signedIn()
+        && isNewGuildId(workspaceId)
         && request.resource.data.ownerId == request.auth.uid;
       allow update: if ownsWorkspace(workspaceId)
         && request.resource.data.ownerId == resource.data.ownerId;
@@ -67,13 +75,15 @@ service cloud.firestore {
           || ownsWorkspace(workspaceId)
           || (signedIn() && resource.data.uid == request.auth.uid);
         allow create: if ownsWorkspace(workspaceId)
-          || (memberId == request.auth.uid
+          || (signedIn()
+            && memberId == request.auth.uid
             && request.auth.token.email != null
             && request.resource.data.uid == request.auth.uid
             && request.resource.data.email == request.auth.token.email
             && request.resource.data.role == "member"
             && hasInviteForCurrentUser(workspaceId, request.auth.token.email)
-            && inviteNotExpired(workspaceId, request.auth.token.email));
+            && inviteNotExpired(workspaceId, request.auth.token.email)
+            && !existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(request.auth.token.email)));
         allow update, delete: if ownsWorkspace(workspaceId);
       }
 

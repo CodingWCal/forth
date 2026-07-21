@@ -27,10 +27,10 @@ import {
   UserPlus,
   Scroll,
 } from "lucide-react";
-import { type DragEvent, FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { type DragEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Image from "next/image";
 import { BrandMark } from "@/components/brand-mark";
-import { hasFirebaseConfig } from "@/lib/firebase/config";
+import { writeBrowserStorage } from "@/lib/browser-storage";
 import type { User } from "firebase/auth";
 import {
   acceptGuildInvite,
@@ -41,16 +41,12 @@ import {
   type GuildWorkspace,
   inviteGuildMember,
   listGuildInvites,
-  listGuildWorkspaces,
   listPendingGuildInvites,
   type PendingGuildInvite,
-  provisionWorkspace,
   saveWorkspace,
-  signInWithGoogle,
-  signOutOfForth,
-  watchAuth,
   watchWorkspace,
 } from "@/lib/firebase/workspace";
+import { createCleanWorkspace, DEMO_STORAGE_KEY } from "@/lib/entry";
 import { createSeedWorkspace } from "@/lib/seed";
 import type { Pace, Project, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
 import {
@@ -63,9 +59,7 @@ import {
   getPlannedWeight,
   getProjectProgress,
   PACE_CAPACITY,
-  parseStoredWorkspace,
   STATUS_LABELS,
-  STORAGE_KEY,
   workspaceReducer,
   type DueSoonEntry,
 } from "@/lib/workspace";
@@ -74,17 +68,38 @@ type View = "today" | "board" | "proof" | "settings";
 
 const DUE_PANEL_LIMIT = 6;
 
-function getAuthFailureMessage(error: unknown) {
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? String(error.code)
-      : "unknown error";
-  if (code === "auth/popup-closed-by-user") return "Google sign-in was cancelled before it finished.";
-  if (code === "auth/popup-blocked") return "Allow popups for Forth, then try Google sign-in again.";
-  if (code === "auth/unauthorized-domain") return "This Forth domain is not authorized in Firebase Authentication.";
-  if (code === "auth/operation-not-allowed") return "Google sign-in is not enabled for this Firebase project.";
-  return `Google sign-in could not finish (${code}).`;
-}
+type SyncState = "demo" | "syncing" | "synced" | "error";
+
+type ForthAppBaseProps = {
+  initialState: WorkspaceState;
+  onExit: () => Promise<void>;
+};
+
+type ForthAppProps = ForthAppBaseProps & (
+  | {
+    mode: "demo";
+    initialDemoStorageWarning?: string;
+    cloudUser?: never;
+    initialGuilds?: never;
+    activeWorkspaceId?: never;
+    onOpenWorkspace?: never;
+  }
+  | {
+    mode: "cloud";
+    initialDemoStorageWarning?: never;
+    cloudUser: User;
+    initialGuilds: GuildWorkspace[];
+    activeWorkspaceId: string;
+    onOpenWorkspace: (workspaceId: string) => Promise<void>;
+  }
+);
+
+type NewGuildInput = {
+  name: string;
+  campaignTitle: string;
+  outcome: string;
+  targetDate: string;
+};
 
 const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "today", label: "Quest Log", icon: Gauge },
@@ -99,37 +114,141 @@ const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
   full: { label: "Raid", hint: "Deep-work reserves ready" },
 };
 
+const SAFE_WORKSPACE_ERROR_PREFIXES = [
+  "Only a guild owner",
+  "Enter a valid teammate email address",
+  "No invitation for this account email",
+  "This invitation has expired",
+  "Your signed-in account needs",
+  "This browser cannot safely create",
+  "Enter a name for your first campaign",
+  "Describe the real outcome",
+  "Choose a valid target date",
+];
+
+function safeWorkspaceActionError(error: unknown, fallback: string) {
+  if (!(error instanceof Error)) return fallback;
+  return SAFE_WORKSPACE_ERROR_PREFIXES.some((prefix) => error.message.startsWith(prefix))
+    ? error.message
+    : fallback;
+}
+
 export function ForthApp({
+  mode,
   initialState,
-  renderedAt,
-}: {
-  initialState: WorkspaceState;
-  renderedAt: string;
-}) {
+  initialDemoStorageWarning = "",
+  cloudUser,
+  initialGuilds = [],
+  activeWorkspaceId,
+  onOpenWorkspace,
+  onExit,
+}: ForthAppProps) {
   const [state, dispatch] = useReducer(workspaceReducer, initialState);
-  const [displayDate, setDisplayDate] = useState(() => new Date(renderedAt));
+  const [displayDate, setDisplayDate] = useState(() => new Date());
   const [view, setView] = useState<View>("today");
-  const [activeProjectId, setActiveProjectId] = useState("project-forth");
+  const [activeProjectId, setActiveProjectId] = useState(initialState.projects[0]?.id ?? "");
   const [hydrated, setHydrated] = useState(false);
   const [toast, setToast] = useState("");
-  const [cloudUser, setCloudUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(hasFirebaseConfig);
-  const [syncState, setSyncState] = useState<"local" | "syncing" | "synced" | "error">("local");
-  const [guilds, setGuilds] = useState<GuildWorkspace[]>([]);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [syncState, setSyncState] = useState<SyncState>(mode === "cloud" ? "syncing" : "demo");
   const [pendingInvites, setPendingInvites] = useState<PendingGuildInvite[]>([]);
   const [inviteStatus, setInviteStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [sentInvites, setSentInvites] = useState<GuildInviteSummary[]>([]);
+  const [cloudSnapshotReady, setCloudSnapshotReady] = useState(mode === "demo");
+  const [persistentSyncError, setPersistentSyncError] = useState("");
+  const [demoStorageWarning, setDemoStorageWarning] = useState(initialDemoStorageWarning);
+  const [transitionBusy, setTransitionBusy] = useState(false);
   const cloudReadyRef = useRef(false);
+  const hasValidatedSnapshotRef = useRef(mode === "demo");
+  const latestStateRef = useRef(state);
+  const remoteStateRef = useRef<WorkspaceState | null>(null);
+  const dirtyRef = useRef(false);
+  const revisionRef = useRef(0);
+  const savedRevisionRef = useRef(0);
+  const saveTimerRef = useRef<number | null>(null);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingSaveCountRef = useRef(0);
+  const transitionBusyRef = useRef(false);
+  latestStateRef.current = state;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const campaignDialogRef = useRef<HTMLDialogElement>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  const queueCloudSave = useCallback(async (
+    targetRevision: number,
+    snapshot: WorkspaceState,
+  ): Promise<boolean> => {
+    if (mode !== "cloud" || !activeWorkspaceId) return true;
+
+    pendingSaveCountRef.current += 1;
+    setSyncState("syncing");
+    const saveAttempt = saveChainRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        await saveWorkspace(activeWorkspaceId, snapshot);
+        savedRevisionRef.current = Math.max(savedRevisionRef.current, targetRevision);
+      });
+    saveChainRef.current = saveAttempt;
+
+    try {
+      await saveAttempt;
+      if (savedRevisionRef.current >= revisionRef.current && pendingSaveCountRef.current <= 1) {
+        dirtyRef.current = false;
+        setPersistentSyncError("");
+        setSyncState("synced");
+      }
+      return true;
+    } catch {
+      setPersistentSyncError(
+        "Forth could not save your latest changes. Stay in this workspace and retry before switching or signing out.",
+      );
+      setSyncState("error");
+      return false;
+    } finally {
+      pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1);
+    }
+  }, [activeWorkspaceId, mode]);
+
+  const flushCloudSave = useCallback(async (): Promise<boolean> => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (mode !== "cloud") return true;
+    if (!dirtyRef.current && pendingSaveCountRef.current === 0) return true;
+    if (!activeWorkspaceId || !hasValidatedSnapshotRef.current) {
+      setPersistentSyncError(
+        "Forth has not confirmed this cloud workspace yet. No navigation occurred; wait for cloud loading to finish and retry.",
+      );
+      setSyncState("error");
+      return false;
+    }
+
+    // A save that was already queued may contain an older state. Wait for it,
+    // then enqueue the newest revision so writes always reach Firestore in the
+    // same order the user made them.
+    if (pendingSaveCountRef.current > 0) {
+      try {
+        await saveChainRef.current;
+      } catch {
+        // The immediate retry below uses the latest state and may recover from
+        // a transient failure without allowing navigation to race ahead.
+      }
+    }
+
+    while (savedRevisionRef.current < revisionRef.current || dirtyRef.current) {
+      const saved = await queueCloudSave(revisionRef.current, latestStateRef.current);
+      if (!saved) return false;
+    }
+
+    dirtyRef.current = false;
+    setPersistentSyncError("");
+    setSyncState("synced");
+    return true;
+  }, [activeWorkspaceId, mode, queueCloudSave]);
+
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const stored = parseStoredWorkspace(window.localStorage.getItem(STORAGE_KEY));
-      dispatch({ type: "RESET", state: stored ?? createSeedWorkspace() });
       setDisplayDate(new Date());
       setHydrated(true);
     });
@@ -162,104 +281,130 @@ export function ForthApp({
   }, []);
 
   useEffect(() => {
-    if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [hydrated, state]);
-
-  useEffect(() => {
-    if (!hasFirebaseConfig) return;
-    return watchAuth(({ user, loading }) => {
-      setCloudUser(user);
-      setAuthLoading(loading);
-      if (user) {
-        setSyncState("syncing");
-      } else {
-        cloudReadyRef.current = false;
-        setGuilds([]);
-        setActiveWorkspaceId(null);
-        setPendingInvites([]);
-        setInviteStatus("idle");
-        setSentInvites([]);
-        setSyncState("local");
+    if (mode === "demo" && hydrated) {
+      const saved = writeBrowserStorage(DEMO_STORAGE_KEY, JSON.stringify(state));
+      if (!saved && !demoStorageWarning) {
+        const frame = window.requestAnimationFrame(() => {
+          setDemoStorageWarning(
+            "Browser storage is unavailable. This demo still works in memory, but refreshing or closing the tab will discard its changes.",
+          );
+        });
+        return () => window.cancelAnimationFrame(frame);
       }
-    }) ?? undefined;
-  }, []);
-
-  useEffect(() => {
-    if (!cloudUser || !hydrated) return;
-    let cancelled = false;
-    void provisionWorkspace(cloudUser, state)
-      .then(async () => {
-        if (cancelled) return;
-        const availableGuilds = await listGuildWorkspaces(cloudUser);
-        if (cancelled) return;
-        setGuilds(availableGuilds);
-        const storedWorkspaceId = window.localStorage.getItem(`forth.active-workspace.${cloudUser.uid}`);
-        const selectedWorkspaceId = availableGuilds.some((guild) => guild.id === storedWorkspaceId)
-          ? storedWorkspaceId!
-          : cloudUser.uid;
-        setActiveWorkspaceId(selectedWorkspaceId);
-      })
-      .catch(() => setSyncState("error"));
-    return () => {
-      cancelled = true;
-    };
-  // Provision exactly when the authenticated identity changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cloudUser?.uid, hydrated]);
+    }
+  }, [demoStorageWarning, hydrated, mode, state]);
 
   // Look up pending invitations independently of workspace provisioning so a
   // recipient always sees (and can act on) an invite even if their own guild
   // sync is degraded.
   useEffect(() => {
-    if (!cloudUser) return;
+    if (mode !== "cloud" || !cloudUser) return;
     void refreshPendingInvites(cloudUser);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cloudUser?.uid]);
+  }, [cloudUser?.uid, mode]);
 
   // Owners see the invitations they have already sent for the active guild so
   // they can cancel a typo or a stale invite. Refreshed when the guild changes.
   useEffect(() => {
-    if (!cloudUser) return;
-    const guild = guilds.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
+    if (mode !== "cloud" || !cloudUser) return;
+    const guild = initialGuilds.find((candidate) => candidate.id === activeWorkspaceId) ?? null;
     void refreshSentInvites(cloudUser, guild);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cloudUser?.uid, activeWorkspaceId, guilds]);
+  }, [cloudUser?.uid, activeWorkspaceId, initialGuilds, mode]);
 
   useEffect(() => {
-    if (!cloudUser || !activeWorkspaceId || !hydrated) return;
-    window.localStorage.setItem(`forth.active-workspace.${cloudUser.uid}`, activeWorkspaceId);
+    if (mode !== "cloud" || !cloudUser || !activeWorkspaceId || !hydrated) return;
+    cloudReadyRef.current = false;
+    hasValidatedSnapshotRef.current = false;
+    dirtyRef.current = false;
+    revisionRef.current = 0;
+    savedRevisionRef.current = 0;
     const unsubscribe = watchWorkspace(
       activeWorkspaceId,
       (cloudState) => {
-        cloudReadyRef.current = false;
+        if (hasValidatedSnapshotRef.current && (dirtyRef.current || pendingSaveCountRef.current > 0)) {
+          // Preserve local edits while their ordered save is pending. The
+          // listener will receive the committed state after Firestore accepts
+          // it; applying an older snapshot here could erase visible work.
+          return;
+        }
+        remoteStateRef.current = cloudState;
         dispatch({ type: "RESET", state: cloudState });
-        window.requestAnimationFrame(() => {
+        if (!hasValidatedSnapshotRef.current) {
+          window.requestAnimationFrame(() => {
+            hasValidatedSnapshotRef.current = true;
+            cloudReadyRef.current = true;
+            setCloudSnapshotReady(true);
+            setPersistentSyncError("");
+            setSyncState("synced");
+          });
+        } else {
           cloudReadyRef.current = true;
+          setPersistentSyncError("");
           setSyncState("synced");
-        });
+        }
       },
-      () => setSyncState("error"),
+      () => {
+        setPersistentSyncError(
+          hasValidatedSnapshotRef.current
+            ? "Live cloud updates were interrupted. Your visible workspace remains in place; retry saving before leaving it."
+            : "Forth could not validate this cloud workspace. No tickets can be edited until the connection succeeds.",
+        );
+        setSyncState("error");
+      },
     ) ?? undefined;
-    return () => unsubscribe?.();
-  }, [activeWorkspaceId, cloudUser, hydrated]);
+    if (!unsubscribe) {
+      setPersistentSyncError("Forth could not start cloud sync for this workspace. No tickets can be edited.");
+      setSyncState("error");
+    }
+    return () => {
+      cloudReadyRef.current = false;
+      unsubscribe?.();
+    };
+  }, [activeWorkspaceId, cloudUser, hydrated, mode]);
 
   useEffect(() => {
-    if (!cloudUser || !activeWorkspaceId || !cloudReadyRef.current) return;
+    if (mode !== "cloud" || !cloudUser || !activeWorkspaceId || !cloudReadyRef.current) return;
+    if (remoteStateRef.current === state) {
+      remoteStateRef.current = null;
+      return;
+    }
+
+    revisionRef.current += 1;
+    dirtyRef.current = true;
     setSyncState("syncing");
-    const timeout = window.setTimeout(() => {
-      void saveWorkspace(activeWorkspaceId, state)
-        .then(() => setSyncState("synced"))
-        .catch(() => setSyncState("error"));
+    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      void flushCloudSave();
     }, 450);
-    return () => window.clearTimeout(timeout);
-  }, [activeWorkspaceId, cloudUser, state]);
+    return () => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, [activeWorkspaceId, cloudUser, flushCloudSave, mode, state]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current && pendingSaveCountRef.current === 0) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeUnload);
+      if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
+    };
+  }, []);
 
   const focusTasks = getFocusTasks(state);
   const plannedWeight = getPlannedWeight(state);
   const capacity = PACE_CAPACITY[state.pace];
   const activeProject =
     state.projects.find((project) => project.id === activeProjectId) ?? state.projects[0];
-  const activeGuild = guilds.find((guild) => guild.id === activeWorkspaceId) ?? null;
+  const activeGuild = initialGuilds.find((guild) => guild.id === activeWorkspaceId) ?? null;
 
   function announce(message: string) {
     setToast(message);
@@ -283,11 +428,6 @@ export function ForthApp({
 
   function openCampaignDialog() {
     campaignDialogRef.current?.showModal();
-  }
-
-  async function refreshGuildDirectory(user: User) {
-    const availableGuilds = await listGuildWorkspaces(user);
-    setGuilds(availableGuilds);
   }
 
   async function refreshPendingInvites(user: User) {
@@ -319,14 +459,13 @@ export function ForthApp({
   }
 
   function resetDemo() {
-    const destination = cloudUser
-      ? "this signed-in guild and every device it syncs to"
-      : "this browser";
-    if (!window.confirm(`Restore the starter campaign in ${destination}? This replaces the current workspace.`)) return;
-    dispatch({ type: "RESET", state: createSeedWorkspace() });
-    setActiveProjectId("project-forth");
+    if (mode !== "demo") return;
+    if (!window.confirm("Restore the disposable demo in this browser? This replaces only demo data on this device.")) return;
+    const demoState = createSeedWorkspace();
+    dispatch({ type: "RESET", state: demoState });
+    setActiveProjectId(demoState.projects[0]?.id ?? "");
     setView("today");
-    announce(cloudUser ? "Starter campaign restored and syncing." : "The local demo has been reset.");
+    announce("The disposable local demo has been reset.");
   }
 
   const title =
@@ -345,32 +484,50 @@ export function ForthApp({
     }
   }
 
-  async function createGuild(name: string) {
-    if (!cloudUser) {
-      announce("Sign in with Google before creating a shared guild.");
-      setView("settings");
-      return;
-    }
+  async function createGuild(input: NewGuildInput): Promise<boolean> {
+    if (mode !== "cloud" || !cloudUser || !onOpenWorkspace) return false;
+    const cleanName = input.name.trim();
+    if (!cleanName) return false;
     try {
-      const workspaceId = await createGuildWorkspace(cloudUser, name, createSeedWorkspace());
-      await refreshGuildDirectory(cloudUser);
-      setActiveWorkspaceId(workspaceId);
-      setActiveProjectId("project-forth");
-      setView("board");
-      announce(`Guild founded: ${name.trim()}.`);
+      const cleanState = createCleanWorkspace({
+        campaignTitle: input.campaignTitle,
+        outcome: input.outcome,
+        targetDate: input.targetDate,
+      });
+      return await runDurableTransition(async () => {
+        const workspaceId = await createGuildWorkspace(cloudUser, cleanName, cleanState);
+        await onOpenWorkspace(workspaceId);
+      });
     } catch (error) {
-      announce(error instanceof Error ? error.message : "The guild could not be created.");
+      announce(safeWorkspaceActionError(error, "The guild could not be created. Your current workspace was not changed."));
+      return false;
     }
   }
 
-  async function inviteGuildmate(email: string) {
-    if (!cloudUser || !activeGuild) return;
+  async function runDurableTransition(action: () => Promise<void>): Promise<boolean> {
+    if (transitionBusyRef.current) return false;
+    transitionBusyRef.current = true;
+    setTransitionBusy(true);
+    try {
+      if (!(await flushCloudSave())) return false;
+      await action();
+      return true;
+    } finally {
+      transitionBusyRef.current = false;
+      setTransitionBusy(false);
+    }
+  }
+
+  async function inviteGuildmate(email: string): Promise<boolean> {
+    if (!cloudUser || !activeGuild) return false;
     try {
       await inviteGuildMember(cloudUser, activeGuild, email);
-      announce(`Invitation recorded for ${email.trim().toLowerCase()}. It appears in their Guild Hall after Google sign-in.`);
+      announce(`Invitation recorded for ${email.trim().toLowerCase()}. It appears after they sign in with that account email.`);
       await refreshSentInvites(cloudUser, activeGuild);
+      return true;
     } catch (error) {
-      announce(error instanceof Error ? error.message : "The invitation could not be sent.");
+      announce(safeWorkspaceActionError(error, "The invitation could not be sent. Check the address and try again."));
+      return false;
     }
   }
 
@@ -381,35 +538,34 @@ export function ForthApp({
       setSentInvites((current) => current.filter((invite) => invite.email !== email));
       announce(`Invitation to ${email} cancelled.`);
     } catch (error) {
-      announce(error instanceof Error ? error.message : "The invitation could not be cancelled. Try again.");
+      announce(safeWorkspaceActionError(error, "The invitation could not be cancelled. Try again."));
       await refreshSentInvites(cloudUser, activeGuild);
     }
   }
 
-  async function joinGuild(workspaceId: string) {
-    if (!cloudUser) return;
+  async function joinGuild(workspaceId: string): Promise<boolean> {
+    if (mode !== "cloud" || !cloudUser || !onOpenWorkspace) return false;
     try {
-      const joinedGuild = await acceptGuildInvite(cloudUser, workspaceId);
-      await refreshGuildDirectory(cloudUser);
-      setActiveWorkspaceId(joinedGuild.workspaceId);
-      setView("today");
-      announce(`Joined ${joinedGuild.workspaceName}.`);
-      void refreshPendingInvites(cloudUser);
+      return await runDurableTransition(async () => {
+        const joinedGuild = await acceptGuildInvite(cloudUser, workspaceId);
+        await onOpenWorkspace(joinedGuild.workspaceId);
+      });
     } catch (error) {
-      announce(error instanceof Error ? error.message : "The guild invitation could not be accepted.");
+      announce(safeWorkspaceActionError(error, "The guild invitation could not be accepted. Try again."));
+      return false;
     }
   }
 
   async function acceptPendingInvite(invite: PendingGuildInvite) {
-    if (!cloudUser) return;
+    if (mode !== "cloud" || !cloudUser || !onOpenWorkspace) return;
     try {
-      const joinedGuild = await acceptGuildInvite(cloudUser, invite.workspaceId);
-      setPendingInvites((current) => current.filter((item) => item.workspaceId !== invite.workspaceId));
-      await refreshGuildDirectory(cloudUser);
-      setActiveWorkspaceId(joinedGuild.workspaceId);
-      announce(`Welcome to ${joinedGuild.workspaceName}. The shared realm is now active.`);
+      await runDurableTransition(async () => {
+        const joinedGuild = await acceptGuildInvite(cloudUser, invite.workspaceId);
+        setPendingInvites((current) => current.filter((item) => item.workspaceId !== invite.workspaceId));
+        await onOpenWorkspace(joinedGuild.workspaceId);
+      });
     } catch (error) {
-      announce(error instanceof Error ? error.message : "The invitation could not be accepted. Try again.");
+      announce(safeWorkspaceActionError(error, "The invitation could not be accepted. Try again."));
       void refreshPendingInvites(cloudUser);
     }
   }
@@ -421,13 +577,68 @@ export function ForthApp({
       setPendingInvites((current) => current.filter((item) => item.workspaceId !== invite.workspaceId));
       announce(`Declined the invitation to ${invite.workspaceName}.`);
     } catch (error) {
-      announce(error instanceof Error ? error.message : "The invitation could not be declined. Try again.");
+      announce(safeWorkspaceActionError(error, "The invitation could not be declined. Try again."));
       void refreshPendingInvites(cloudUser);
     }
   }
 
+  async function openGuild(workspaceId: string) {
+    if (mode !== "cloud" || !onOpenWorkspace || workspaceId === activeWorkspaceId) return;
+    setSyncState("syncing");
+    try {
+      await runDurableTransition(() => onOpenWorkspace(workspaceId));
+    } catch (error) {
+      setSyncState("error");
+      announce(safeWorkspaceActionError(error, "The selected guild could not be opened. Your current workspace remains active."));
+    }
+  }
+
+  async function exitAfterSave() {
+    try {
+      await runDurableTransition(onExit);
+    } catch {
+      setPersistentSyncError("Forth could not finish leaving this workspace. Your saved cloud data was not changed; try again.");
+      setSyncState("error");
+    }
+  }
+
+  async function retryCloudSync() {
+    if (dirtyRef.current || pendingSaveCountRef.current > 0) {
+      await flushCloudSave();
+      return;
+    }
+    window.location.reload();
+  }
+
+  if (mode === "cloud" && !cloudSnapshotReady) {
+    const failed = syncState === "error";
+    return (
+      <div className="entry-page">
+        <main className="entry-status-page" aria-labelledby="cloud-validation-title" aria-busy={!failed}>
+          <div className="entry-status-card" role={failed ? "alert" : "status"} aria-live="polite">
+            {failed ? <LockKeyhole aria-hidden="true" size={28} /> : <span aria-hidden="true">Loading</span>}
+            <p className="eyebrow">Cloud workspace</p>
+            <h1 id="cloud-validation-title">
+              {failed ? "Editing is safely paused." : "Validating your workspaceâ€¦"}
+            </h1>
+            <p>
+              {failed
+                ? persistentSyncError || "Forth could not validate this workspace. No tickets can be edited."
+                : "Forth is waiting for the first verified Firestore snapshot. Tickets stay read-only until it arrives."}
+            </p>
+            {failed && (
+              <button className="button button--quiet" onClick={() => void exitAfterSave()}>
+                Sign out safely
+              </button>
+            )}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" aria-busy={transitionBusy || undefined} inert={transitionBusy || undefined}>
       <aside className="side-rail">
         <button className="brand" onClick={() => setView("today")} aria-label="Forth home">
           <BrandMark />
@@ -484,7 +695,7 @@ export function ForthApp({
           <BrandMark compact />
           <span className="brand-word">Forth</span>
         </button>
-        <EnvironmentBadge />
+        <EnvironmentBadge mode={mode} syncState={syncState} />
       </header>
 
       <main className="main-canvas">
@@ -500,7 +711,7 @@ export function ForthApp({
             <h1>{title}</h1>
           </div>
           <div className="desktop-actions">
-            <EnvironmentBadge />
+            <EnvironmentBadge mode={mode} syncState={syncState} />
             {view !== "settings" && (
               <button className="button button--primary" onClick={openAddDialog}>
                 <Plus size={17} /> New quest
@@ -508,6 +719,29 @@ export function ForthApp({
             )}
           </div>
         </header>
+
+        {persistentSyncError && (
+          <div className="entry-error" role="alert">
+            <LockKeyhole aria-hidden="true" size={20} />
+            <div>
+              <strong>Cloud save needs attention</strong>
+              <p>{persistentSyncError}</p>
+              <button className="entry-text-action" onClick={() => void retryCloudSync()}>
+                Retry cloud sync
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mode === "demo" && demoStorageWarning && (
+          <div className="entry-error" role="status">
+            <LockKeyhole aria-hidden="true" size={20} />
+            <div>
+              <strong>Demo changes are temporary</strong>
+              <p>{demoStorageWarning}</p>
+            </div>
+          </div>
+        )}
 
         {view === "today" && (
           <TodayView
@@ -551,13 +785,13 @@ export function ForthApp({
         {view === "proof" && <ProofView state={state} onEdit={openEditDialog} onDelete={deleteTask} />}
         {view === "settings" && (
           <SettingsView
+            mode={mode}
             onReset={resetDemo}
             user={cloudUser}
-            authLoading={authLoading}
             syncState={syncState}
             activeGuild={activeGuild}
-            guilds={guilds}
-            onSelectGuild={setActiveWorkspaceId}
+            guilds={initialGuilds}
+            onSelectGuild={(workspaceId) => void openGuild(workspaceId)}
             onCreateGuild={createGuild}
             onInviteGuildmate={inviteGuildmate}
             onJoinGuild={joinGuild}
@@ -571,19 +805,7 @@ export function ForthApp({
               if (cloudUser) void refreshPendingInvites(cloudUser);
             }}
             onOpenCampaign={openCampaignDialog}
-            onSignIn={async () => {
-              try {
-                await signInWithGoogle();
-                announce("Welcome to the guild. Cloud save is active.");
-              } catch (error) {
-                console.error("Forth Google sign-in failed", error);
-                announce(getAuthFailureMessage(error));
-              }
-            }}
-            onSignOut={async () => {
-              await signOutOfForth();
-              announce("Signed out. This browser keeps its local copy.");
-            }}
+            onExit={exitAfterSave}
           />
         )}
       </main>
@@ -672,10 +894,17 @@ export function ForthApp({
   );
 }
 
-function EnvironmentBadge() {
+function EnvironmentBadge({ mode, syncState }: { mode: "demo" | "cloud"; syncState: SyncState }) {
+  const label = mode === "demo"
+    ? "Disposable demo - this device only"
+    : syncState === "synced"
+      ? "Cloud workspace - saved"
+      : syncState === "syncing"
+        ? "Cloud workspace - syncing"
+        : "Cloud workspace - sync error";
   return (
-    <span className={hasFirebaseConfig ? "env-badge is-connected" : "env-badge"}>
-      <span /> {hasFirebaseConfig ? "Cloud rune active" : "Local camp"}
+    <span className={mode === "cloud" && syncState !== "error" ? "env-badge is-connected" : "env-badge"}>
+      <span aria-hidden="true" /> {label}
     </span>
   );
 }
@@ -1293,9 +1522,9 @@ function ProofView({
 }
 
 function SettingsView({
+  mode,
   onReset,
   user,
-  authLoading,
   syncState,
   activeGuild,
   guilds,
@@ -1311,19 +1540,18 @@ function SettingsView({
   onDeclineInvite,
   onRetryInvites,
   onOpenCampaign,
-  onSignIn,
-  onSignOut,
+  onExit,
 }: {
+  mode: "demo" | "cloud";
   onReset: () => void;
-  user: User | null;
-  authLoading: boolean;
-  syncState: "local" | "syncing" | "synced" | "error";
+  user?: User;
+  syncState: SyncState;
   activeGuild: GuildWorkspace | null;
   guilds: GuildWorkspace[];
   onSelectGuild: (workspaceId: string) => void;
-  onCreateGuild: (name: string) => Promise<void>;
-  onInviteGuildmate: (email: string) => Promise<void>;
-  onJoinGuild: (workspaceId: string) => Promise<void>;
+  onCreateGuild: (input: NewGuildInput) => Promise<boolean>;
+  onInviteGuildmate: (email: string) => Promise<boolean>;
+  onJoinGuild: (workspaceId: string) => Promise<boolean>;
   sentInvites: GuildInviteSummary[];
   onCancelInvite: (email: string) => Promise<void>;
   pendingInvites: PendingGuildInvite[];
@@ -1332,33 +1560,38 @@ function SettingsView({
   onDeclineInvite: (invite: PendingGuildInvite) => Promise<void>;
   onRetryInvites: () => void;
   onOpenCampaign: () => void;
-  onSignIn: () => Promise<void>;
-  onSignOut: () => Promise<void>;
+  onExit: () => Promise<void>;
 }) {
+  const syncLabel = syncState === "synced"
+    ? "Saved to cloud"
+    : syncState === "syncing"
+      ? "Syncing with cloud"
+      : syncState === "error"
+        ? "Cloud sync error"
+        : "Demo on this device";
+
   return (
     <div className="settings-view">
       <section className="settings-intro">
         <p className="eyebrow">Guild hall · Save altar</p>
         <h2>Account wards and cloud runes.</h2>
-        <p>Play from a local camp or sign in to carry the same engineering realm across devices. Ticket data stays private to your guild workspace.</p>
+        <p>{mode === "cloud" ? "This signed-in workspace saves to private cloud storage for authorized guild members." : "This disposable demo stays in this browser and never copies sample tickets into a real account."}</p>
       </section>
 
       <section className="settings-card">
         <div className="settings-icon"><LockKeyhole size={22} /></div>
         <div>
           <p className="eyebrow">Save ward</p>
-          <h3>{user ? `Signed in as ${user.displayName ?? user.email}` : hasFirebaseConfig ? "Cloud save is available" : "Local browser save"}</h3>
-          <p>{user ? `Save status: ${syncState}. Forth keeps a local fallback while your private Firestore workspace synchronizes.` : hasFirebaseConfig ? "Use Google sign-in to create your private guild save." : "Changes survive refreshes on this device but do not travel to another browser."}</p>
-          {hasFirebaseConfig && (
-            <button className="button button--primary" disabled={authLoading} onClick={() => void (user ? onSignOut() : onSignIn())}>
-              {authLoading ? "Checking save…" : user ? "Sign out" : "Sign in with Google"}
-            </button>
-          )}
+          <h3>{mode === "cloud" ? `Signed in as ${user?.displayName ?? user?.email ?? "your account"}` : "Disposable local demo"}</h3>
+          <p>{mode === "cloud" ? `${syncLabel}. Forth saves this workspace only to its authorized Firestore record.` : "Sample tickets persist on this device only until you reset or clear the demo. They are never uploaded to Firebase."}</p>
+          <button className="button button--primary" onClick={() => void onExit()}>
+            {mode === "cloud" ? "Sign out" : "Exit demo"}
+          </button>
         </div>
-        <span className={user && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{user ? syncState : "Local"}</span>
+        <span className={mode === "cloud" && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{syncLabel}</span>
       </section>
 
-      {user && (
+      {mode === "cloud" && user && (
         <PendingInvitesCard
           pendingInvites={pendingInvites}
           inviteStatus={inviteStatus}
@@ -1368,7 +1601,7 @@ function SettingsView({
         />
       )}
 
-      {user && (
+      {mode === "cloud" && user && (
         <GuildHallCard
           activeGuild={activeGuild}
           guilds={guilds}
@@ -1396,10 +1629,12 @@ function SettingsView({
         </div>
       </section>
 
-      <section className="reset-card">
-        <div><p className="eyebrow">Workspace controls</p><h3>Restore the starter campaign</h3><p>{user ? "This replaces the signed-in workspace and synchronizes the starter campaign to Firebase." : "This replaces local browser data on this device only."}</p></div>
-        <button className="button button--danger" onClick={onReset}><RotateCcw size={16} /> {user ? "Restore guild seed" : "Restore local seed"}</button>
-      </section>
+      {mode === "demo" && (
+        <section className="reset-card">
+          <div><p className="eyebrow">Demo controls</p><h3>Restore the sample campaign</h3><p>This replaces disposable demo data in this browser only. No signed-in workspace is changed.</p></div>
+          <button className="button button--danger" onClick={onReset}><RotateCcw size={16} /> Restore demo sample</button>
+        </section>
+      )}
     </div>
   );
 }
@@ -1435,7 +1670,7 @@ function PendingInvitesCard({
         <p className="eyebrow">Guild summons</p>
         <h3>Pending invitations</h3>
         {(inviteStatus === "idle" || inviteStatus === "loading") && (
-          <p>Checking for guild invitations addressed to your Google email…</p>
+          <p>Checking for guild invitations addressed to your account email…</p>
         )}
         {inviteStatus === "error" && (
           <>
@@ -1449,7 +1684,7 @@ function PendingInvitesCard({
         )}
         {inviteStatus === "ready" && pendingInvites.length === 0 && (
           <>
-            <p>No invitations are waiting for you. When a guild leader invites this Google email, the summons appears here.</p>
+            <p>No invitations are waiting for you. When a guild leader invites your account email, the summons appears here.</p>
             <div className="guild-actions">
               <button type="button" className="button button--quiet" onClick={onRetryInvites}>
                 <RotateCcw size={15} /> Check again
@@ -1511,14 +1746,17 @@ function GuildHallCard({
   activeGuild: GuildWorkspace | null;
   guilds: GuildWorkspace[];
   onSelectGuild: (workspaceId: string) => void;
-  onCreateGuild: (name: string) => Promise<void>;
-  onInviteGuildmate: (email: string) => Promise<void>;
-  onJoinGuild: (workspaceId: string) => Promise<void>;
+  onCreateGuild: (input: NewGuildInput) => Promise<boolean>;
+  onInviteGuildmate: (email: string) => Promise<boolean>;
+  onJoinGuild: (workspaceId: string) => Promise<boolean>;
   sentInvites: GuildInviteSummary[];
   onCancelInvite: (email: string) => Promise<void>;
   onOpenCampaign: () => void;
 }) {
   const [guildName, setGuildName] = useState("");
+  const [firstCampaignTitle, setFirstCampaignTitle] = useState("");
+  const [firstCampaignOutcome, setFirstCampaignOutcome] = useState("");
+  const [firstCampaignTargetDate, setFirstCampaignTargetDate] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [guildCode, setGuildCode] = useState("");
   const [cancelingEmail, setCancelingEmail] = useState<string | null>(null);
@@ -1538,7 +1776,7 @@ function GuildHallCard({
       <div>
         <p className="eyebrow">Guild roster</p>
         <h3>Build campaigns with real guildmates.</h3>
-        <p>Invite a teammate by the Google email they will use for Forth. After they sign in, the invitation appears in their own Guild Hall under Pending invitations. The guild code below is a backup path if that panel is unavailable.</p>
+        <p>Invite a teammate by the account email they will use for Forth. After they sign in, the invitation appears in their own Guild Hall under Pending invitations. The guild code below is a backup path if that panel is unavailable.</p>
         {activeGuild?.role === "owner" && <p className="guild-code">Guild code: <code>{activeGuild.id}</code></p>}
 
         <label className="field guild-field">
@@ -1554,10 +1792,24 @@ function GuildHallCard({
 
         <form className="guild-inline-form" onSubmit={(event) => {
           event.preventDefault();
-          if (!guildName.trim()) return;
-          void onCreateGuild(guildName).then(() => setGuildName(""));
+          if (!guildName.trim() || !firstCampaignTitle.trim() || !firstCampaignOutcome.trim() || !firstCampaignTargetDate) return;
+          void onCreateGuild({
+            name: guildName,
+            campaignTitle: firstCampaignTitle,
+            outcome: firstCampaignOutcome,
+            targetDate: firstCampaignTargetDate,
+          }).then((created) => {
+            if (!created) return;
+            setGuildName("");
+            setFirstCampaignTitle("");
+            setFirstCampaignOutcome("");
+            setFirstCampaignTargetDate("");
+          });
         }}>
-          <label className="field"><span>Found another guild</span><input value={guildName} onChange={(event) => setGuildName(event.target.value)} placeholder="Platform guild" maxLength={60} /></label>
+          <label className="field"><span>New workspace name</span><input value={guildName} onChange={(event) => setGuildName(event.target.value)} placeholder="Platform guild" maxLength={60} required /></label>
+          <label className="field"><span>First campaign (project)</span><input value={firstCampaignTitle} onChange={(event) => setFirstCampaignTitle(event.target.value)} placeholder="Ship cohort ticketing" maxLength={80} required /></label>
+          <label className="field"><span>Campaign outcome</span><textarea value={firstCampaignOutcome} onChange={(event) => setFirstCampaignOutcome(event.target.value)} placeholder="What should be true when this project succeeds?" maxLength={240} rows={3} required /></label>
+          <label className="field"><span>Campaign target date</span><input type="date" value={firstCampaignTargetDate} onChange={(event) => setFirstCampaignTargetDate(event.target.value)} required /></label>
           <button className="button button--quiet" type="submit">Found guild</button>
         </form>
 
@@ -1565,7 +1817,9 @@ function GuildHallCard({
           <form className="guild-inline-form" onSubmit={(event) => {
             event.preventDefault();
             if (!inviteEmail.trim()) return;
-            void onInviteGuildmate(inviteEmail).then(() => setInviteEmail(""));
+            void onInviteGuildmate(inviteEmail).then((sent) => {
+              if (sent) setInviteEmail("");
+            });
           }}>
             <label className="field"><span>Invite a guildmate</span><input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="teammate@example.com" /></label>
             <button className="button button--primary" type="submit">Send invite</button>
@@ -1597,7 +1851,9 @@ function GuildHallCard({
         <form className="guild-inline-form" onSubmit={(event) => {
           event.preventDefault();
           if (!guildCode.trim()) return;
-          void onJoinGuild(guildCode).then(() => setGuildCode(""));
+          void onJoinGuild(guildCode).then((joined) => {
+            if (joined) setGuildCode("");
+          });
         }}>
           <label className="field"><span>Join with a guild code</span><input value={guildCode} onChange={(event) => setGuildCode(event.target.value)} placeholder="guild-…" /></label>
           <button className="button button--primary" type="submit">Join guild</button>
