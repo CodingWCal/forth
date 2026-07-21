@@ -10,6 +10,8 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Production baseline: `origin/main` at merge commit `d547e4b` after PR #21
 - Staging baseline at branch creation: `30e71f4`; canonical `staging` has since added TICKET-031 and TICKET-032 backlog commits
 - Active ticket: TICKET-013 task-first Quest Log redesign; local implementation and QA pass
+- Draft PR: https://github.com/CodingWCal/forth/pull/22 (targets `staging`)
+- Implementation commit: `7c10e00`
 - Release state: PR #21 merged and deployed successfully; production and stable staging both return HTTP 200
 - Stable staging URL: https://forth-git-staging-calvintrinhvan-2763s-projects.vercel.app/
 
@@ -34,11 +36,12 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - `git diff --check`: passed.
 - Added-line credential-pattern scan: passed.
 - Fresh 375px and 1440px local visual captures inspected: ticket operations are primary, the first mobile ticket begins within the initial viewport, and the closed Guild progress drawer remains available without competing above the fold.
+- Hosted GitGuardian and initial Vercel preview deployment for PR #22: passed; maintainer usability smoke remains.
 
 ## Next delivery sequence
 
-1. Finish final QA, push TICKET-013, and open a draft PR into `staging`.
-2. Run a maintainer visual/usability smoke on the hosted feature preview, then merge into `staging` only after approval.
+1. Run a maintainer visual/usability smoke on PR #22's hosted feature preview, then merge into `staging` only after approval.
+2. After merge, use the stable staging hostname for authenticated cloud testing; do not authorize the temporary feature URL in Firebase.
 3. Keep TICKET-030 as a separately reviewable responsive quick fix.
 4. Start TICKET-029 only after the task-first hierarchy is stable so tour anchors do not immediately become stale.
 
