@@ -29,6 +29,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-007 | Implemented on `main` | Pending invitations exist in code and rules; still needs live two-account E2E verification. |
 | TICKET-008 | Implemented on `agent/invite-lifecycle` | Cancel/decline/expiry and rule tests pass; not yet released to production. |
 | TICKET-009 | Planned | Optional email delivery must remain downstream of a reliable in-app invitation flow. |
+| TICKET-010 | Implemented on `codex/ticket-010-auth-entry` | Automated gates pass; live Google/GitHub two-account smoke testing remains a release requirement. |
 
 ## External Contribution Intake
 
@@ -384,6 +385,8 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
 
 ### TICKET-010: Add an authenticated landing page with explicit demo entry
 
+- Status: Implemented on `codex/ticket-010-auth-entry`; pending draft-PR review and live OAuth/provider verification.
+
 - Priority: P0 Critical
 - Type: Product/Security/UX
 - Area: Root route, authentication, first-run routing
@@ -401,12 +404,16 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - Build a concise branded landing page that states Forth’s practical value before fantasy flavor.
   - Add Google and GitHub authentication, loading, popup-blocked, cancelled, unauthorized-domain, and retry states.
   - Require an explicit action to enter demo mode; never hydrate demo state into a new cloud workspace without confirmation.
+  - Start every newly authenticated account with an empty/onboarding-created real workspace; never present seeded example tickets as the user's work.
+  - Keep example campaigns and tickets behind an explicitly labeled, browser-local demo or an intentional onboarding choice, with a separate persistence namespace from authenticated data.
   - Redirect authenticated users into their last active guild or onboarding.
 - Out of scope:
   - Password authentication, SSO, billing, or public workspace discovery.
 - Acceptance criteria:
   - No workspace ticket data renders before auth resolution or explicit demo selection.
   - The page identifies demo data as disposable/local before entry.
+  - A new authenticated user sees onboarding for a clean first campaign with zero pre-completed or fake tickets.
+  - Seeded examples load only after an explicit demo/example-data choice, remain identifiable as samples, and can never silently sync into Firestore.
   - Google and GitHub users can sign in, sign out, and recover from cancelled/blocked popup flows.
   - Provider collisions give a safe account-linking explanation without exposing whether another email is registered.
   - Auth mode is keyboard accessible, responsive, and understandable without fantasy vocabulary.

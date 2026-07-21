@@ -1,17 +1,19 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterAll, beforeAll, describe, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   assertFails,
   assertSucceeds,
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { collectionGroup, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from "firebase/firestore";
+import { collectionGroup, deleteDoc, doc, getDoc, getDocs, query, setDoc, where, writeBatch } from "firebase/firestore";
 
 const projectId = "forth-rules-test";
 const ownerId = "guild-owner";
 const outsiderId = "outside-adventurer";
+const ownerEmail = "owner@example.com";
+const firstGuildId = "guild-123e4567-e89b-42d3-a456-426614174000";
 let testEnv: RulesTestEnvironment;
 
 beforeAll(async () => {
@@ -26,18 +28,25 @@ afterAll(async () => {
 });
 
 describe("Firestore workspace rules", () => {
-  it("lets an authenticated owner provision and access only their workspace", async () => {
-    const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
-    const workspace = doc(ownerDb, "workspaces", ownerId);
+  it("provisions a complete UUID-keyed workspace with membership last", async () => {
+    const ownerDb = testEnv.authenticatedContext(ownerId, { email: ownerEmail }).firestore();
+    const workspace = doc(ownerDb, "workspaces", firstGuildId);
+
+    // Mirrors the client provisioner. Membership is deliberately last so an
+    // interrupted setup never appears as a usable guild in the directory.
     await assertSucceeds(setDoc(workspace, { ownerId, name: "Owner guild" }));
-    await assertSucceeds(setDoc(doc(ownerDb, "workspaces", ownerId, "members", ownerId), {
-      uid: ownerId,
-      role: "owner",
-    }));
-    await assertSucceeds(setDoc(doc(ownerDb, "workspaces", ownerId, "data", "current"), {
+    await assertSucceeds(setDoc(doc(ownerDb, "workspaces", firstGuildId, "data", "current"), {
       state: { version: 2 },
     }));
+    await assertSucceeds(setDoc(doc(ownerDb, "workspaces", firstGuildId, "members", ownerId), {
+      uid: ownerId,
+      email: ownerEmail,
+      role: "owner",
+    }));
+
     await assertSucceeds(getDoc(workspace));
+    await assertSucceeds(getDoc(doc(ownerDb, "workspaces", firstGuildId, "members", ownerId)));
+    await assertSucceeds(getDoc(doc(ownerDb, "workspaces", firstGuildId, "data", "current")));
   });
 
   it("denies an outsider from reading or writing another owner's workspace", async () => {
@@ -50,15 +59,54 @@ describe("Firestore workspace rules", () => {
   });
 
   it("binds a new workspace owner to the authenticated identity", async () => {
-    const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
-    await assertFails(setDoc(doc(ownerDb, "workspaces", "borrowed-id"), {
+    const ownerDb = testEnv.authenticatedContext(ownerId, { email: ownerEmail }).firestore();
+    const borrowedGuildId = "guild-223e4567-e89b-42d3-a456-426614174000";
+    const borrowedBatch = writeBatch(ownerDb);
+    borrowedBatch.set(doc(ownerDb, "workspaces", borrowedGuildId), {
       ownerId: outsiderId,
       name: "Wrong path",
-    }));
-    await assertSucceeds(setDoc(doc(ownerDb, "workspaces", "another-guild"), {
+    });
+    borrowedBatch.set(doc(ownerDb, "workspaces", borrowedGuildId, "members", ownerId), {
+      uid: ownerId,
+      email: ownerEmail,
+      role: "owner",
+    });
+    borrowedBatch.set(doc(ownerDb, "workspaces", borrowedGuildId, "data", "current"), {
+      state: { version: 2 },
+    });
+    await assertFails(borrowedBatch.commit());
+
+    // Human-readable or uid-like paths are legacy-only; new roots must use a
+    // generated guild UUID even when the caller claims themselves as owner.
+    await assertFails(setDoc(doc(ownerDb, "workspaces", "another-guild"), {
       ownerId,
       name: "A second guild",
     }));
+  });
+
+  it("blocks an attacker from pre-claiming another account's uid path", async () => {
+    const attackerId = "path-attacker";
+    const victimId = "future-victim-uid";
+    const attackerEmail = "attacker@example.com";
+    const attackerDb = testEnv.authenticatedContext(attackerId, { email: attackerEmail }).firestore();
+    const attack = writeBatch(attackerDb);
+    attack.set(doc(attackerDb, "workspaces", victimId), {
+      ownerId: attackerId,
+      name: "Pre-claimed victim path",
+    });
+    attack.set(doc(attackerDb, "workspaces", victimId, "members", attackerId), {
+      uid: attackerId,
+      email: attackerEmail,
+      role: "owner",
+    });
+    attack.set(doc(attackerDb, "workspaces", victimId, "data", "current"), {
+      state: { version: 2 },
+    });
+    await assertFails(attack.commit());
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      expect((await getDoc(doc(context.firestore(), "workspaces", victimId))).exists()).toBe(false);
+    });
   });
 
   it("prevents an owner from changing the workspace owner id", async () => {
@@ -124,12 +172,28 @@ describe("Firestore workspace rules", () => {
 
     const memberDb = testEnv.authenticatedContext(memberId, { email: memberEmail }).firestore();
     await assertSucceeds(getDoc(doc(memberDb, "workspaces", ownerId, "invites", memberEmail)));
-    await assertSucceeds(setDoc(doc(memberDb, "workspaces", ownerId, "members", memberId), {
+
+    // A member write without consuming the invite would be a partial accept.
+    await assertFails(setDoc(doc(memberDb, "workspaces", ownerId, "members", memberId), {
       uid: memberId,
       email: memberEmail,
       role: "member",
     }));
-    await assertSucceeds(deleteDoc(doc(memberDb, "workspaces", ownerId, "invites", memberEmail)));
+
+    const acceptance = writeBatch(memberDb);
+    acceptance.set(doc(memberDb, "workspaces", ownerId, "members", memberId), {
+      uid: memberId,
+      email: memberEmail,
+      role: "member",
+    });
+    acceptance.delete(doc(memberDb, "workspaces", ownerId, "invites", memberEmail));
+    await assertSucceeds(acceptance.commit());
+
+    // The post-commit shape is also what makes a repeated client call
+    // idempotent: no invite remains, while the caller can still read their
+    // existing member document and treat the operation as already complete.
+    await assertFails(getDoc(doc(memberDb, "workspaces", ownerId, "invites", memberEmail)));
+    await assertSucceeds(getDoc(doc(memberDb, "workspaces", ownerId, "members", memberId)));
     await assertSucceeds(getDocs(query(collectionGroup(memberDb, "members"), where("uid", "==", memberId))));
     await assertSucceeds(getDoc(doc(memberDb, "workspaces", ownerId, "data", "current")));
   });
@@ -189,26 +253,32 @@ describe("Firestore workspace rules", () => {
     await assertSucceeds(deleteDoc(doc(declinerDb, "workspaces", ownerId, "invites", declinerEmail)));
   });
 
-  it("lets a brand-new account provision its own default workspace", async () => {
+  it("requires a brand-new account to provision a UUID guild atomically", async () => {
     const newUserId = "fresh-adventurer";
     const newUserEmail = "fresh@example.com";
     const db = testEnv.authenticatedContext(newUserId, { email: newUserEmail }).firestore();
-    // Mirrors createWorkspaceAt(): read own (non-existent) workspace first, then
-    // create it, the owner member document, and the initial state document.
+
+    // Legacy self paths may still be read, but new uid-keyed roots are blocked.
     await assertSucceeds(getDoc(doc(db, "workspaces", newUserId)));
-    await assertSucceeds(setDoc(doc(db, "workspaces", newUserId), {
+    await assertFails(setDoc(doc(db, "workspaces", newUserId), {
       ownerId: newUserId,
       name: "Fresh guild",
     }));
-    await assertSucceeds(setDoc(doc(db, "workspaces", newUserId, "members", newUserId), {
+
+    const guildId = "guild-323e4567-e89b-42d3-a456-426614174000";
+    await assertSucceeds(setDoc(doc(db, "workspaces", guildId), {
+      ownerId: newUserId,
+      name: "Fresh guild",
+    }));
+    await assertSucceeds(setDoc(doc(db, "workspaces", guildId, "data", "current"), {
+      state: { version: 2 },
+    }));
+    await assertSucceeds(setDoc(doc(db, "workspaces", guildId, "members", newUserId), {
       uid: newUserId,
       email: newUserEmail,
       role: "owner",
     }));
-    await assertSucceeds(getDoc(doc(db, "workspaces", newUserId, "data", "current")));
-    await assertSucceeds(setDoc(doc(db, "workspaces", newUserId, "data", "current"), {
-      state: { version: 2 },
-    }));
+    await assertSucceeds(getDoc(doc(db, "workspaces", guildId, "data", "current")));
   });
 
   it("does not let the own-workspace read rule expose another account's workspace", async () => {
@@ -264,11 +334,14 @@ describe("Firestore workspace rules", () => {
       });
     });
     const memberDb = testEnv.authenticatedContext(memberId, { email }).firestore();
-    await assertFails(setDoc(doc(memberDb, "workspaces", ownerId, "members", memberId), {
+    const expiredAcceptance = writeBatch(memberDb);
+    expiredAcceptance.set(doc(memberDb, "workspaces", ownerId, "members", memberId), {
       uid: memberId,
       email,
       role: "member",
-    }));
+    });
+    expiredAcceptance.delete(doc(memberDb, "workspaces", ownerId, "invites", email));
+    await assertFails(expiredAcceptance.commit());
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "workspaces", ownerId, "invites", email), {
         email,
@@ -277,11 +350,14 @@ describe("Firestore workspace rules", () => {
         expiresAt: new Date(Date.now() + 60_000),
       });
     });
-    await assertSucceeds(setDoc(doc(memberDb, "workspaces", ownerId, "members", memberId), {
+    const liveAcceptance = writeBatch(memberDb);
+    liveAcceptance.set(doc(memberDb, "workspaces", ownerId, "members", memberId), {
       uid: memberId,
       email,
       role: "member",
-    }));
+    });
+    liveAcceptance.delete(doc(memberDb, "workspaces", ownerId, "invites", email));
+    await assertSucceeds(liveAcceptance.commit());
   });
 
   it("still accepts a legacy invite that has no expiry field (TICKET-008)", async () => {
@@ -297,10 +373,13 @@ describe("Firestore workspace rules", () => {
       });
     });
     const memberDb = testEnv.authenticatedContext(memberId, { email }).firestore();
-    await assertSucceeds(setDoc(doc(memberDb, "workspaces", ownerId, "members", memberId), {
+    const acceptance = writeBatch(memberDb);
+    acceptance.set(doc(memberDb, "workspaces", ownerId, "members", memberId), {
       uid: memberId,
       email,
       role: "member",
-    }));
+    });
+    acceptance.delete(doc(memberDb, "workspaces", ownerId, "invites", email));
+    await assertSucceeds(acceptance.commit());
   });
 });

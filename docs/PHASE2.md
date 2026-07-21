@@ -1,6 +1,6 @@
 # Forth Phase 2: Private Guild Beta
 
-Updated: 2026-07-16
+Updated: 2026-07-20
 
 ## Product decision
 
@@ -10,14 +10,17 @@ The new visual layer is a restrained 8-bit fantasy guild theme. A ticket can be 
 
 ## Included in this phase
 
-- Google sign-in through Firebase Authentication.
+- Authenticated landing and first-run routing before any ticket data renders.
+- Google and GitHub sign-in through Firebase Authentication.
+- Explicit disposable demo mode under its own browser-storage namespace.
+- Clean first-workspace onboarding with one user-defined campaign and zero tickets.
 - Owner-created Firestore guild workspaces with email-matched invitations.
 - Invite acceptance after Google sign-in, using a shared guild code and a matching invite email.
 - Campaign creation inside the active guild workspace.
 - Ticket title, description, project, priority, due date, effort, focus state, and status.
 - Search, rename, deletion, and ticket status transitions.
 - A guild-rank HUD and gold earned from completed ticket effort.
-- Local browser storage as a safe fallback until a user signs in.
+- Browser storage only for the explicitly chosen demo; authenticated work comes from the selected Firestore workspace.
 
 ## Incentive contract
 
@@ -32,14 +35,15 @@ Engineering terms: the reward model uses deterministic completion events and a d
 
 ## Architecture
 
-The reducer and selectors remain the source of business rules. `localStorage` remains the offline/local adapter. Firebase becomes an optional cloud adapter after configuration exists.
+The reducer and selectors remain the source of business rules. `ForthEntry` owns the authentication boundary and does not mount the ticket application until an explicit demo choice or a fully loaded authorized workspace exists. `localStorage` is the demo-only adapter; Firebase is the authenticated cloud adapter.
 
 ```text
-React ticket UI
+Auth/entry state machine
+     -> signed-out landing | onboarding | explicit demo | authorized workspace
+     -> React ticket UI
      -> WorkspaceAction reducer
      -> WorkspaceState version 2
-     -> localStorage fallback
-     -> authenticated Firestore workspace when signed in
+     -> demo-only localStorage OR authenticated Firestore workspace
 ```
 
 The initial Firestore shape is intentionally simple:
@@ -51,23 +55,25 @@ workspaces/{ownerUid}
     state: WorkspaceState
 ```
 
-This supports a deliberately small shared-team beta. The invitation is matched against the signed-in Google email before that account can create its own member record. The whole-workspace snapshot remains a private-beta tradeoff, so simultaneous edits can still resolve last-write-wins.
+This supports a deliberately small shared-team beta. The invitation is matched against the signed-in account email before that account can create its own member record. The whole-workspace snapshot remains a private-beta tradeoff, so simultaneous edits can still resolve last-write-wins.
 
 ## Security boundary
 
-- Google sign-in is enabled.
+- Google and GitHub providers must be enabled for the sign-in buttons intended for that environment.
 - Firestore starts deny-by-default until the Forth rules are published.
-- The owner creates and owns the first workspace at their Firebase UID.
+- A new user explicitly creates a first workspace and real campaign; Forth never provisions cloud data from demo state.
 - Public Firebase configuration belongs in Vercel environment variables, never source control.
 - The deployed host `forth-bice.vercel.app` must remain in Firebase Authentication's authorized-domain list.
 
 ## Acceptance checks
 
-1. A visitor can still use the app locally without Firebase configuration.
-2. A configured visitor can sign in with Google from Settings.
-3. A first sign-in provisions the user's owner guild and membership record.
-4. Signing out removes cloud access but leaves the browser fallback usable.
-5. A ticket with priority, due date, and description survives refresh and cloud sync.
-6. Completing a ticket updates Proof and the deterministic guild-progress HUD.
-7. An uninvited authenticated user cannot read or write another guild's workspace.
-8. An invited account can use the owner-shared guild code to join only the workspace addressed to its Google email.
+1. Before authentication resolves, no ticket, navigation, or sample workspace data renders.
+2. A visitor can explicitly enter a clearly labeled local demo without Firebase configuration.
+3. A configured visitor can sign in with Google or GitHub from the landing page.
+4. A first sign-in leads to clean onboarding and creates no sample or pre-completed tickets.
+5. Signing out immediately removes cloud workspace data from the UI and returns to the landing page.
+6. A ticket with priority, due date, and description survives refresh and cloud sync.
+7. Completing a ticket updates Proof and the deterministic guild-progress HUD.
+8. An uninvited authenticated user cannot read or write another guild's workspace.
+9. An invited account can join only a workspace addressed to its authenticated account email.
+10. Demo data remains under its demo key and never becomes an authenticated provisioning payload.
