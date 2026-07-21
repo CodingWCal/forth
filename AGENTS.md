@@ -1,5 +1,14 @@
 # AGENTS.md
 
+## Shared Agent Continuity (Codex + Claude Code)
+
+- Treat this file as the cross-agent operating contract. `CLAUDE.md` points here; do not maintain conflicting assistant-specific rules.
+- At the start of every work session, read this file, `docs/AGENT_HANDOFF.md`, and `docs/ticket-backlog.md` before editing.
+- Continue the highest-priority in-progress backlog ticket unless the user explicitly changes priorities. Do not duplicate an existing ticket under a new name.
+- Before ending a session, update `docs/AGENT_HANDOFF.md` with branch/commit, completed work, validation results, uncommitted files, blockers, and the exact safest next step.
+- When ticket scope or status changes, update `docs/ticket-backlog.md` in the same checkpoint. Never mark a ticket complete until its acceptance criteria and listed checks pass.
+- Inspect `git status`, recent commits, and the handoff before resuming work done by another assistant. Preserve user and contributor changes; do not reset or overwrite them.
+
 ## Project Overview
 
 - Build **Forth**, “project work with a pulse”: a motivational project-management app for small creative and product teams.
@@ -25,6 +34,8 @@ Run from the repository root:
 - Lint: `pnpm lint`
 - Typecheck: `pnpm typecheck`
 - Unit tests: `pnpm test`
+- Firestore rules: `pnpm test:rules`
+- Browser E2E: `pnpm test:e2e`
 - Production build: `pnpm build`
 - Production server after build: `pnpm start`
 
@@ -53,8 +64,8 @@ In a non-interactive Codex runtime where the `pnpm` wrapper attempts to reinstal
 ## Testing Instructions
 
 - Add or update Vitest coverage for reducer actions, persistence parsing, capacity math, WIP limits, or progress derivation.
-- For UI changes, run lint, typecheck, unit tests, and a production build, then exercise affected flows in a real browser.
-- Visually check 375×812, 768×1024, and 1440×1000. Test Today, Work map, Proof, Settings, and the add-move dialog when relevant.
+- For UI changes, run lint, typecheck, unit tests, browser E2E, and a production build, then exercise affected flows in a real browser.
+- Visually check 320×720, 375×812, 768×1024, and 1440×1000. Test Quest Log, Realm Map, Chronicle, Guild Hall, and affected dialogs.
 - Verify empty, paused, completed, over-capacity, corrupt-storage, keyboard, and reduced-motion states when the touched code affects them.
 - Do not hide a failing check. Classify whether it comes from the change, existing code, dependencies, or the environment.
 

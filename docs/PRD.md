@@ -45,7 +45,7 @@ The full motivational loop works with seeded data and browser persistence. It mu
 
 ### Phase 2 — Private beta (active)
 
-Firebase Authentication and Cloud Firestore provide authenticated cloud persistence with a local fallback. Owner-created guild workspaces, email-matched invitations, and emulator-tested rules are connected. Conflict-aware multi-member editing, activity attribution, and recovery UX remain future beta work.
+Firebase Authentication and Cloud Firestore provide authenticated cloud persistence behind a professional entry boundary. Google/GitHub sign-in, owner-created guild workspaces, email-matched invitations, and emulator-tested rules are connected. A separately named local demo is available only after explicit selection and is never used to provision cloud data. Conflict-aware multi-member editing, activity attribution, and recovery UX remain future beta work.
 
 ### Phase 3 — Public beta
 
@@ -86,7 +86,7 @@ Role-based authorization, auditability, retention controls, operational runbooks
 
 ## 5. Functional requirements
 
-- **FR-001 / P0:** Persist pace, projects, tasks, and completion events in browser storage for local MVP use.
+- **FR-001 / P0:** Persist explicit demo state in an isolated browser-storage namespace; authenticated state persists to the selected Firestore workspace.
 - **FR-002 / P0:** Provide Today, Board, Proof, and Settings views without page reloads.
 - **FR-003 / P0:** Create, transition, and complete a task with accessible controls.
 - **FR-004 / P0:** Limit the Today focus surface to no more than three unfinished moves.
@@ -140,7 +140,9 @@ workspaces/{workspaceId}
 
 ## 8. Security, privacy, and reliability
 
-- The local MVP stores only demo/user-entered project text in that browser.
+- The local demo stores only demo/user-entered project text in its isolated browser key.
+- No workspace ticket data renders before authentication resolves or the visitor explicitly chooses demo mode.
+- Demo state is never passed to authenticated workspace provisioning.
 - Never imply cross-device sync in local mode.
 - Firestore rules require authentication and workspace membership before nested reads/writes.
 - Production must validate resource ownership server-side and test rules with the Firebase emulator.
@@ -149,14 +151,14 @@ workspaces/{workspaceId}
 
 ## 9. Acceptance criteria
 
-1. Given a first visit, when the app loads, then meaningful seeded content appears with an explicit “Local demo” status.
+1. Given a first visit, when the app loads, then a literal account/demo entry page appears and no ticket data renders before authentication resolves or the visitor explicitly chooses the local demo.
 2. Given any supported viewport, when the Today view renders, then navigation, pace controls, the next-three list, and primary actions remain reachable without horizontal page scrolling.
 3. Given a valid task form, when the user submits it, then a new Ready task is persisted and announced.
 4. Given a Ready task, when the user starts it, then its state becomes Moving on both Today and Board.
 5. Given an unfinished task, when the user completes it, then it leaves the active list, updates project progress, and appears in Proof.
 6. Given a Paused task, when the user chooses “Make ready,” then the task returns to Ready.
-7. Given stored state, when the page refreshes, then the same state is restored.
-8. Given corrupted local state, when the app loads, then it recovers to seeded data without a white screen.
+7. Given stored authenticated state, when the page refreshes, then the last accessible cloud workspace is restored; given an explicit demo visit, only its separate demo state is restored.
+8. Given corrupted demo state, when the visitor explicitly enters demo mode, then it recovers to labeled sample data without touching Firestore or showing a white screen.
 9. Given keyboard-only navigation, when controls receive focus, then focus is visually apparent and all task transitions are operable.
 10. Given reduced-motion preference, when state changes, then nonessential motion is removed.
 
