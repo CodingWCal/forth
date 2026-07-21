@@ -148,8 +148,24 @@ function isValidDate(value: unknown): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
 
+function parseDateOnly(value: unknown): [year: number, month: number, day: number] | null {
+  if (typeof value !== "string") return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) return null;
+  return [year, month, day];
+}
+
 function isValidDateOnly(value: unknown): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && isValidDate(`${value}T12:00:00Z`);
+  return parseDateOnly(value) !== null;
 }
 
 export function getFocusTasks(state: WorkspaceState) {
@@ -202,6 +218,88 @@ export function getMomentumDays(tasks: Task[], now = new Date(), useUtc = false)
       weight,
     };
   });
+}
+
+export const DUE_SOON_DAYS = 3;
+
+export type DueCategory = "overdue" | "due-today" | "due-soon" | "later" | "none";
+
+export type DueTiming = {
+  category: DueCategory;
+  /** Whole calendar days until the due date: negative when overdue, 0 today, null when no due date. */
+  daysUntilDue: number | null;
+};
+
+export type DueSoonEntry = {
+  task: Task;
+  category: Extract<DueCategory, "overdue" | "due-today" | "due-soon">;
+  daysUntilDue: number;
+};
+
+/**
+ * Whole calendar days between now and a task's due date in the viewer's local
+ * zone. Converting both calendar dates to UTC day numbers keeps daylight-saving
+ * transitions from creating 23- or 25-hour arithmetic errors.
+ */
+export function getDaysUntilDue(task: Task, now = new Date()): number | null {
+  const due = parseDateOnly(task.dueDate);
+  if (!due || Number.isNaN(now.getTime())) return null;
+  const dueDay = Date.UTC(due[0], due[1] - 1, due[2]);
+  const currentDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((dueDay - currentDay) / 86_400_000);
+}
+
+/** Delay until just after the viewer's next local midnight. */
+export function getNextLocalDayDelay(now = new Date()): number {
+  if (Number.isNaN(now.getTime())) return 1;
+  const nextDay = new Date(now);
+  nextDay.setHours(24, 0, 0, 50);
+  return Math.max(1, nextDay.getTime() - now.getTime());
+}
+
+/** Classify a task's due date relative to now. Pure — no shame states, just timing. */
+export function getTaskTiming(
+  task: Task,
+  now = new Date(),
+  withinDays = DUE_SOON_DAYS,
+): DueTiming {
+  const daysUntilDue = getDaysUntilDue(task, now);
+  if (daysUntilDue === null) return { category: "none", daysUntilDue: null };
+  if (daysUntilDue < 0) return { category: "overdue", daysUntilDue };
+  if (daysUntilDue === 0) return { category: "due-today", daysUntilDue };
+  if (daysUntilDue <= withinDays) return { category: "due-soon", daysUntilDue };
+  return { category: "later", daysUntilDue };
+}
+
+/**
+ * Active (unshipped) quests that are overdue or due within `withinDays`, most
+ * pressing first. Shipped work never appears — proof is not pressure.
+ */
+export function getDueSoonTasks(
+  state: WorkspaceState,
+  now = new Date(),
+  withinDays = DUE_SOON_DAYS,
+): DueSoonEntry[] {
+  return state.tasks
+    .filter((task) => task.status !== "done" && Boolean(task.dueDate))
+    .map((task) => ({ task, timing: getTaskTiming(task, now, withinDays) }))
+    .filter(
+      (entry): entry is { task: Task; timing: DueTiming & { daysUntilDue: number } } =>
+        entry.timing.category === "overdue" ||
+        entry.timing.category === "due-today" ||
+        entry.timing.category === "due-soon",
+    )
+    .map(({ task, timing }) => ({
+      task,
+      category: timing.category as DueSoonEntry["category"],
+      daysUntilDue: timing.daysUntilDue,
+    }))
+    .sort(
+      (a, b) =>
+        a.daysUntilDue - b.daysUntilDue ||
+        b.task.weight - a.task.weight ||
+        a.task.title.localeCompare(b.task.title),
+    );
 }
 
 export function createTask(input: {

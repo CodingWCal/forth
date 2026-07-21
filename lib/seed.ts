@@ -10,7 +10,14 @@ function isoFromNow(referenceDate: Date, days: number, hour = 12) {
 }
 
 function dateFromNow(referenceDate: Date, days: number) {
-  return isoFromNow(referenceDate, days).slice(0, 10);
+  const date = new Date(referenceDate);
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return [
+    String(date.getFullYear()).padStart(4, "0"),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 export function createSeedWorkspace(referenceDate = new Date()): WorkspaceState {
