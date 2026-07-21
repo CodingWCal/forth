@@ -1,6 +1,8 @@
 import { ForthApp } from "@/components/forth-app";
 import { createSeedWorkspace } from "@/lib/seed";
 
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   const renderedAt = new Date();
   return (

@@ -527,8 +527,8 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 10px 12px;
+  gap: 0;
+  padding: 0;
   border: 1px solid var(--rule);
   border-left: 4px solid var(--gold);
   background: rgba(233, 217, 183, 0.5);
@@ -542,8 +542,10 @@ h3 {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  min-height: 44px;
   min-width: 0;
-  padding: 0;
+  padding: 10px 12px;
   border: 0;
   background: none;
   text-align: left;
@@ -565,6 +567,7 @@ h3 {
 
 .nearing-copy {
   display: grid;
+  flex: 1;
   min-width: 0;
 }
 
@@ -591,6 +594,7 @@ h3 {
 
 .due-badge {
   flex: none;
+  margin-left: auto;
   padding: 3px 8px;
   border: 1px solid var(--rule-dark);
   background: var(--gold);
@@ -611,6 +615,40 @@ h3 {
 .due-badge.is-due-today {
   background: var(--clay);
   color: var(--paper-bright);
+}
+
+.nearing-view-all {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px dashed var(--rule-dark);
+  background: rgba(245, 232, 201, 0.45);
+  color: var(--ink);
+  text-align: left;
+}
+
+.nearing-view-all > span {
+  display: grid;
+}
+
+.nearing-view-all strong {
+  font-family: var(--serif);
+  font-size: 14px;
+}
+
+.nearing-view-all small {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.nearing-view-all:hover strong {
+  text-decoration: underline;
 }
 
 .pace-panel {
@@ -3197,6 +3235,40 @@ body {
     padding-top: 0;
   }
 
+  .nearing-main {
+    display: grid;
+    grid-template-columns: 9px minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .nearing-dot {
+    grid-column: 1;
+    grid-row: 1;
+    margin-top: 5px;
+  }
+
+  .nearing-copy {
+    grid-column: 2;
+  }
+
+  .nearing-copy strong {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .due-badge {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    justify-self: end;
+    margin-top: 0;
+    margin-left: 0;
+  }
+
   .proof-summary dl {
     gap: 9px;
   }
@@ -3204,6 +3276,19 @@ body {
   .dialog-foot .button {
     flex: 1;
     padding: 0 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .nearing-main {
+    grid-template-columns: 9px minmax(0, 1fr);
+  }
+
+  .due-badge {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    margin-top: 6px;
   }
 }
 

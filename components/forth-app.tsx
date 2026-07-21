@@ -59,6 +59,7 @@ import {
   getDueSoonTasks,
   getFocusTasks,
   getMomentumDays,
+  getNextLocalDayDelay,
   getPlannedWeight,
   getProjectProgress,
   PACE_CAPACITY,
@@ -70,6 +71,8 @@ import {
 } from "@/lib/workspace";
 
 type View = "today" | "board" | "proof" | "settings";
+
+const DUE_PANEL_LIMIT = 6;
 
 function getAuthFailureMessage(error: unknown) {
   const code =
@@ -131,6 +134,31 @@ export function ForthApp({
       setHydrated(true);
     });
     return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    let midnightTimer = 0;
+
+    const scheduleNextDay = () => {
+      window.clearTimeout(midnightTimer);
+      const now = new Date();
+      midnightTimer = window.setTimeout(() => {
+        setDisplayDate(new Date());
+        scheduleNextDay();
+      }, getNextLocalDayDelay(now));
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      setDisplayDate(new Date());
+      scheduleNextDay();
+    };
+
+    scheduleNextDay();
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearTimeout(midnightTimer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -490,6 +518,7 @@ export function ForthApp({
             capacity={capacity}
             now={displayDate}
             useUtc={!hydrated}
+            temporalReady={hydrated}
             onSetPace={(pace) => dispatch({ type: "SET_PACE", pace })}
             onSetStatus={setStatus}
             onOpenAdd={openAddDialog}
@@ -668,6 +697,7 @@ function TodayView({
   capacity,
   now,
   useUtc,
+  temporalReady,
   onSetPace,
   onSetStatus,
   onOpenAdd,
@@ -682,6 +712,7 @@ function TodayView({
   capacity: number;
   now: Date;
   useUtc: boolean;
+  temporalReady: boolean;
   onSetPace: (pace: Pace) => void;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onOpenAdd: () => void;
@@ -689,11 +720,14 @@ function TodayView({
   onDelete: (task: Task) => void;
   onGoToBoard: () => void;
 }) {
+  const [showAllDue, setShowAllDue] = useState(false);
   const momentum = getMomentumDays(state.tasks, now, useUtc);
   const maxMomentum = Math.max(...momentum.map((day) => day.weight), 1);
   const progress = getProjectProgress(state, activeProject.id);
   const completedToday = momentum[momentum.length - 1]?.weight ?? 0;
-  const nearing = getDueSoonTasks(state, now);
+  const nearing = temporalReady ? getDueSoonTasks(state, now) : [];
+  const visibleNearing = showAllDue ? nearing : nearing.slice(0, DUE_PANEL_LIMIT);
+  const hiddenNearingCount = nearing.length - visibleNearing.length;
   const overPlan = plannedWeight > capacity;
   const totalGold = state.tasks.filter((task) => task.status === "done").reduce((sum, task) => sum + task.weight * 10, 0);
   const level = Math.floor(totalGold / 100) + 1;
@@ -795,14 +829,14 @@ function TodayView({
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Mind the horizon</p>
-                <h2 id="nearing-title">Nearing the moon</h2>
+                <h2 id="nearing-title">Due soon and overdue</h2>
               </div>
               <span className="quiet-stat">
-                <strong>{nearing.length}</strong> {nearing.length === 1 ? "quest" : "quests"} near due
+                Across all campaigns · <strong>{nearing.length}</strong> {nearing.length === 1 ? "quest" : "quests"}
               </span>
             </div>
-            <ul className="nearing-list">
-              {nearing.map((entry) => {
+            <ul className="nearing-list" id="due-task-summary">
+              {visibleNearing.map((entry) => {
                 const project = state.projects.find((item) => item.id === entry.task.projectId);
                 return (
                   <li key={entry.task.id} className={`nearing-row is-${entry.category}`}>
@@ -817,12 +851,27 @@ function TodayView({
                         <strong>{entry.task.title}</strong>
                         {project && <small>{project.code} · {STATUS_LABELS[entry.task.status]}</small>}
                       </span>
+                      <time dateTime={entry.task.dueDate} className={`due-badge is-${entry.category}`}>{dueLabel(entry)}</time>
                     </button>
-                    <span className={`due-badge is-${entry.category}`}>{dueLabel(entry)}</span>
                   </li>
                 );
               })}
             </ul>
+            {nearing.length > DUE_PANEL_LIMIT && (
+              <button
+                type="button"
+                className="nearing-view-all"
+                aria-controls="due-task-summary"
+                aria-expanded={showAllDue}
+                onClick={() => setShowAllDue((current) => !current)}
+              >
+                <span>
+                  <strong>{showAllDue ? `Show first ${DUE_PANEL_LIMIT} due quests` : `View all ${nearing.length} due quests`}</strong>
+                  <small>{showAllDue ? "Collapse this deadline summary" : `${hiddenNearingCount} more beyond this summary`}</small>
+                </span>
+                <ArrowRight size={15} aria-hidden="true" />
+              </button>
+            )}
           </section>
         )}
 

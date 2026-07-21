@@ -7,6 +7,7 @@ import {
   getDueSoonTasks,
   getFocusTasks,
   getMomentumDays,
+  getNextLocalDayDelay,
   getPlannedWeight,
   getProjectProgress,
   getTaskTiming,
@@ -42,6 +43,10 @@ describe("workspace state", () => {
     expect(parseStoredWorkspace(JSON.stringify({
       ...seed,
       tasks: [{ ...seed.tasks[0], dueDate: "not-a-date" }],
+    }))).toBeNull();
+    expect(parseStoredWorkspace(JSON.stringify({
+      ...seed,
+      tasks: [{ ...seed.tasks[0], dueDate: "2026-02-30" }],
     }))).toBeNull();
   });
 
@@ -278,6 +283,27 @@ describe("due-date timing", () => {
     expect(getDaysUntilDue(questWithDue("2026-07-23"), now)).toBe(3);
     expect(getDaysUntilDue(questWithDue("2026-07-18"), now)).toBe(-2);
     expect(getDaysUntilDue(questWithDue(undefined), now)).toBeNull();
+    expect(getDaysUntilDue(questWithDue("2026-02-30"), now)).toBeNull();
+    expect(getDaysUntilDue(questWithDue("2026-07-20"), new Date("invalid"))).toBeNull();
+  });
+
+  it("uses calendar dates at the start and end of a local day", () => {
+    const startOfDay = new Date(2026, 6, 20, 0, 1);
+    const endOfDay = new Date(2026, 6, 20, 23, 59);
+    expect(getDaysUntilDue(questWithDue("2026-07-20"), startOfDay)).toBe(0);
+    expect(getDaysUntilDue(questWithDue("2026-07-20"), endOfDay)).toBe(0);
+  });
+
+  it("handles month, year, leap-day, and daylight-saving calendar boundaries", () => {
+    expect(getDaysUntilDue(questWithDue("2027-01-01"), new Date(2026, 11, 31, 23, 59))).toBe(1);
+    expect(getDaysUntilDue(questWithDue("2028-02-29"), new Date(2028, 1, 28, 12))).toBe(1);
+    expect(getDaysUntilDue(questWithDue("2026-03-09"), new Date(2026, 2, 8, 12))).toBe(1);
+    expect(getDaysUntilDue(questWithDue("2026-11-02"), new Date(2026, 10, 1, 12))).toBe(1);
+  });
+
+  it("calculates a bounded refresh just after the next local midnight", () => {
+    expect(getNextLocalDayDelay(new Date(2026, 6, 20, 23, 59, 59, 900))).toBe(150);
+    expect(getNextLocalDayDelay(new Date("invalid"))).toBe(1);
   });
 
   it("classifies timing into overdue, due-today, due-soon, later, and none", () => {
@@ -325,5 +351,17 @@ describe("due-date timing", () => {
       ],
     };
     expect(getDueSoonTasks(state, now).map((entry) => entry.task.id)).toEqual(["heavy", "light"]);
+  });
+
+  it("returns the complete due set so presentation can cap without losing work", () => {
+    const state = {
+      version: 2 as const,
+      pace: "steady" as const,
+      projects: createSeedWorkspace().projects,
+      tasks: Array.from({ length: 9 }, (_, index) =>
+        questWithDue("2026-07-21", { id: `due-${index}`, title: `Quest ${index}` }),
+      ),
+    };
+    expect(getDueSoonTasks(state, now)).toHaveLength(9);
   });
 });

@@ -148,8 +148,24 @@ function isValidDate(value: unknown): value is string {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
 
+function parseDateOnly(value: unknown): [year: number, month: number, day: number] | null {
+  if (typeof value !== "string") return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) return null;
+  return [year, month, day];
+}
+
 function isValidDateOnly(value: unknown): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && isValidDate(`${value}T12:00:00Z`);
+  return parseDateOnly(value) !== null;
 }
 
 export function getFocusTasks(state: WorkspaceState) {
@@ -221,19 +237,24 @@ export type DueSoonEntry = {
 };
 
 /**
- * Whole calendar days between now and a task's due date, in the viewer's local
- * zone — matching how due dates are rendered on cards. Anchored at local noon so
- * daylight-saving shifts never move a date across a day boundary.
+ * Whole calendar days between now and a task's due date in the viewer's local
+ * zone. Converting both calendar dates to UTC day numbers keeps daylight-saving
+ * transitions from creating 23- or 25-hour arithmetic errors.
  */
 export function getDaysUntilDue(task: Task, now = new Date()): number | null {
-  if (!task.dueDate) return null;
-  const due = new Date(`${task.dueDate}T12:00:00`);
-  if (Number.isNaN(due.getTime())) return null;
-  const dueMidnight = new Date(due);
-  dueMidnight.setHours(0, 0, 0, 0);
-  const nowMidnight = new Date(now);
-  nowMidnight.setHours(0, 0, 0, 0);
-  return Math.round((dueMidnight.getTime() - nowMidnight.getTime()) / 86_400_000);
+  const due = parseDateOnly(task.dueDate);
+  if (!due || Number.isNaN(now.getTime())) return null;
+  const dueDay = Date.UTC(due[0], due[1] - 1, due[2]);
+  const currentDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((dueDay - currentDay) / 86_400_000);
+}
+
+/** Delay until just after the viewer's next local midnight. */
+export function getNextLocalDayDelay(now = new Date()): number {
+  if (Number.isNaN(now.getTime())) return 1;
+  const nextDay = new Date(now);
+  nextDay.setHours(24, 0, 0, 50);
+  return Math.max(1, nextDay.getTime() - now.getTime());
 }
 
 /** Classify a task's due date relative to now. Pure — no shame states, just timing. */
