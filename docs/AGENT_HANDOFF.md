@@ -9,8 +9,9 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Branch: `codex/ticket-010-auth-entry`
 - Implementation commit: `e9632dc`
 - Base checkpoint: `codex/pr13-qa-fixes` (`f769978`), represented by draft PR #16
+- Draft PR: https://github.com/CodingWCal/forth/pull/17
 - Active ticket: TICKET-010 — authenticated landing, explicit disposable demo, and clean zero-ticket onboarding
-- Release state: committed locally; not merged or deployed
+- Release state: pushed as a stacked draft PR; not merged or deployed
 
 ## Implemented in this checkpoint
 
@@ -31,10 +32,11 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - `pnpm test:e2e`: 6/6 passed across 320, 375, 768, and 1440px viewports.
 - `pnpm lint`: passed.
 
-## Remaining before push
+## Remaining before merge/deploy
 
-1. Push this branch and open a draft PR stacked on `codex/pr13-qa-fixes` until PR #16 merges.
-2. Manually smoke-test Google and GitHub sign-in plus a two-account invitation on an authorized preview domain before merge/deploy.
+1. Manually smoke-test Google and GitHub sign-in plus a two-account invitation on an authorized preview domain.
+2. Merge PR #16, then retarget/rebase PR #17 onto `main` and rerun its checks.
+3. Review and merge PR #17 only after the live auth/invitation gate passes; deployment remains a separate explicit action.
 
 ## Known next risk
 
