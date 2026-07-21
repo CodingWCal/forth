@@ -88,6 +88,9 @@ const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "settings", label: "Guild Hall", icon: Settings },
 ];
 
+/** Device-local flag: the welcome guide has been seen. Kept out of WorkspaceState (never synced). */
+const WELCOME_SEEN_KEY = "forth.welcome.v1";
+
 const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
   light: { label: "Scout", hint: "A short expedition" },
   steady: { label: "Venture", hint: "A grounded build day" },
@@ -119,6 +122,7 @@ export function ForthApp({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const campaignDialogRef = useRef<HTMLDialogElement>(null);
+  const welcomeDialogRef = useRef<HTMLDialogElement>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   useEffect(() => {
@@ -134,6 +138,16 @@ export function ForthApp({
   useEffect(() => {
     if (hydrated) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [hydrated, state]);
+
+  // First visit only: open the welcome guide once the app has hydrated. Reading
+  // localStorage after mount (never during render) mirrors the workspace-hydration
+  // pattern above and avoids a server/client mismatch.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (window.localStorage.getItem(WELCOME_SEEN_KEY)) return;
+    const frame = window.requestAnimationFrame(() => welcomeDialogRef.current?.showModal());
+    return () => window.cancelAnimationFrame(frame);
+  }, [hydrated]);
 
   useEffect(() => {
     if (!hasFirebaseConfig) return;
@@ -253,6 +267,15 @@ export function ForthApp({
 
   function openCampaignDialog() {
     campaignDialogRef.current?.showModal();
+  }
+
+  function openWelcome() {
+    welcomeDialogRef.current?.showModal();
+  }
+
+  // Persist "seen" on any close path (button, X, backdrop, Escape) via the dialog's onClose.
+  function markWelcomeSeen() {
+    window.localStorage.setItem(WELCOME_SEEN_KEY, "seen");
   }
 
   async function refreshGuildDirectory(user: User) {
@@ -540,6 +563,7 @@ export function ForthApp({
               if (cloudUser) void refreshPendingInvites(cloudUser);
             }}
             onOpenCampaign={openCampaignDialog}
+            onShowGuide={openWelcome}
             onSignIn={async () => {
               try {
                 await signInWithGoogle();
@@ -632,6 +656,8 @@ export function ForthApp({
           announce(`Campaign chartered: ${campaign.title}.`);
         }}
       />
+
+      <WelcomeDialog dialogRef={welcomeDialogRef} onClose={markWelcomeSeen} />
 
       <div className={toast ? "toast is-visible" : "toast"} role="status" aria-live="polite">
         <Check size={16} />
@@ -1214,6 +1240,7 @@ function SettingsView({
   onDeclineInvite,
   onRetryInvites,
   onOpenCampaign,
+  onShowGuide,
   onSignIn,
   onSignOut,
 }: {
@@ -1235,6 +1262,7 @@ function SettingsView({
   onDeclineInvite: (invite: PendingGuildInvite) => Promise<void>;
   onRetryInvites: () => void;
   onOpenCampaign: () => void;
+  onShowGuide: () => void;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
@@ -1244,6 +1272,9 @@ function SettingsView({
         <p className="eyebrow">Guild hall · Save altar</p>
         <h2>Account wards and cloud runes.</h2>
         <p>Play from a local camp or sign in to carry the same engineering realm across devices. Ticket data stays private to your guild workspace.</p>
+        <button type="button" className="button button--quiet" onClick={onShowGuide}>
+          <Scroll size={15} /> How Forth works
+        </button>
       </section>
 
       <section className="settings-card">
@@ -1507,6 +1538,90 @@ function GuildHallCard({
         </form>
       </div>
     </section>
+  );
+}
+
+const WELCOME_STEPS = [
+  {
+    title: "No sign-up needed",
+    body: "Forth works the moment you arrive — everything saves to this browser. Sign in with Google later only if you want cloud sync across devices.",
+  },
+  {
+    title: "Set your pace",
+    body: "Choose how much the party can carry today: Scout, Venture, or Raid.",
+  },
+  {
+    title: "Add quests",
+    body: "Log a ticket with a title and why it matters, then keep up to three in Today's active party.",
+  },
+  {
+    title: "Move work on the Realm Map",
+    body: "Drag, or use the move buttons, to send quests through Quest Log → In Forge → Camped → Shipped.",
+  },
+  {
+    title: "Ship for proof",
+    body: "Completed quests land permanently in the Chronicle. No streaks, no leaderboards — just proof you shipped.",
+  },
+];
+
+function WelcomeDialog({
+  dialogRef,
+  onClose,
+}: {
+  dialogRef: React.RefObject<HTMLDialogElement | null>;
+  onClose: () => void;
+}) {
+  return (
+    <dialog
+      className="move-dialog welcome-dialog"
+      ref={dialogRef}
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target === dialogRef.current) dialogRef.current?.close();
+      }}
+    >
+      <div className="welcome-body">
+        <header className="dialog-head">
+          <div>
+            <p className="eyebrow">New adventurer</p>
+            <h2>Welcome to Forth</h2>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => dialogRef.current?.close()}
+            aria-label="Close welcome guide"
+          >
+            <X size={19} />
+          </button>
+        </header>
+
+        <p className="welcome-lead">
+          A calm quest board for real engineering work. Here is how to get moving.
+        </p>
+
+        <ol className="welcome-steps">
+          {WELCOME_STEPS.map((step, index) => (
+            <li className="welcome-step" key={step.title}>
+              <span className="welcome-step-num" aria-hidden="true">{index + 1}</span>
+              <div>
+                <strong>{step.title}</strong>
+                <p>{step.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <footer className="dialog-foot">
+          <button type="button" className="button button--quiet" onClick={() => dialogRef.current?.close()}>
+            Maybe later
+          </button>
+          <button type="button" className="button button--primary" autoFocus onClick={() => dialogRef.current?.close()}>
+            Enter the guild <ArrowRight size={16} />
+          </button>
+        </footer>
+      </div>
+    </dialog>
   );
 }
 
