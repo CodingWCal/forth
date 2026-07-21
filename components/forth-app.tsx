@@ -30,7 +30,7 @@ import {
 import { type DragEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Image from "next/image";
 import { BrandMark } from "@/components/brand-mark";
-import { writeBrowserStorage } from "@/lib/browser-storage";
+import { readBrowserStorage, writeBrowserStorage } from "@/lib/browser-storage";
 import type { User } from "firebase/auth";
 import {
   acceptGuildInvite,
@@ -108,6 +108,9 @@ const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "settings", label: "Guild Hall", icon: Settings },
 ];
 
+/** Device-local flag: the welcome guide has been seen. Kept out of WorkspaceState (never synced). */
+const WELCOME_SEEN_KEY = "forth.welcome.v2";
+
 const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
   light: { label: "Scout", hint: "A short expedition" },
   steady: { label: "Venture", hint: "A grounded build day" },
@@ -172,7 +175,11 @@ export function ForthApp({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const campaignDialogRef = useRef<HTMLDialogElement>(null);
+  const welcomeDialogRef = useRef<HTMLDialogElement>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const welcomeSeenKey = mode === "cloud"
+    ? `${WELCOME_SEEN_KEY}.cloud.${cloudUser.uid}`
+    : `${WELCOME_SEEN_KEY}.demo`;
 
   const queueCloudSave = useCallback(async (
     targetRevision: number,
@@ -279,6 +286,19 @@ export function ForthApp({
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, []);
+
+  // Demo and each signed-in account keep separate seen-state. Someone who first
+  // explores sample data—or shares this device—still receives the accurate
+  // signed-in explanation when entering their own real workspace.
+  useEffect(() => {
+    if (!hydrated || (mode === "cloud" && !cloudSnapshotReady)) return;
+    if (readBrowserStorage(welcomeSeenKey).value) return;
+    const frame = window.requestAnimationFrame(() => {
+      const dialog = welcomeDialogRef.current;
+      if (dialog && !dialog.open) dialog.showModal();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [cloudSnapshotReady, hydrated, mode, welcomeSeenKey]);
 
   useEffect(() => {
     if (mode === "demo" && hydrated) {
@@ -430,6 +450,15 @@ export function ForthApp({
     campaignDialogRef.current?.showModal();
   }
 
+  function openWelcome() {
+    const dialog = welcomeDialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }
+
+  // Persist "seen" on any close path (button, X, backdrop, Escape) via the dialog's onClose.
+  function markWelcomeSeen() {
+    writeBrowserStorage(welcomeSeenKey, "seen");
+  }
   async function refreshPendingInvites(user: User) {
     setInviteStatus("loading");
     try {
@@ -806,6 +835,7 @@ export function ForthApp({
             }}
             onOpenCampaign={openCampaignDialog}
             onExit={exitAfterSave}
+            onShowGuide={openWelcome}
           />
         )}
       </main>
@@ -885,6 +915,8 @@ export function ForthApp({
           announce(`Campaign chartered: ${campaign.title}.`);
         }}
       />
+
+      <WelcomeDialog mode={mode} dialogRef={welcomeDialogRef} onClose={markWelcomeSeen} />
 
       <div className={toast ? "toast is-visible" : "toast"} role="status" aria-live="polite">
         <Check size={16} />
@@ -1541,6 +1573,7 @@ function SettingsView({
   onRetryInvites,
   onOpenCampaign,
   onExit,
+  onShowGuide,
 }: {
   mode: "demo" | "cloud";
   onReset: () => void;
@@ -1561,6 +1594,7 @@ function SettingsView({
   onRetryInvites: () => void;
   onOpenCampaign: () => void;
   onExit: () => Promise<void>;
+  onShowGuide: () => void;
 }) {
   const syncLabel = syncState === "synced"
     ? "Saved to cloud"
@@ -1576,6 +1610,9 @@ function SettingsView({
         <p className="eyebrow">Guild hall · Save altar</p>
         <h2>Account wards and cloud runes.</h2>
         <p>{mode === "cloud" ? "This signed-in workspace saves to private cloud storage for authorized guild members." : "This disposable demo stays in this browser and never copies sample tickets into a real account."}</p>
+        <button type="button" className="button button--quiet" onClick={onShowGuide} aria-haspopup="dialog">
+          <Scroll size={15} /> How Forth works
+        </button>
       </section>
 
       <section className="settings-card">
@@ -1860,6 +1897,106 @@ function GuildHallCard({
         </form>
       </div>
     </section>
+  );
+}
+
+const COMMON_WELCOME_STEPS = [
+  {
+    title: "Choose your pace (daily capacity)",
+    body: "Scout, Venture, or Raid sets a realistic effort budget for today. It never grades you or creates a public score.",
+  },
+  {
+    title: "Add quests (tickets)",
+    body: "Create a ticket with its campaign, purpose, assignee, priority, due date, and effort. Keep up to three unfinished quests in Today.",
+  },
+  {
+    title: "Use the Realm Map (Kanban board)",
+    body: "Drag with a mouse, or use Move controls with keyboard or touch, to send tickets through Quest Log (Ready), In Forge (In progress), Camped (Paused), and Shipped (Done).",
+  },
+  {
+    title: "Review the Chronicle (completed work)",
+    body: "Shipped quests remain visible as proof of progress. There are no public rankings, streak penalties, or random rewards.",
+  },
+];
+
+function getWelcomeSteps(mode: "demo" | "cloud") {
+  const entryStep = mode === "cloud"
+    ? {
+        title: "Private cloud workspace",
+        body: "You signed in before tickets loaded. Forth shows only guild workspaces that your account is authorized to access.",
+      }
+    : {
+        title: "Disposable browser demo",
+        body: "These are sample tickets stored only in this browser. They never sync to Firebase or enter your real workspace.",
+      };
+  return [entryStep, ...COMMON_WELCOME_STEPS];
+}
+
+function WelcomeDialog({
+  mode,
+  dialogRef,
+  onClose,
+}: {
+  mode: "demo" | "cloud";
+  dialogRef: React.RefObject<HTMLDialogElement | null>;
+  onClose: () => void;
+}) {
+  const steps = getWelcomeSteps(mode);
+  return (
+    <dialog
+      className="move-dialog welcome-dialog"
+      ref={dialogRef}
+      aria-labelledby="welcome-title"
+      aria-describedby="welcome-description"
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target === dialogRef.current) dialogRef.current?.close();
+      }}
+    >
+      <div className="welcome-body">
+        <header className="dialog-head">
+          <div>
+            <p className="eyebrow">New adventurer</p>
+            <h2 id="welcome-title">Welcome to Forth</h2>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => dialogRef.current?.close()}
+            aria-label="Close welcome guide"
+          >
+            <X size={19} />
+          </button>
+        </header>
+
+        <p className="welcome-lead" id="welcome-description">
+          {mode === "cloud"
+            ? "Your private project workspace is ready. Here is the five-step path through Forth."
+            : "This safe practice workspace contains sample work. Here is the five-step path through Forth."}
+        </p>
+
+        <ol className="welcome-steps">
+          {steps.map((step, index) => (
+            <li className="welcome-step" key={step.title}>
+              <span className="welcome-step-num" aria-hidden="true">{index + 1}</span>
+              <div>
+                <strong>{step.title}</strong>
+                <p>{step.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <footer className="dialog-foot">
+          <button type="button" className="button button--quiet" onClick={() => dialogRef.current?.close()}>
+            Close guide
+          </button>
+          <button type="button" className="button button--primary" autoFocus onClick={() => dialogRef.current?.close()}>
+            Start planning <ArrowRight size={16} />
+          </button>
+        </footer>
+      </div>
+    </dialog>
   );
 }
 

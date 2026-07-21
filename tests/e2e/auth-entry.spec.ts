@@ -12,6 +12,7 @@ test("keeps ticket data behind auth or explicit demo entry", async ({ page }) =>
   await expect(page.getByText("Uses sample tickets stored only in this browser.")).toBeVisible();
 
   await page.getByRole("button", { name: "Explore local demo" }).click();
+  await page.getByRole("dialog", { name: "Welcome to Forth" }).getByRole("button", { name: "Start planning" }).click();
   await expect(page.getByText("Disposable demo - this device only").last()).toBeVisible();
   await expect(page.getByRole("heading", { name: SEEDED_TICKET }).first()).toBeVisible();
 
@@ -45,6 +46,16 @@ for (const viewport of [
     await expect(demoButton).toBeVisible();
     expect((await demoButton.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
     await demoButton.click();
+    const guide = page.getByRole("dialog", { name: "Welcome to Forth" });
+    await expect(guide).toBeVisible();
+    const guideBox = await guide.boundingBox();
+    expect(guideBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect(guideBox?.width ?? viewport.width + 1).toBeLessThanOrEqual(viewport.width);
+    expect(guideBox?.height ?? viewport.height + 1).toBeLessThanOrEqual(viewport.height);
+    const startPlanning = guide.getByRole("button", { name: "Start planning" });
+    await startPlanning.scrollIntoViewIfNeeded();
+    expect((await startPlanning.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await startPlanning.click();
 
     const demoMetrics = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
@@ -65,5 +76,35 @@ test("entry controls have a visible keyboard path", async ({ page }) => {
 
   await page.getByRole("button", { name: "Explore local demo" }).focus();
   await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Welcome to Forth" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: "Choose today’s three quests." })).toBeVisible();
+});
+
+test("explains disposable demo data and reopens the guide from Guild Hall", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Explore local demo" }).click();
+
+  const guide = page.getByRole("dialog", { name: "Welcome to Forth" });
+  await expect(guide).toBeVisible();
+  await expect(guide.getByText("Disposable browser demo", { exact: true })).toBeVisible();
+  await expect(guide.getByText(/never sync to Firebase or enter your real workspace/i)).toBeVisible();
+  await expect(guide.getByRole("listitem")).toHaveCount(5);
+  await expect(guide.getByText("Use the Realm Map (Kanban board)", { exact: true })).toBeVisible();
+
+  await guide.getByRole("button", { name: "Start planning" }).click();
+  await expect(guide).not.toBeVisible();
+
+  await page.getByRole("button", { name: "Guild Hall" }).click();
+  const reopen = page.getByRole("button", { name: "How Forth works" });
+  await expect(reopen).toBeVisible();
+  expect((await reopen.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await reopen.click();
+  await expect(guide).toBeVisible();
+  await guide.getByRole("button", { name: "Close welcome guide" }).click();
+  await expect(reopen).toBeFocused();
+
+  await page.getByRole("button", { name: "Exit demo" }).click();
+  await page.getByRole("button", { name: "Explore local demo" }).click();
+  await expect(guide).not.toBeVisible();
 });

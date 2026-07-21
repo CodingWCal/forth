@@ -5,39 +5,48 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 ## Current checkpoint
 
 - Date: 2026-07-21
-- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket019`
-- Branch: `codex/ticket-019-contributor-guide`
-- Implementation commits: `2462019`, `e2aa296`, `18234b1`
-- Base: `main` after merged PR #17
-- Draft PR: https://github.com/CodingWCal/forth/pull/19
-- Active ticket: TICKET-019 - safe fellow-contributor workflow and ownership policy
-- Release state: pushed as a documentation-only stacked draft PR; not merged or deployed
+- Worktree: `C:\Users\calvi\Documents\Codex\forth-contributor-agent-policy`
+- Branch: `codex/integrate-pr18-onboarding`
+- Integration commits: `99e9613` (Roger's original PR #18 commit, preserving authorship) and `c49f1e4` (maintainer reconciliation and QA)
+- Base: `origin/main` at `7aeb3c2` after merged PR #20
+- Draft PR: https://github.com/CodingWCal/forth/pull/21
+- Active ticket: TICKET-022 first-visit/contextual-help slice
+- Release state: pushed as PR #21; automated and hosted checks passed; maintainer reported the authenticated preview smoke test passed; original PR #18 closed as superseded; not merged or deployed
 
 ## Implemented in this checkpoint
 
-- Human-facing `CONTRIBUTING.md` with ticket claims, explicit scope confirmation, protected areas, validation, external-preview boundaries, and agent instructions.
-- Repository ownership, PR template, ticket-claim and bug-report forms, security reporting, and a durable decision-log format.
-- `AGENTS.md` coordination rules that require agents to inspect active work and honor the confirmed ticket slice.
-- `CLAUDE.md` directly requires Claude Code to read `CONTRIBUTING.md` before cohort contribution work.
-- PR #18 intake mapped to existing tickets without merging its outdated pre-authentication assumptions.
+- Reconciled Roger's first-visit welcome guide with Forth's authenticated-entry architecture instead of merging the outdated local-first assumptions.
+- Opens the cloud guide only after a verified Firestore snapshot; demo copy explicitly states that sample tickets remain disposable and browser-local.
+- Stores welcome state safely and separately for demo mode and each authenticated account on a shared device.
+- Pairs the core fantasy labels with literal PM terms for daily capacity, tickets, Kanban status, and completed work.
+- Keeps the native dialog keyboard/backdrop/close behavior, returns focus to the Guild Hall help trigger, and enforces 44px actions.
+- Documents the feature in README and records PR #13/#18 intake status in the canonical backlog.
 
 ## Validation at handoff
 
+- `pnpm install --frozen-lockfile`: passed; 455 packages reused from the locked store.
+- `pnpm run lint`: passed.
+- `pnpm run typecheck`: passed.
+- `pnpm run test`: passed, 50/50 unit tests.
+- `pnpm run test:rules`: passed, 17/17 Firestore emulator tests.
+- `pnpm run test:e2e`: passed, 7/7 Playwright tests across 320, 375, 768, and 1440px viewports.
+- `pnpm run build`: passed.
+- `pnpm audit --prod`: no known vulnerabilities.
 - `git diff --check`: passed.
-- Secret-pattern scan: passed; only policy prose mentioning credential categories was found.
-- Issue-form YAML received a manual structure review. No local YAML parser is installed, so hosted GitHub rendering remains the final syntax check after push.
-- No application runtime code changed; full application suites remain inherited from PR #17.
+- Added-line credential-pattern scan: passed.
+- Hosted GitGuardian and Vercel checks on draft PR #21: passed.
+- Live authenticated preview guide (cloud timing, copy, close/reopen behavior): passed by maintainer on 2026-07-21.
 
 ## Remaining before merge/deploy
 
-1. Review draft PR #19 against `main`, then mark it ready and merge it.
-2. Verify branch protection requires CODEOWNERS review and required checks.
-3. Confirm hosted issue-form rendering and dry-run the guide with a fresh contributor.
+1. Review PR #21 and merge it when the maintainer is ready; all defined release gates for this slice have passed.
+2. Start TICKET-029 only from updated `main` after #21 merges; do not expand #21 with the interactive tour.
+3. Do not deploy until the maintainer explicitly approves release from updated `main`.
 
 ## Known next risk
 
-CODEOWNERS and templates communicate policy in the repository, but GitHub branch-protection settings must enforce required checks and review externally. TICKET-001 remains the next product P0 after the active authentication and governance stacks land.
+The automated suite covers signed-out protection, explicit demo entry, dialog behavior, keyboard focus, persistence, and responsive layouts. It does not automate a live third-party OAuth/Firestore session, so the cloud-guide timing still needs one manual preview smoke test. The centralized terminology map and persistent plain-language preference remain future TICKET-022 work.
 
 ## Required end-of-session update
 
-Replace these checkpoint/status sections with the actual branch, commit, checks, uncommitted files, blockers, and safest next command. Keep architecture/product work in `docs/ticket-backlog.md`, not here.
+Replace these checkpoint/status sections with the actual branch, commits, checks, uncommitted files, blockers, and safest next command. Keep architecture/product work in `docs/ticket-backlog.md`, not here.
