@@ -10,7 +10,9 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Base: `origin/staging` at `9ace9c5`
 - Active ticket: TICKET-032, patch the transitive sharp/libvips advisory
 - Parallel active work: draft PR #22 implements TICKET-013/TICKET-030 on `codex/ticket-013-task-first-quest-log`; do not mix or reimplement its UI changes here
-- Release state: dependency patch is locally validated; commit, push, Vercel preview, and maintainer approval remain
+- Draft PR: https://github.com/CodingWCal/forth/pull/23 (targets `staging`)
+- Implementation commit: `793c8d3`
+- Release state: dependency patch is pushed; local QA, GitGuardian, and the Vercel clean preview build pass; maintainer preview smoke and approval remain
 - Stable staging URL: https://forth-git-staging-calvintrinhvan-2763s-projects.vercel.app/
 
 ## Implemented in this checkpoint
@@ -33,16 +35,18 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - `pnpm test:e2e`: passed, 7/7 browser tests on the staging baseline.
 - `pnpm build`: passed.
 - Local production image optimizer: HTTP 200, `Content-Type: image/png`, 3,864-byte optimized response.
+- GitGuardian Security Checks: passed on draft PR #23.
+- Vercel clean install/build: passed on draft PR #23.
+- Vercel preview: https://forth-git-codex-ticket-032-c05262-calvintrinhvan-2763s-projects.vercel.app (feature preview protection may require the maintainer's Vercel login; do not add it to Firebase authorized domains).
 - `pnpm test:rules`: not rerun because this branch changes no Firebase adapter, schema, authentication, membership, or Firestore rules behavior; staging baseline is 17/17.
 - `git diff --check`: passed.
 - Added-line credential-pattern scan: passed; zero matches.
 
 ## Next delivery sequence
 
-1. Run final diff and credential checks, commit the isolated override/lock/docs patch, and push a draft PR into `staging`.
-2. Require a successful Vercel clean-install preview and verify the sprite renders before merge.
-3. Merge only after maintainer approval; do not promote to production until draft PR #22 and the remaining release gates are separately accepted.
-4. Remove this override when a supported Next.js release accepts `sharp >=0.35.0`; do not let the temporary compatibility pin become invisible permanent policy.
+1. Open draft PR #23's preview while signed into Vercel and confirm the code-squire sprite renders without a server error.
+2. Merge only after maintainer approval; do not promote to production until draft PR #22 and the remaining release gates are separately accepted.
+3. Remove this override when a supported Next.js release accepts `sharp >=0.35.0`; do not let the temporary compatibility pin become invisible permanent policy.
 
 ## Known next risk
 
