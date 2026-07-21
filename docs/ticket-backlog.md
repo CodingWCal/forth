@@ -31,7 +31,8 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-009 | Planned | Optional email delivery must remain downstream of a reliable in-app invitation flow. |
 | TICKET-010 | Implemented on `codex/ticket-010-auth-entry` | Automated gates pass; live Google/GitHub two-account smoke testing remains a release requirement. |
 | TICKET-019 | Repository policy merged via PRs [#19](https://github.com/CodingWCal/forth/pull/19) and [#20](https://github.com/CodingWCal/forth/pull/20) | Human/agent contribution contract, ownership, templates, security reporting, decision log, and backlog-ownership policy are on `main`; hosted branch-protection settings and a fresh-contributor dry run still require maintainer verification. |
-| TICKET-022 | First-visit guide slice integrated on `codex/integrate-pr18-onboarding` | Roger's original PR #18 commit and authorship are preserved. The guide now distinguishes authenticated cloud data from disposable demo data, pairs core fantasy terms with literal PM language, and has responsive/browser coverage. The centralized terminology map and plain-language preference remain planned. |
+| TICKET-022 | Ready PR [#21](https://github.com/CodingWCal/forth/pull/21) | Roger's original PR #18 commit and authorship are preserved. The guide distinguishes authenticated cloud data from disposable demo data, pairs core fantasy terms with literal PM language, passes automated gates, and passed the maintainer's live authenticated preview smoke test. The centralized terminology map and plain-language preference remain planned. |
+| TICKET-029 | Planned | Add an optional, accessible two-minute coach-mark tour after PR #21 lands; keep it separate so the verified static guide remains a reliable fallback. |
 
 ## External Contribution Intake
 
@@ -48,11 +49,11 @@ PR #18's themed walkthrough and contextual-help entry point have been reconciled
 
 1. **Identity and data safety:** TICKET-010, TICKET-001, TICKET-024, TICKET-011, TICKET-002.
 2. **Complete the PM contract:** TICKET-028, TICKET-012, TICKET-006, TICKET-005, then discovery epic TICKET-025.
-3. **Make daily use obvious and inclusive:** TICKET-013, TICKET-014, TICKET-022, TICKET-027, TICKET-004, TICKET-026.
+3. **Make daily use obvious and inclusive:** TICKET-013, TICKET-014, TICKET-022, TICKET-029, TICKET-027, TICKET-004, TICKET-026.
 4. **Prove and operate it:** TICKET-003/TICKET-015, TICKET-016, TICKET-017, TICKET-018, TICKET-020, TICKET-021.
 5. **Expand engagement safely:** TICKET-023, then TICKET-009 and later notification work.
 
-Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
+Active inventory after this audit: **4 P0**, **15 P1**, and **8 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
 
 ## Priority Guide
 
@@ -1141,3 +1142,51 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **7 P2** tickets, pl
   - Two-account CRUD/lifecycle browser matrix, including refresh, concurrent-edit, archive/restore, and unauthorized-operation scenarios.
 - Subagent prompt:
   > Create and implement a sitewide resource capability matrix for Forth. Complete CRUD plus archive/restore/cancel/expire behavior for every applicable resource, enforce every action in Firestore rules, preserve dependent data and audit history, and add reducer, rules, and two-account browser tests for success and failure paths.
+
+### TICKET-029: Turn first-use help into an optional guided product tour
+
+- Priority: P2 Medium
+- Type: UX/Feature/A11y/Test
+- Area: Entry onboarding, application navigation, contextual help, responsive overlays
+- Effort: L
+- Confidence: High
+- Depends on: Merge PR #21 first; coordinate terminology with TICKET-022 and the task-first hierarchy with TICKET-013.
+- Evidence: PR #21 adds an accurate, accessible five-step summary dialog and a Guild Hall reopen control. The maintainer's authenticated preview smoke test passed, but the current `WelcomeDialog` remains a static list: it does not highlight the real pace selector, New Quest action, navigation tabs, board, or Chronicle while teaching the workflow. The user explicitly requested an optional tutorial that moves through and points at live features.
+- Plain English: Keep the reliable quick-start summary, then offer a short guided walk that visibly points to each real control so new and older users do not have to translate written instructions into screen locations by themselves.
+- Learning brief (layman terms):
+  - What is happening now: The guide explains Forth correctly, but the person must close it and locate every feature on their own.
+  - Why it matters: Written directions are harder to follow when the interface is unfamiliar, especially when fantasy and standard PM terms appear together.
+  - What changing it means: Add a voluntary “Take the 2-minute tour” path that moves through live views, highlights one control at a time, and can be skipped or reopened.
+  - Concept to learn: A coach mark is a small contextual explanation attached to the actual control it describes; progressive onboarding teaches one action in its real location instead of presenting every instruction at once.
+- Engineering framing: Add a finite-state guided-tour controller with a stable anchor registry (for example, versioned `data-tour` identifiers), explicit view transitions, adaptive step resolution, safe per-account/demo persistence, accessible focus and announcements, collision-aware positioning, and deterministic Playwright coverage. The tour must never create or mutate workspace data merely to demonstrate a feature.
+- Scope:
+  - Keep the static quick-start content as the accessible fallback and add clear “Take the 2-minute tour” and “Explore on my own” choices.
+  - Guide the user through daily capacity, New Quest, Quest Log, Realm Map/Kanban board, Chronicle/completed work, and Guild Hall/help using the actual rendered controls.
+  - Highlight the current target, scroll it into view, and move between application views only when the user chooses Next or Back.
+  - Adapt to empty authenticated workspaces and populated demos. Explain unavailable data-dependent steps without injecting fake tickets into a real workspace.
+  - Provide Step X of Y, Back, Next, Skip tour, Finish, and Restart tour controls with 44px targets and literal accessible names.
+  - Announce each step and target meaning to screen readers; support keyboard-only, touch, 200% zoom, reduced motion, and 320px layouts.
+  - Persist completion separately for demo mode and each authenticated account through the safe browser-storage adapter; version the key so materially improved tours can be offered again.
+  - If an anchor is missing after a UI change, fall back gracefully to a centered explanation and continue or exit without crashing.
+- Out of scope:
+  - Automatically clicking destructive controls, creating tickets/campaigns for the user, silently changing pace or status, blocking normal app use, or adding behavioral analytics without a separate privacy decision.
+- Acceptance criteria:
+  - A first-time user can choose the quick summary, start the guided tour, skip it, or reopen it later from Guild Hall.
+  - The tour visibly points to each live feature and changes views without creating, editing, moving, or deleting workspace records.
+  - Cloud and demo copy remain truthful; an empty real workspace never receives seeded tutorial data.
+  - Keyboard focus, Escape/Skip behavior, screen-reader announcements, and focus return are deterministic at every step.
+  - Tooltip/coach-mark placement remains fully visible with no horizontal overflow at 320, 375, 768, and 1440px and at 200% zoom.
+  - Missing anchors fail safely, and completion/restart persistence is isolated per authenticated account and demo mode.
+- Suggested files:
+  - `components/forth-app.tsx`
+  - a focused `components/guided-tour.tsx`
+  - `lib/browser-storage.ts`
+  - `app/globals.css`
+  - `tests/e2e/auth-entry.spec.ts`
+  - `docs/DESIGN.md`
+- Validation:
+  - Unit-test the tour state machine and missing-anchor fallback.
+  - Playwright-test start, Next, Back, Skip, Finish, reopen, persistence, empty-cloud adaptation, keyboard focus, reduced motion, zoom, and 320/375/768/1440px placement.
+  - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `pnpm build`.
+- Subagent prompt:
+  > Implement TICKET-029 after PR #21 merges. Preserve the verified quick-start dialog as a fallback, add an optional accessible coach-mark tour over the real Forth controls, never mutate user data for demonstration, and prove responsive, keyboard, screen-reader, persistence, and missing-anchor behavior with focused tests.
