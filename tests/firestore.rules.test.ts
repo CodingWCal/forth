@@ -7,7 +7,25 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { collectionGroup, deleteDoc, doc, getDoc, getDocs, query, setDoc, where, writeBatch } from "firebase/firestore";
+import {
+  collection,
+  collectionGroup,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  runTransaction,
+  setDoc,
+  where,
+  writeBatch,
+} from "firebase/firestore";
+import {
+  loadWorkspaceStateFromDatabase,
+  saveWorkspaceToDatabase,
+  WorkspaceConflictError,
+} from "../lib/firebase/workspace";
+import type { WorkspaceState } from "../lib/types";
 
 const projectId = "forth-rules-test";
 const ownerId = "guild-owner";
@@ -15,6 +33,39 @@ const outsiderId = "outside-adventurer";
 const ownerEmail = "owner@example.com";
 const firstGuildId = "guild-123e4567-e89b-42d3-a456-426614174000";
 let testEnv: RulesTestEnvironment;
+
+function normalizedCurrent(revision = 0, pace: WorkspaceState["pace"] = "steady") {
+  return { storageVersion: 1, schemaVersion: 2, revision, pace };
+}
+
+function projectRecord(revision = 0) {
+  return {
+    id: "project-one",
+    title: "Cohort platform",
+    code: "COHORT",
+    outcome: "Ship a dependable workspace.",
+    color: "moss",
+    targetDate: "2026-08-20",
+    position: 0,
+    revision,
+  };
+}
+
+function workspaceFixture(): WorkspaceState {
+  return {
+    version: 2,
+    pace: "steady",
+    projects: [{
+      id: "project-one",
+      title: "Cohort platform",
+      code: "COHORT",
+      outcome: "Ship a dependable workspace.",
+      color: "moss",
+      targetDate: "2026-08-20",
+    }],
+    tasks: [],
+  };
+}
 
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
@@ -35,9 +86,10 @@ describe("Firestore workspace rules", () => {
     // Mirrors the client provisioner. Membership is deliberately last so an
     // interrupted setup never appears as a usable guild in the directory.
     await assertSucceeds(setDoc(workspace, { ownerId, name: "Owner guild" }));
-    await assertSucceeds(setDoc(doc(ownerDb, "workspaces", firstGuildId, "data", "current"), {
-      state: { version: 2 },
-    }));
+    const initialData = writeBatch(ownerDb);
+    initialData.set(doc(ownerDb, "workspaces", firstGuildId, "data", "current"), normalizedCurrent());
+    initialData.set(doc(ownerDb, "workspaces", firstGuildId, "projects", "project-one"), projectRecord());
+    await assertSucceeds(initialData.commit());
     await assertSucceeds(setDoc(doc(ownerDb, "workspaces", firstGuildId, "members", ownerId), {
       uid: ownerId,
       email: ownerEmail,
@@ -47,6 +99,7 @@ describe("Firestore workspace rules", () => {
     await assertSucceeds(getDoc(workspace));
     await assertSucceeds(getDoc(doc(ownerDb, "workspaces", firstGuildId, "members", ownerId)));
     await assertSucceeds(getDoc(doc(ownerDb, "workspaces", firstGuildId, "data", "current")));
+    await assertSucceeds(getDoc(doc(ownerDb, "workspaces", firstGuildId, "projects", "project-one")));
   });
 
   it("denies an outsider from reading or writing another owner's workspace", async () => {
@@ -133,14 +186,29 @@ describe("Firestore workspace rules", () => {
         role: "member",
       });
       await setDoc(doc(adminDb, "workspaces", ownerId, "data", "current"), {
-        state: { version: 2 },
+        ...normalizedCurrent(),
       });
+      await setDoc(doc(adminDb, "workspaces", ownerId, "projects", "project-one"), projectRecord());
     });
 
     const memberDb = testEnv.authenticatedContext(memberId).firestore();
     await assertSucceeds(getDoc(doc(memberDb, "workspaces", ownerId)));
-    await assertSucceeds(setDoc(doc(memberDb, "workspaces", ownerId, "data", "current"), {
-      state: { version: 2, pace: 3 },
+    await assertSucceeds(runTransaction(memberDb, async (transaction) => {
+      const currentRef = doc(memberDb, "workspaces", ownerId, "data", "current");
+      const current = await transaction.get(currentRef);
+      transaction.set(currentRef, normalizedCurrent(current.data()?.revision + 1, "full"));
+      transaction.set(doc(memberDb, "workspaces", ownerId, "tasks", "member-task"), {
+        id: "member-task",
+        title: "Verify collaboration",
+        projectId: "project-one",
+        status: "ready",
+        weight: 1,
+        meaning: "Protect shared work.",
+        assignee: "Guild member",
+        isFocus: false,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        revision: current.data()?.revision + 1,
+      });
     }));
     await assertFails(setDoc(doc(memberDb, "workspaces", ownerId), {
       ownerId,
@@ -270,9 +338,10 @@ describe("Firestore workspace rules", () => {
       ownerId: newUserId,
       name: "Fresh guild",
     }));
-    await assertSucceeds(setDoc(doc(db, "workspaces", guildId, "data", "current"), {
-      state: { version: 2 },
-    }));
+    const initialData = writeBatch(db);
+    initialData.set(doc(db, "workspaces", guildId, "data", "current"), normalizedCurrent());
+    initialData.set(doc(db, "workspaces", guildId, "projects", "project-one"), projectRecord());
+    await assertSucceeds(initialData.commit());
     await assertSucceeds(setDoc(doc(db, "workspaces", guildId, "members", newUserId), {
       uid: newUserId,
       email: newUserEmail,
@@ -381,5 +450,157 @@ describe("Firestore workspace rules", () => {
     });
     acceptance.delete(doc(memberDb, "workspaces", ownerId, "invites", email));
     await assertSucceeds(acceptance.commit());
+  });
+
+  it("rejects a stale client instead of silently replacing a teammate's ticket (TICKET-001)", async () => {
+    const workspaceId = "concurrency-workspace";
+    const memberId = "concurrency-member";
+    const base = workspaceFixture();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", workspaceId), { ownerId, name: "Concurrency guild" });
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "members", memberId), {
+        uid: memberId,
+        role: "member",
+      });
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "data", "current"), normalizedCurrent());
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "projects", "project-one"), projectRecord());
+    });
+
+    const memberDb = testEnv.authenticatedContext(memberId).firestore();
+    const firstTask = {
+      id: "first-client-task",
+      title: "Keep the first edit",
+      projectId: "project-one",
+      status: "done" as const,
+      weight: 1 as const,
+      meaning: "Prove completed work grows as separate records.",
+      assignee: "First client",
+      isFocus: false,
+      createdAt: "2026-07-21T12:00:00.000Z",
+      completedAt: "2026-07-21T12:05:00.000Z",
+    };
+    const secondTask = {
+      ...firstTask,
+      id: "second-client-task",
+      title: "Overwrite from stale client",
+      assignee: "Second client",
+    };
+
+    await expect(saveWorkspaceToDatabase(
+      memberDb,
+      workspaceId,
+      0,
+      base,
+      { ...base, tasks: [firstTask] },
+    )).resolves.toMatchObject({ revision: 1 });
+
+    await expect(saveWorkspaceToDatabase(
+      memberDb,
+      workspaceId,
+      0,
+      base,
+      { ...base, tasks: [secondTask] },
+    )).rejects.toBeInstanceOf(WorkspaceConflictError);
+
+    const current = await getDoc(doc(memberDb, "workspaces", workspaceId, "data", "current"));
+    expect(current.data()).toMatchObject({ storageVersion: 1, revision: 1, pace: "steady" });
+    expect(current.data()).not.toHaveProperty("state");
+    expect((await getDoc(doc(memberDb, "workspaces", workspaceId, "tasks", firstTask.id))).exists()).toBe(true);
+    expect((await getDoc(doc(memberDb, "workspaces", workspaceId, "tasks", secondTask.id))).exists()).toBe(false);
+    expect((await getDocs(collection(memberDb, "workspaces", workspaceId, "tasks"))).size).toBe(1);
+    await expect(loadWorkspaceStateFromDatabase(memberDb, workspaceId)).resolves.toEqual({
+      state: { ...base, tasks: [firstTask] },
+      revision: 1,
+    });
+  });
+
+  it("requires entity writes to advance the workspace revision atomically (TICKET-001)", async () => {
+    const memberDb = testEnv.authenticatedContext("concurrency-member").firestore();
+    await assertFails(setDoc(
+      doc(memberDb, "workspaces", "concurrency-workspace", "tasks", "uncoupled-task"),
+      {
+        id: "uncoupled-task",
+        title: "Bypass revision",
+        projectId: "project-one",
+        status: "ready",
+        weight: 1,
+        meaning: "This direct write must fail.",
+        assignee: "Member",
+        isFocus: false,
+        createdAt: "2026-07-21T12:00:00.000Z",
+        revision: 1,
+      },
+    ));
+  });
+
+  it("allows exactly one winner when two clients commit the same revision concurrently (TICKET-001)", async () => {
+    const workspaceId = "parallel-concurrency-workspace";
+    const memberId = "parallel-concurrency-member";
+    const base = workspaceFixture();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", workspaceId), { ownerId, name: "Parallel guild" });
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "members", memberId), {
+        uid: memberId,
+        role: "member",
+      });
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "data", "current"), normalizedCurrent());
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "projects", "project-one"), projectRecord());
+    });
+
+    const memberDb = testEnv.authenticatedContext(memberId).firestore();
+    const taskFor = (id: string) => ({
+      id,
+      title: `Concurrent ticket ${id}`,
+      projectId: "project-one",
+      status: "ready" as const,
+      weight: 1 as const,
+      meaning: "Only one revision-zero transaction may win.",
+      assignee: id,
+      isFocus: false,
+      createdAt: "2026-07-21T12:00:00.000Z",
+    });
+    const results = await Promise.allSettled([
+      saveWorkspaceToDatabase(memberDb, workspaceId, 0, base, { ...base, tasks: [taskFor("alpha")] }),
+      saveWorkspaceToDatabase(memberDb, workspaceId, 0, base, { ...base, tasks: [taskFor("beta")] }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    expect(rejected?.reason).toBeInstanceOf(WorkspaceConflictError);
+    expect((await getDocs(collection(memberDb, "workspaces", workspaceId, "tasks"))).size).toBe(1);
+    expect((await getDoc(doc(memberDb, "workspaces", workspaceId, "data", "current"))).data()?.revision).toBe(1);
+  });
+
+  it("migrates a valid legacy snapshot on its first conflict-safe save (TICKET-001)", async () => {
+    const workspaceId = "legacy-migration-workspace";
+    const memberId = "legacy-migration-member";
+    const base = workspaceFixture();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", workspaceId), { ownerId, name: "Legacy guild" });
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "members", memberId), {
+        uid: memberId,
+        role: "member",
+      });
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "data", "current"), { state: base });
+    });
+
+    const memberDb = testEnv.authenticatedContext(memberId).firestore();
+    await expect(saveWorkspaceToDatabase(
+      memberDb,
+      workspaceId,
+      0,
+      base,
+      { ...base, pace: "full" },
+    )).resolves.toMatchObject({ revision: 1 });
+
+    expect((await getDoc(doc(memberDb, "workspaces", workspaceId, "projects", "project-one"))).exists()).toBe(true);
+    const recovery = await getDoc(doc(memberDb, "workspaces", workspaceId, "recovery", "legacy-v2"));
+    expect(recovery.data()).toMatchObject({ sourceStorageVersion: "whole-state-v2", state: base });
+    const current = await getDoc(doc(memberDb, "workspaces", workspaceId, "data", "current"));
+    expect(current.data()).toMatchObject({ storageVersion: 1, revision: 1, pace: "full" });
+    expect(current.data()).not.toHaveProperty("state");
   });
 });

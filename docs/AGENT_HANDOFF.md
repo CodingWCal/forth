@@ -5,48 +5,48 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 ## Current checkpoint
 
 - Date: 2026-07-21
-- Worktree: `C:\Users\calvi\Documents\Codex\forth-staging`
-- Branch: `staging`
-- Production baseline: `origin/main` at merge commit `d547e4b` after PR #21
-- Staging commits: `94a7492` (stable staging marker) and `3574584` (TICKET-030 backlog entry)
-- Active ticket: TICKET-013 task-first Quest Log redesign; TICKET-030 is a planned responsive quick fix
-- Release state: PR #21 merged and deployed successfully; production and stable staging both return HTTP 200
-- Stable staging URL: https://forth-git-staging-calvintrinhvan-2763s-projects.vercel.app/
+- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket001`
+- Branch: `codex/ticket-001-conflict-safe-sync`
+- Base: `origin/staging` at `9ace9c5`
+- Active ticket: TICKET-001 conflict-safe cloud persistence
+- Release state: isolated implementation only; do not merge, publish Firestore rules, or deploy to production without maintainer approval and the coordinated migration procedure in `docs/PHASE2.md`
+- Related isolated work: draft PR #22 owns the task-first dashboard cleanup; draft PR #23 owns the patched `sharp` dependency. Do not combine their diffs into this ticket.
 
 ## Implemented in this checkpoint
 
-- Reconciled Roger's first-visit welcome guide with Forth's authenticated-entry architecture instead of merging the outdated local-first assumptions.
-- Opens the cloud guide only after a verified Firestore snapshot; demo copy explicitly states that sample tickets remain disposable and browser-local.
-- Stores welcome state safely and separately for demo mode and each authenticated account on a shared device.
-- Pairs the core fantasy labels with literal PM terms for daily capacity, tickets, Kanban status, and completed work.
-- Keeps the native dialog keyboard/backdrop/close behavior, returns focus to the Guild Hall help trigger, and enforces 44px actions.
-- Documents the feature in README and records PR #13/#18 intake status in the canonical backlog.
+- Replaced blind whole-board cloud writes with normalized project/ticket records and a small revision metadata document.
+- Added optimistic concurrency control: a save commits only if the cloud revision still matches the revision originally loaded.
+- Added an explicit conflict state that preserves the stale tab's visible edits and asks before discarding them to load the latest cloud version.
+- Added a lazy legacy migration that writes one immutable `recovery/legacy-v2` snapshot before normalizing the first save.
+- Tightened Firestore rules so record mutations must be coupled atomically to exactly one revision advance.
+- Added real adapter-plus-emulator coverage for sequential stale writes, simultaneous saves, uncoupled writes, and legacy migration.
+- Documented the schema, migration, rollback boundary, and remaining TICKET-024 scale work.
 
 ## Validation at handoff
 
 - `pnpm install --frozen-lockfile`: passed; 455 packages reused from the locked store.
-- `pnpm run lint`: passed.
-- `pnpm run typecheck`: passed.
-- `pnpm run test`: passed, 50/50 unit tests.
-- `pnpm run test:rules`: passed, 17/17 Firestore emulator tests.
-- `pnpm run test:e2e`: passed, 7/7 Playwright tests across 320, 375, 768, and 1440px viewports.
-- `pnpm run build`: passed.
-- `pnpm audit --prod`: no known vulnerabilities.
-- `git diff --check`: passed.
-- Added-line credential-pattern scan: passed.
-- Hosted GitGuardian and Vercel checks on draft PR #21: passed.
-- Live authenticated preview guide (cloud timing, copy, close/reopen behavior): passed by maintainer on 2026-07-21.
+- `pnpm run lint`: passed before the final rule-validation tightening; rerun before commit.
+- `pnpm run typecheck`: passed before the final rule-validation tightening; rerun before commit.
+- `pnpm run test`: passed, 50/50 unit tests; rerun before commit.
+- `pnpm run test:rules`: passed, 21/21 tests before the final rule-validation tightening; rerun before commit.
+- `pnpm run test:e2e`: passed, 7/7 Playwright tests.
+- `pnpm run build`: passed; rerun if code changes after this handoff update.
+- `pnpm audit --prod`: baseline advisory remains for `sharp@0.34.5`; isolated draft PR #23 updates to the clean patched path. Do not promote this branch until that patch is integrated or this branch is rebased on it.
+- `git diff --check`: passed before final documentation edits; rerun before commit.
+- Still required: authenticated two-tab staging smoke, a legacy migration dry run, and production backup/rollback rehearsal.
 
 ## Next delivery sequence
 
-1. Implement TICKET-013 on a dedicated branch based on `staging` and open a draft PR into `staging`.
-2. Keep TICKET-030 as a separately reviewable responsive quick fix.
-3. Start TICKET-029 only after the task-first hierarchy is stable so tour anchors do not immediately become stale.
-4. Promote `staging` to `main` only after automated QA, authenticated staging smoke, and explicit maintainer approval.
+1. Rerun the complete automated gate and added-line secret scan.
+2. Commit, push, and open a draft PR into `staging`; do not merge it.
+3. Integrate or stack the dependency patch from draft PR #23 before any production promotion.
+4. On a stable authenticated staging hostname, run the documented two-tab race and legacy migration checks.
+5. Review the migration/rollback plan with the maintainer before publishing rules or promoting the app.
+6. Keep the dashboard simplification in draft PR #22 separately reviewable.
 
 ## Known next risk
 
-Firebase Authentication requires an exact authorized hostname. The stable staging hostname needs to be added once; temporary feature-preview hostnames should not be added after every push. The centralized terminology map and persistent plain-language preference remain future TICKET-022 work.
+The new application and new Firestore rules are a matched pair. Deploying only one side can block saves, and rolling back only the frontend after any workspace migrates is unsafe. TICKET-024 still owns 30+ user load testing, granular listeners, pagination, and richer merge UX; TICKET-001 prevents silent overwrites but does not claim Google Docs-style merging.
 
 ## Required end-of-session update
 
