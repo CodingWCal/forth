@@ -26,6 +26,7 @@ import {
   GripVertical,
   UserPlus,
   Scroll,
+  Info,
 } from "lucide-react";
 import { type DragEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Image from "next/image";
@@ -101,11 +102,31 @@ type NewGuildInput = {
   targetDate: string;
 };
 
-const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge }> = [
-  { id: "today", label: "Quest Log", icon: Gauge },
-  { id: "board", label: "Realm Map", icon: LayoutGrid },
-  { id: "proof", label: "Chronicle", icon: ListChecks },
-  { id: "settings", label: "Guild Hall", icon: Settings },
+const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge; tooltip: string }> = [
+  {
+    id: "today",
+    label: "Quest Log",
+    icon: Gauge,
+    tooltip: "Your personal tasks and to-dos.",
+  },
+  {
+    id: "board",
+    label: "Realm Map",
+    icon: LayoutGrid,
+    tooltip: "The main board tracking our project progress.",
+  },
+  {
+    id: "proof",
+    label: "Chronicle",
+    icon: ListChecks,
+    tooltip: "A history of all completed tasks and updates.",
+  },
+  {
+    id: "settings",
+    label: "Guild Hall",
+    icon: Settings,
+    tooltip: "Settings, member profiles, and team management.",
+  },
 ];
 
 /** Device-local flag: the welcome guide has been seen. Kept out of WorkspaceState (never synced). */
@@ -677,16 +698,31 @@ export function ForthApp({
         <nav className="rail-nav" aria-label="Primary navigation">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
+            const tooltipId = `nav-tip-${item.id}`;
             return (
-              <button
-                key={item.id}
-                className={view === item.id ? "rail-link is-active" : "rail-link"}
-                onClick={() => setView(item.id)}
-                aria-current={view === item.id ? "page" : undefined}
-              >
-                <Icon size={18} strokeWidth={1.7} />
-                <span>{item.label}</span>
-              </button>
+              <div key={item.id} className="rail-link-row">
+                <button
+                  className={view === item.id ? "rail-link is-active" : "rail-link"}
+                  onClick={() => setView(item.id)}
+                  aria-current={view === item.id ? "page" : undefined}
+                >
+                  <Icon size={18} strokeWidth={1.7} />
+                  <span>{item.label}</span>
+                </button>
+                <span className="nav-info-wrap">
+                  <button
+                    type="button"
+                    className="nav-info-trigger"
+                    aria-label={`About ${item.label}`}
+                    aria-describedby={tooltipId}
+                  >
+                    <Info size={13} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                  <span id={tooltipId} role="tooltip" className="nav-info-tooltip">
+                    {item.tooltip}
+                  </span>
+                </span>
+              </div>
             );
           })}
         </nav>

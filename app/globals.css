@@ -216,6 +216,81 @@ h3 {
   content: "";
 }
 
+.rail-link-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.rail-link-row .rail-link {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-info-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.nav-info-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 43px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--slate);
+  cursor: help;
+}
+
+.nav-info-trigger:hover,
+.nav-info-trigger:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--clay);
+  outline: none;
+}
+
+.nav-info-tooltip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  z-index: 30;
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 2px solid var(--oak);
+  background: var(--paper-bright);
+  box-shadow: 3px 3px 0 #643922;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%) translateX(-4px);
+  transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
+}
+
+.nav-info-wrap:hover .nav-info-tooltip,
+.nav-info-wrap:focus-within .nav-info-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-info-tooltip {
+    transition: none;
+    transform: translateY(-50%);
+  }
+}
+
 .rail-projects {
   display: grid;
   gap: 4px;
@@ -2356,6 +2431,24 @@ body {
 .rail-link.is-active::before {
   width: 5px;
   background: #d69a35;
+}
+
+.nav-info-trigger {
+  min-height: 48px;
+  color: #7a8a7e;
+}
+
+.nav-info-trigger:hover,
+.nav-info-trigger:focus-visible {
+  border-color: #44523e;
+  background: #182119;
+  color: #c58b2b;
+}
+
+.nav-info-tooltip {
+  border-color: #665034;
+  background: #f5e8c9;
+  color: #2a3428;
 }
 
 .rail-projects {
