@@ -105,7 +105,7 @@ h3 {
   flex-direction: column;
   height: 100vh;
   padding: 30px 20px 22px;
-  overflow-y: auto;
+  overflow: visible;
   background: var(--ink);
   color: var(--paper);
 }
@@ -180,6 +180,7 @@ h3 {
   display: grid;
   gap: 5px;
   margin-top: 48px;
+  overflow: visible;
 }
 
 .rail-link {
@@ -217,8 +218,10 @@ h3 {
 }
 
 .rail-link-row {
+  position: relative;
   display: flex;
   align-items: stretch;
+  overflow: visible;
 }
 
 .rail-link-row .rail-link {
@@ -226,18 +229,12 @@ h3 {
   min-width: 0;
 }
 
-.nav-info-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
 .nav-info-trigger {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 44px;
+  flex-shrink: 0;
   min-height: 43px;
   padding: 0;
   border: 2px solid transparent;
@@ -257,13 +254,14 @@ h3 {
 
 .nav-info-tooltip {
   position: absolute;
-  left: calc(100% + 10px);
+  left: calc(100% + 12px);
   top: 50%;
-  z-index: 30;
+  z-index: 100;
+  display: block;
   width: max-content;
-  max-width: 220px;
+  max-width: 240px;
   padding: 8px 10px;
-  border: 2px solid var(--oak);
+  border: 2px solid var(--rule-dark);
   background: var(--paper-bright);
   box-shadow: 3px 3px 0 #643922;
   color: var(--ink);
@@ -273,29 +271,30 @@ h3 {
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-50%) translateX(-4px);
-  transition: opacity 160ms ease, visibility 160ms ease, transform 160ms ease;
+  transform: translateY(-50%);
+  transition: opacity 160ms ease, visibility 160ms ease;
 }
 
-.nav-info-wrap:hover .nav-info-tooltip,
-.nav-info-wrap:focus-within .nav-info-tooltip {
+.rail-link-row:has(.nav-info-trigger:hover) .nav-info-tooltip,
+.rail-link-row:has(.nav-info-trigger:focus-visible) .nav-info-tooltip {
   opacity: 1;
   visibility: visible;
-  transform: translateY(-50%) translateX(0);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .nav-info-tooltip {
     transition: none;
-    transform: translateY(-50%);
   }
 }
 
 .rail-projects {
   display: grid;
   gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
   margin-top: 39px;
   padding-top: 23px;
+  overflow-y: auto;
   border-top: 1px solid rgba(255, 255, 255, 0.13);
 }
 
@@ -2401,6 +2400,11 @@ body {
 .rail-nav {
   gap: 6px;
   margin-top: 30px;
+  overflow: visible;
+}
+
+.rail-link-row {
+  overflow: visible;
 }
 
 .rail-link,
@@ -2453,6 +2457,7 @@ body {
 
 .rail-projects {
   border-top: 2px solid #43503d;
+  overflow-y: auto;
 }
 
 .project-link.is-active {

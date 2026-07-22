@@ -709,18 +709,16 @@ export function ForthApp({
                   <Icon size={18} strokeWidth={1.7} />
                   <span>{item.label}</span>
                 </button>
-                <span className="nav-info-wrap">
-                  <button
-                    type="button"
-                    className="nav-info-trigger"
-                    aria-label={`About ${item.label}`}
-                    aria-describedby={tooltipId}
-                  >
-                    <Info size={13} strokeWidth={2} aria-hidden="true" />
-                  </button>
-                  <span id={tooltipId} role="tooltip" className="nav-info-tooltip">
-                    {item.tooltip}
-                  </span>
+                <button
+                  type="button"
+                  className="nav-info-trigger"
+                  aria-label={`About ${item.label}`}
+                  aria-describedby={tooltipId}
+                >
+                  <Info size={13} strokeWidth={2} aria-hidden="true" />
+                </button>
+                <span id={tooltipId} role="tooltip" className="nav-info-tooltip">
+                  {item.tooltip}
                 </span>
               </div>
             );
