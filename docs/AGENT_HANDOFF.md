@@ -10,6 +10,7 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - Base: `origin/staging` at `9ace9c5`
 - Checkpoint commit: `4739d46` (`Prevent concurrent cloud save data loss`), pushed to origin
 - Active ticket: TICKET-001 conflict-safe cloud persistence
+- Draft PR: [#24](https://github.com/CodingWCal/forth/pull/24) into `staging`
 - Release state: isolated implementation only; do not merge, publish Firestore rules, or deploy to production without maintainer approval and the coordinated migration procedure in `docs/PHASE2.md`
 - Related isolated work: draft PR #22 owns the task-first dashboard cleanup; draft PR #23 owns the patched `sharp` dependency. Do not combine their diffs into this ticket.
 
@@ -28,22 +29,21 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - `pnpm install --frozen-lockfile`: passed; 455 packages reused from the locked store.
 - `pnpm run lint`: passed after the final code/rules edits.
 - `pnpm run typecheck`: passed after the final code/rules edits.
-- `pnpm run test`: passed, 50/50 unit tests; rerun before commit.
-- `pnpm run test:rules`: passed, 21/21 tests before the final field-validation tightening. The final rerun stalled before Firebase emulator startup and produced no test failure; rerun this gate before PR approval.
-- `pnpm run test:e2e`: passed, 7/7 Playwright tests.
-- `pnpm run build`: passed; rerun if code changes after this handoff update.
+- `pnpm run test`: passed, 50/50 unit tests.
+- `pnpm run test:rules`: passed, 21/21 Firestore emulator tests after the final field-validation tightening.
+- `pnpm run test:e2e`: passed, 7/7 Playwright tests across 320, 375, 768, and 1440px coverage.
+- `pnpm run build`: passed.
 - `pnpm audit --prod`: baseline advisory remains for `sharp@0.34.5`; isolated draft PR #23 updates to the clean patched path. Do not promote this branch until that patch is integrated or this branch is rebased on it.
 - `git diff --check`: passed before final documentation edits; rerun before commit.
 - Still required: authenticated two-tab staging smoke, a legacy migration dry run, and production backup/rollback rehearsal.
 
 ## Next delivery sequence
 
-1. Rerun `pnpm run test:rules` to verify the final field-validation tightening, then rerun the complete automated gate before approval.
-2. Open a draft PR into `staging`; do not merge it.
-3. Integrate or stack the dependency patch from draft PR #23 before any production promotion.
-4. On a stable authenticated staging hostname, run the documented two-tab race and legacy migration checks.
-5. Review the migration/rollback plan with the maintainer before publishing rules or promoting the app.
-6. Keep the dashboard simplification in draft PR #22 separately reviewable.
+1. Review draft PR #24; do not merge it yet.
+2. Integrate or stack the dependency patch from draft PR #23 before any production promotion.
+3. On a stable authenticated staging hostname, run the documented two-tab race and legacy migration checks.
+4. Review the migration/rollback plan with the maintainer before publishing rules or promoting the app.
+5. Keep the dashboard simplification in draft PR #22 separately reviewable.
 
 ## Known next risk
 

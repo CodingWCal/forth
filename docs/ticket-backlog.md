@@ -25,7 +25,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 
 | Ticket | Status | Note |
 |---|---|---|
-| TICKET-001 | Implemented on `codex/ticket-001-conflict-safe-sync` | Normalized records, revision-checked transactions, stale-write recovery UI, legacy migration recovery point, and emulator races are implemented. Draft review, manual authenticated two-tab staging validation, and a coordinated rules/application release remain required. |
+| TICKET-001 | Draft PR [#24](https://github.com/CodingWCal/forth/pull/24) | Normalized records, revision-checked transactions, stale-write recovery UI, legacy migration recovery point, and emulator races are implemented. Automated gates pass; manual authenticated two-tab staging validation and a coordinated rules/application release remain required. |
 | TICKET-002–006 | Planned | Still required for production cohort use; TICKET-006 is partially unblocked by the invitation work. |
 | TICKET-007 | Implemented on `main` | Pending invitations exist in code and rules; still needs live two-account E2E verification. |
 | TICKET-008 | Implemented on `agent/invite-lifecycle` | Cancel/decline/expiry and rule tests pass; not yet released to production. |
@@ -71,7 +71,7 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 ### TICKET-001: Prevent last-write-wins data loss during concurrent cloud edits
 
 - Priority: P0 Critical
-- Status: Implemented on `codex/ticket-001-conflict-safe-sync`; pending draft review, authenticated staging migration smoke test, and coordinated release approval.
+- Status: Draft PR [#24](https://github.com/CodingWCal/forth/pull/24); automated gates pass, with authenticated staging migration smoke testing and coordinated release approval still required.
 - Type: Architecture/Reliability
 - Area: `lib/firebase/workspace.ts`, Firestore workspace data model
 - Effort: L
