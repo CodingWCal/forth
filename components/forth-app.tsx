@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Award,
   Bookmark,
   Check,
   CirclePause,
@@ -12,9 +13,11 @@ import {
   ListChecks,
   LockKeyhole,
   Map as MapIcon,
+  Palette,
   Plus,
   RotateCcw,
   Settings,
+  Sparkles,
   Target,
   X,
   Coins,
@@ -30,6 +33,7 @@ import {
 import { type DragEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Image from "next/image";
 import { BrandMark } from "@/components/brand-mark";
+import { getEarnedBadgeCount, getProgressBadges } from "@/lib/badges";
 import { readBrowserStorage, writeBrowserStorage } from "@/lib/browser-storage";
 import type { User } from "firebase/auth";
 import {
@@ -47,7 +51,15 @@ import {
   watchWorkspace,
 } from "@/lib/firebase/workspace";
 import { createCleanWorkspace, DEMO_STORAGE_KEY } from "@/lib/entry";
+import {
+  LAYOUT_OPTIONS,
+  type LayoutMode,
+  layoutPreferenceKey,
+  readLayoutMode,
+  writeLayoutMode,
+} from "@/lib/preferences";
 import { createSeedWorkspace } from "@/lib/seed";
+import { getDisplayTerms, type DisplayTerms } from "@/lib/terminology";
 import type { Pace, Project, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
 import {
   createTask,
@@ -59,12 +71,12 @@ import {
   getPlannedWeight,
   getProjectProgress,
   PACE_CAPACITY,
-  STATUS_LABELS,
   workspaceReducer,
   type DueSoonEntry,
 } from "@/lib/workspace";
 
 type View = "today" | "board" | "proof" | "settings";
+type SettingsTab = "account" | "layout" | "progress";
 
 const DUE_PANEL_LIMIT = 6;
 
@@ -101,21 +113,15 @@ type NewGuildInput = {
   targetDate: string;
 };
 
-const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge }> = [
-  { id: "today", label: "Quest Log", icon: Gauge },
-  { id: "board", label: "Realm Map", icon: LayoutGrid },
-  { id: "proof", label: "Chronicle", icon: ListChecks },
-  { id: "settings", label: "Guild Hall", icon: Settings },
+const NAV_ICONS: Array<{ id: View; icon: typeof Gauge }> = [
+  { id: "today", icon: Gauge },
+  { id: "board", icon: LayoutGrid },
+  { id: "proof", icon: ListChecks },
+  { id: "settings", icon: Settings },
 ];
 
 /** Device-local flag: the welcome guide has been seen. Kept out of WorkspaceState (never synced). */
 const WELCOME_SEEN_KEY = "forth.welcome.v2";
-
-const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
-  light: { label: "Scout", hint: "A short expedition" },
-  steady: { label: "Venture", hint: "A grounded build day" },
-  full: { label: "Raid", hint: "Deep-work reserves ready" },
-};
 
 const SAFE_WORKSPACE_ERROR_PREFIXES = [
   "Only a guild owner",
@@ -177,9 +183,27 @@ export function ForthApp({
   const campaignDialogRef = useRef<HTMLDialogElement>(null);
   const welcomeDialogRef = useRef<HTMLDialogElement>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const layoutPrefKey = layoutPreferenceKey(mode, cloudUser?.uid);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => readLayoutMode(layoutPrefKey));
+  const [layoutKey, setLayoutKey] = useState(layoutPrefKey);
+  if (layoutKey !== layoutPrefKey) {
+    setLayoutKey(layoutPrefKey);
+    setLayoutMode(readLayoutMode(layoutPrefKey));
+  }
   const welcomeSeenKey = mode === "cloud"
     ? `${WELCOME_SEEN_KEY}.cloud.${cloudUser.uid}`
     : `${WELCOME_SEEN_KEY}.demo`;
+  const terms = useMemo(() => getDisplayTerms(layoutMode), [layoutMode]);
+
+  function chooseLayout(next: LayoutMode) {
+    setLayoutMode(next);
+    writeLayoutMode(layoutPrefKey, next);
+    announce(
+      next === "calm"
+        ? "Calm layout on — plain labels and larger text."
+        : "Adventure layout on — full guild theme.",
+    );
+  }
 
   const queueCloudSave = useCallback(async (
     targetRevision: number,
@@ -437,8 +461,8 @@ export function ForthApp({
     if (!task) return;
     announce(
       status === "done"
-        ? `Quest shipped: ${task.title} · +${task.weight * 10} gold`
-        : `${task.title} is now ${STATUS_LABELS[status].toLowerCase()}.`,
+        ? terms.shippedToast(task.title, task.weight * 10)
+        : terms.statusToast(task.title, status),
     );
   }
 
@@ -497,14 +521,7 @@ export function ForthApp({
     announce("The disposable local demo has been reset.");
   }
 
-  const title =
-    view === "today"
-      ? "Choose today’s three quests."
-      : view === "board"
-        ? "Survey the engineering realm."
-        : view === "proof"
-        ? "Read what the guild has shipped."
-        : "Tend the guild hall.";
+  const title = terms.pageTitle[view];
 
   function deleteTask(task: Task) {
     if (window.confirm(`Delete “${task.title}”? This cannot be undone.`)) {
@@ -667,7 +684,7 @@ export function ForthApp({
   }
 
   return (
-    <div className="app-shell" aria-busy={transitionBusy || undefined} inert={transitionBusy || undefined}>
+    <div className="app-shell" data-layout={layoutMode} aria-busy={transitionBusy || undefined} inert={transitionBusy || undefined}>
       <aside className="side-rail">
         <button className="brand" onClick={() => setView("today")} aria-label="Forth home">
           <BrandMark />
@@ -675,7 +692,7 @@ export function ForthApp({
         </button>
 
         <nav className="rail-nav" aria-label="Primary navigation">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ICONS.map((item) => {
             const Icon = item.icon;
             return (
               <button
@@ -685,14 +702,14 @@ export function ForthApp({
                 aria-current={view === item.id ? "page" : undefined}
               >
                 <Icon size={18} strokeWidth={1.7} />
-                <span>{item.label}</span>
+                <span>{terms.nav[item.id]}</span>
               </button>
             );
           })}
         </nav>
 
         <div className="rail-projects">
-          <p className="eyebrow">Active campaigns</p>
+          <p className="eyebrow">{terms.projectsEyebrow}</p>
           {state.projects.map((project) => (
             <button
               key={project.id}
@@ -707,7 +724,7 @@ export function ForthApp({
             </button>
           ))}
           <button className="project-link project-link--new" onClick={openCampaignDialog}>
-            <Plus size={13} /> <span>New campaign</span>
+            <Plus size={13} /> <span>{terms.newProject}</span>
           </button>
         </div>
 
@@ -715,7 +732,9 @@ export function ForthApp({
           <div className="rail-sprite" aria-hidden="true">
             <Image src="/sprites/code-squire.png" alt="" width={54} height={54} unoptimized />
           </div>
-          <span className="rail-foot-copy">Code guild<br />camp online</span>
+          <span className="rail-foot-copy">
+            {layoutMode === "calm" ? <>Workspace<br />ready</> : <>Code guild<br />camp online</>}
+          </span>
         </div>
       </aside>
 
@@ -743,7 +762,7 @@ export function ForthApp({
             <EnvironmentBadge mode={mode} syncState={syncState} />
             {view !== "settings" && (
               <button className="button button--primary" onClick={openAddDialog}>
-                <Plus size={17} /> New quest
+                <Plus size={17} /> {terms.newTask}
               </button>
             )}
           </div>
@@ -775,6 +794,7 @@ export function ForthApp({
         {view === "today" && (
           <TodayView
             state={state}
+            terms={terms}
             activeProject={activeProject}
             focusTasks={focusTasks}
             plannedWeight={plannedWeight}
@@ -793,6 +813,7 @@ export function ForthApp({
         {view === "board" && (
           <BoardView
             state={state}
+            terms={terms}
             activeProject={activeProject}
             onSelectProject={setActiveProjectId}
             onSetStatus={setStatus}
@@ -801,7 +822,11 @@ export function ForthApp({
               const task = state.tasks.find((item) => item.id === taskId);
               dispatch({ type: "TOGGLE_FOCUS", taskId });
               if (task && !task.isFocus && before >= 3) {
-                announce("Today’s quest pouch is full. Ship or remove one first.");
+                announce(
+                  layoutMode === "calm"
+                    ? "Today already has three tasks. Complete or remove one first."
+                    : "Today’s quest pouch is full. Ship or remove one first.",
+                );
               } else if (task) {
                 announce(task.isFocus ? "Removed from today." : "Added to today.");
               }
@@ -815,6 +840,10 @@ export function ForthApp({
         {view === "settings" && (
           <SettingsView
             mode={mode}
+            terms={terms}
+            layoutMode={layoutMode}
+            onLayoutChange={chooseLayout}
+            workspace={state}
             onReset={resetDemo}
             user={cloudUser}
             syncState={syncState}
@@ -841,7 +870,7 @@ export function ForthApp({
       </main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ICONS.map((item) => {
           const Icon = item.icon;
           return (
             <button
@@ -851,7 +880,7 @@ export function ForthApp({
               aria-current={view === item.id ? "page" : undefined}
             >
               <Icon size={19} strokeWidth={1.8} />
-              <span>{item.id === "board" ? "Map" : item.label}</span>
+              <span>{terms.navShort[item.id]}</span>
             </button>
           );
         })}
@@ -952,6 +981,7 @@ function dueLabel(entry: DueSoonEntry): string {
 
 function TodayView({
   state,
+  terms,
   activeProject,
   focusTasks,
   plannedWeight,
@@ -967,6 +997,7 @@ function TodayView({
   onGoToBoard,
 }: {
   state: WorkspaceState;
+  terms: DisplayTerms;
   activeProject: Project;
   focusTasks: Task[];
   plannedWeight: number;
@@ -997,32 +1028,32 @@ function TodayView({
   return (
     <div className="today-layout">
       <div className="today-main">
-        <section className="adventurer-hud" aria-label="Guild progress">
+        <section className="adventurer-hud" aria-label={terms.mode === "calm" ? "Your progress" : "Guild progress"}>
           <div className="pixel-portrait" aria-hidden="true">
             <Image src="/sprites/code-squire.png" alt="" width={76} height={76} unoptimized priority />
           </div>
           <div className="adventurer-copy">
-            <p className="eyebrow">Engineer class · Rank {level}</p>
-            <h2>Code Squire</h2>
+            <p className="eyebrow">{terms.hudEyebrow(level)}</p>
+            <h2>{terms.hudTitle}</h2>
             <div className="xp-track" role="progressbar" aria-label="Progress to next level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
-            <small>{100 - levelProgress} craft XP until the next rank</small>
+            <small>{terms.xpRemaining(100 - levelProgress)}</small>
           </div>
           <dl className="reward-stats">
-            <div><dt><Coins size={14} /> Gold</dt><dd>{totalGold}</dd></div>
-            <div><dt><ScrollText size={14} /> Quests</dt><dd>{state.tasks.filter((task) => task.status === "done").length}</dd></div>
+            <div><dt><Coins size={14} /> {terms.goldLabel}</dt><dd>{totalGold}</dd></div>
+            <div><dt><ScrollText size={14} /> {terms.completedLabel}</dt><dd>{state.tasks.filter((task) => task.status === "done").length}</dd></div>
           </dl>
         </section>
         <section className="pace-panel" aria-labelledby="pace-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">I · Choose provisions</p>
-              <h2 id="pace-title">How far can the party travel?</h2>
+              <p className="eyebrow">{terms.paceEyebrow}</p>
+              <h2 id="pace-title">{terms.paceTitle}</h2>
             </div>
-            <span className="capacity-number"><strong>{plannedWeight}</strong> / {capacity} energy</span>
+            <span className="capacity-number"><strong>{plannedWeight}</strong> / {capacity} {terms.energyLabel}</span>
           </div>
           <div className="pace-row">
             <div className="pace-options" role="radiogroup" aria-label="Today's pace">
-              {(Object.keys(PACE_COPY) as Pace[]).map((pace) => (
+              {(Object.keys(terms.pace) as Pace[]).map((pace) => (
                 <button
                   key={pace}
                   className={state.pace === pace ? "pace-option is-active" : "pace-option"}
@@ -1031,7 +1062,7 @@ function TodayView({
                   aria-checked={state.pace === pace}
                 >
                   <span className="pace-mark"><i /><i /><i /></span>
-                  <span><strong>{PACE_COPY[pace].label}</strong><small>{PACE_COPY[pace].hint}</small></span>
+                  <span><strong>{terms.pace[pace].label}</strong><small>{terms.pace[pace].hint}</small></span>
                 </button>
               ))}
             </div>
@@ -1048,8 +1079,12 @@ function TodayView({
               </div>
               <p className={overPlan ? "capacity-note is-over" : "capacity-note"}>
                 {overPlan
-                  ? "The party is over-encumbered. Remove a quest or choose a larger expedition."
-                  : `${capacity - plannedWeight} energy remain. Keep some provisions for the unexpected.`}
+                  ? (terms.mode === "calm"
+                    ? "You are over capacity. Remove a task or choose a larger daily budget."
+                    : "The party is over-encumbered. Remove a quest or choose a larger expedition.")
+                  : (terms.mode === "calm"
+                    ? `${capacity - plannedWeight} effort remain. Leave room for the unexpected.`
+                    : `${capacity - plannedWeight} energy remain. Keep some provisions for the unexpected.`)}
               </p>
             </div>
           </div>
@@ -1058,10 +1093,10 @@ function TodayView({
         <section className="focus-panel" aria-labelledby="focus-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">II · Ready the party</p>
-              <h2 id="focus-title">Today’s three quests</h2>
+              <p className="eyebrow">{terms.focusEyebrow}</p>
+              <h2 id="focus-title">{terms.focusTitle}</h2>
             </div>
-            <button className="text-button" onClick={onGoToBoard}>Open realm map <ArrowRight size={15} /></button>
+            <button className="text-button" onClick={onGoToBoard}>{terms.openBoard} <ArrowRight size={15} /></button>
           </div>
 
           <div className="focus-list">
@@ -1069,6 +1104,7 @@ function TodayView({
               <FocusTaskRow
                 key={task.id}
                 task={task}
+                terms={terms}
                 project={state.projects.find((project) => project.id === task.projectId)!}
                 index={index}
                 onSetStatus={onSetStatus}
@@ -1079,7 +1115,7 @@ function TodayView({
             {focusTasks.length < 3 && (
               <button className="empty-focus" onClick={onOpenAdd}>
                 <Plus size={18} />
-                <span><strong>Take another quest</strong><small>Only three may travel in the active party.</small></span>
+                <span><strong>{terms.emptyFocusTitle}</strong><small>{terms.emptyFocusHint}</small></span>
               </button>
             )}
           </div>
@@ -1089,11 +1125,11 @@ function TodayView({
           <section className="nearing-panel" aria-labelledby="nearing-title">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Mind the horizon</p>
-                <h2 id="nearing-title">Due soon and overdue</h2>
+                <p className="eyebrow">{terms.dueEyebrow}</p>
+                <h2 id="nearing-title">{terms.dueTitle}</h2>
               </div>
               <span className="quiet-stat">
-                Across all campaigns · <strong>{nearing.length}</strong> {nearing.length === 1 ? "quest" : "quests"}
+                Across all {terms.mode === "calm" ? "projects" : "campaigns"} · <strong>{nearing.length}</strong> {nearing.length === 1 ? (terms.mode === "calm" ? "task" : "quest") : (terms.mode === "calm" ? "tasks" : "quests")}
               </span>
             </div>
             <ul className="nearing-list" id="due-task-summary">
@@ -1105,12 +1141,12 @@ function TodayView({
                       type="button"
                       className="nearing-main"
                       onClick={() => onEdit(entry.task)}
-                      aria-label={`Edit quest ${entry.task.title} — ${dueLabel(entry)}`}
+                      aria-label={`Edit ${terms.mode === "calm" ? "task" : "quest"} ${entry.task.title} — ${dueLabel(entry)}`}
                     >
                       <span className="nearing-dot" aria-hidden="true" />
                       <span className="nearing-copy">
                         <strong>{entry.task.title}</strong>
-                        {project && <small>{project.code} · {STATUS_LABELS[entry.task.status]}</small>}
+                        {project && <small>{project.code} · {terms.status[entry.task.status]}</small>}
                       </span>
                       <time dateTime={entry.task.dueDate} className={`due-badge is-${entry.category}`}>{dueLabel(entry)}</time>
                     </button>
@@ -1127,7 +1163,7 @@ function TodayView({
                 onClick={() => setShowAllDue((current) => !current)}
               >
                 <span>
-                  <strong>{showAllDue ? `Show first ${DUE_PANEL_LIMIT} due quests` : `View all ${nearing.length} due quests`}</strong>
+                  <strong>{showAllDue ? `Show first ${DUE_PANEL_LIMIT} due ${terms.mode === "calm" ? "tasks" : "quests"}` : `View all ${nearing.length} due ${terms.mode === "calm" ? "tasks" : "quests"}`}</strong>
                   <small>{showAllDue ? "Collapse this deadline summary" : `${hiddenNearingCount} more beyond this summary`}</small>
                 </span>
                 <ArrowRight size={15} aria-hidden="true" />
@@ -1139,8 +1175,8 @@ function TodayView({
         <section className="momentum-panel" aria-labelledby="momentum-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">III · Read the campaign</p>
-              <h2 id="momentum-title">Seven-day expedition</h2>
+              <p className="eyebrow">{terms.momentumEyebrow}</p>
+              <h2 id="momentum-title">{terms.momentumTitle}</h2>
             </div>
             <span className="quiet-stat"><strong>{completedToday}</strong> effort shipped today</span>
           </div>
@@ -1206,6 +1242,7 @@ function TodayView({
 
 function FocusTaskRow({
   task,
+  terms,
   project,
   index,
   onSetStatus,
@@ -1213,6 +1250,7 @@ function FocusTaskRow({
   onDelete,
 }: {
   task: Task;
+  terms: DisplayTerms;
   project: Project;
   index: number;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
@@ -1221,15 +1259,15 @@ function FocusTaskRow({
 }) {
   return (
     <article className={`focus-task focus-task--${task.status}`}>
-      <button className="land-button" onClick={() => onSetStatus(task.id, "done")} aria-label={`Ship ${task.title}`}>
+      <button className="land-button" onClick={() => onSetStatus(task.id, "done")} aria-label={`${terms.mode === "calm" ? "Complete" : "Ship"} ${task.title}`}>
         <Check size={18} />
       </button>
       <span className="task-index">0{index + 1}</span>
       <div className="task-body">
         <div className="task-meta">
           <span className={`project-tag project-tag--${project.color}`}>{project.code}</span>
-          <span>{task.weight} energy</span>
-          <span>{STATUS_LABELS[task.status]}</span>
+          <span>{task.weight} {terms.energyLabel}</span>
+          <span>{terms.status[task.status]}</span>
         </div>
         <h3>{task.title}</h3>
         <p>{task.meaning}</p>
@@ -1259,6 +1297,7 @@ function FocusTaskRow({
 
 function BoardView({
   state,
+  terms,
   activeProject,
   onSelectProject,
   onSetStatus,
@@ -1268,6 +1307,7 @@ function BoardView({
   onDelete,
 }: {
   state: WorkspaceState;
+  terms: DisplayTerms;
   activeProject: Project;
   onSelectProject: (id: string) => void;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
@@ -1280,6 +1320,7 @@ function BoardView({
   const [query, setQuery] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
+  const calm = terms.mode === "calm";
 
   const startDragging = (event: DragEvent<HTMLElement>, task: Task) => {
     if ((event.target as HTMLElement).closest("button")) {
@@ -1325,24 +1366,33 @@ function BoardView({
 
       <section className="board-intro">
         <div>
-          <p className="eyebrow">{activeProject.code} · Campaign objective</p>
+          <p className="eyebrow">{activeProject.code} · {calm ? "Project objective" : "Campaign objective"}</p>
           <h2>{activeProject.outcome}</h2>
         </div>
         <div className="board-progress">
           <strong>{getProjectProgress(state, activeProject.id)}%</strong>
-          <span>realm cleared</span>
+          <span>{calm ? "complete" : "realm cleared"}</span>
         </div>
       </section>
 
       <div className="quest-tools">
         <Search size={16} aria-hidden="true" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search engineering quests" placeholder="Search quests, runes, and requirements…" />
-        <button className="button button--primary" onClick={onOpenAdd}><Plus size={15} /> Inscribe quest</button>
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label={calm ? "Search tasks" : "Search engineering quests"}
+          placeholder={calm ? "Search tasks and requirements…" : "Search quests, runes, and requirements…"}
+        />
+        <button className="button button--primary" onClick={onOpenAdd}>
+          <Plus size={15} /> {calm ? "Add task" : "Inscribe quest"}
+        </button>
       </div>
 
       <p className="drag-help" id="kanban-drag-help">
         <GripVertical size={15} aria-hidden="true" />
-        Drag a quest between provinces with your cursor. On phone or keyboard, use its move arrows.
+        {calm
+          ? "Drag a task between columns with your cursor. On phone or keyboard, use its move arrows."
+          : "Drag a quest between provinces with your cursor. On phone or keyboard, use its move arrows."}
       </p>
 
       <section className="kanban" aria-label={`${activeProject.title} work map`} aria-describedby="kanban-drag-help">
@@ -1368,7 +1418,7 @@ function BoardView({
               onDrop={(event) => dropInProvince(event, status)}
             >
               <div className="column-head">
-                <span>{STATUS_LABELS[status]}</span>
+                <span>{terms.status[status]}</span>
                 <strong>{tasks.length}</strong>
               </div>
               <div className="column-tasks">
@@ -1388,11 +1438,13 @@ function BoardView({
                 {tasks.length === 0 && (
                   <div className="column-empty">
                     <MapIcon size={20} />
-                    <span>No quests in this province.</span>
+                    <span>{calm ? "No tasks in this column." : "No quests in this province."}</span>
                   </div>
                 )}
                 {status === "ready" && (
-                  <button className="column-add" onClick={onOpenAdd}><Plus size={15} /> Inscribe quest</button>
+                  <button className="column-add" onClick={onOpenAdd}>
+                    <Plus size={15} /> {calm ? "Add task" : "Inscribe quest"}
+                  </button>
                 )}
               </div>
             </div>
@@ -1555,6 +1607,10 @@ function ProofView({
 
 function SettingsView({
   mode,
+  terms,
+  layoutMode,
+  onLayoutChange,
+  workspace,
   onReset,
   user,
   syncState,
@@ -1576,6 +1632,10 @@ function SettingsView({
   onShowGuide,
 }: {
   mode: "demo" | "cloud";
+  terms: DisplayTerms;
+  layoutMode: LayoutMode;
+  onLayoutChange: (layout: LayoutMode) => void;
+  workspace: WorkspaceState;
   onReset: () => void;
   user?: User;
   syncState: SyncState;
@@ -1596,6 +1656,10 @@ function SettingsView({
   onExit: () => Promise<void>;
   onShowGuide: () => void;
 }) {
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("account");
+  const calm = terms.mode === "calm";
+  const badges = getProgressBadges(workspace);
+  const earnedCount = getEarnedBadgeCount(workspace);
   const syncLabel = syncState === "synced"
     ? "Saved to cloud"
     : syncState === "syncing"
@@ -1604,73 +1668,209 @@ function SettingsView({
         ? "Cloud sync error"
         : "Demo on this device";
 
+  const tabs: Array<{ id: SettingsTab; label: string; icon: typeof LockKeyhole }> = [
+    { id: "account", label: calm ? "Account" : "Account ward", icon: LockKeyhole },
+    { id: "layout", label: calm ? "Layout" : "Layout skin", icon: Palette },
+    { id: "progress", label: calm ? "Progress" : "Renown", icon: Award },
+  ];
+
   return (
     <div className="settings-view">
       <section className="settings-intro">
-        <p className="eyebrow">Guild hall · Save altar</p>
-        <h2>Account wards and cloud runes.</h2>
-        <p>{mode === "cloud" ? "This signed-in workspace saves to private cloud storage for authorized guild members." : "This disposable demo stays in this browser and never copies sample tickets into a real account."}</p>
+        <p className="eyebrow">{calm ? "Settings" : "Guild hall · Save altar"}</p>
+        <h2>{calm ? "Account, layout, and progress." : "Account wards and cloud runes."}</h2>
+        <p>
+          {mode === "cloud"
+            ? "This signed-in workspace saves to private cloud storage for authorized guild members."
+            : "This disposable demo stays in this browser and never copies sample tickets into a real account."}
+        </p>
         <button type="button" className="button button--quiet" onClick={onShowGuide} aria-haspopup="dialog">
           <Scroll size={15} /> How Forth works
         </button>
       </section>
 
-      <section className="settings-card">
-        <div className="settings-icon"><LockKeyhole size={22} /></div>
-        <div>
-          <p className="eyebrow">Save ward</p>
-          <h3>{mode === "cloud" ? `Signed in as ${user?.displayName ?? user?.email ?? "your account"}` : "Disposable local demo"}</h3>
-          <p>{mode === "cloud" ? `${syncLabel}. Forth saves this workspace only to its authorized Firestore record.` : "Sample tickets persist on this device only until you reset or clear the demo. They are never uploaded to Firebase."}</p>
-          <button className="button button--primary" onClick={() => void onExit()}>
-            {mode === "cloud" ? "Sign out" : "Exit demo"}
-          </button>
-        </div>
-        <span className={mode === "cloud" && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{syncLabel}</span>
-      </section>
+      <div className="settings-tabs" role="tablist" aria-label="Settings sections">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`settings-tab-${tab.id}`}
+              aria-selected={settingsTab === tab.id}
+              aria-controls={`settings-panel-${tab.id}`}
+              className={settingsTab === tab.id ? "settings-tab is-active" : "settings-tab"}
+              onClick={() => setSettingsTab(tab.id)}
+            >
+              <Icon size={16} aria-hidden="true" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
-      {mode === "cloud" && user && (
-        <PendingInvitesCard
-          pendingInvites={pendingInvites}
-          inviteStatus={inviteStatus}
-          onAcceptInvite={onAcceptInvite}
-          onDeclineInvite={onDeclineInvite}
-          onRetryInvites={onRetryInvites}
-        />
+      {settingsTab === "account" && (
+        <div
+          className="settings-panel"
+          role="tabpanel"
+          id="settings-panel-account"
+          aria-labelledby="settings-tab-account"
+        >
+          <section className="settings-card">
+            <div className="settings-icon"><LockKeyhole size={22} /></div>
+            <div>
+              <p className="eyebrow">{calm ? "Sign-in" : "Save ward"}</p>
+              <h3>{mode === "cloud" ? `Signed in as ${user?.displayName ?? user?.email ?? "your account"}` : "Disposable local demo"}</h3>
+              <p>{mode === "cloud" ? `${syncLabel}. Forth saves this workspace only to its authorized Firestore record.` : "Sample tickets persist on this device only until you reset or clear the demo. They are never uploaded to Firebase."}</p>
+              <button className="button button--primary" onClick={() => void onExit()}>
+                {mode === "cloud" ? "Sign out" : "Exit demo"}
+              </button>
+            </div>
+            <span className={mode === "cloud" && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{syncLabel}</span>
+          </section>
+
+          {mode === "cloud" && user && (
+            <PendingInvitesCard
+              pendingInvites={pendingInvites}
+              inviteStatus={inviteStatus}
+              onAcceptInvite={onAcceptInvite}
+              onDeclineInvite={onDeclineInvite}
+              onRetryInvites={onRetryInvites}
+            />
+          )}
+
+          {mode === "cloud" && user && (
+            <GuildHallCard
+              activeGuild={activeGuild}
+              guilds={guilds}
+              onSelectGuild={onSelectGuild}
+              onCreateGuild={onCreateGuild}
+              onInviteGuildmate={onInviteGuildmate}
+              onJoinGuild={onJoinGuild}
+              sentInvites={sentInvites}
+              onCancelInvite={onCancelInvite}
+              onOpenCampaign={onOpenCampaign}
+            />
+          )}
+
+          {mode === "demo" && (
+            <section className="reset-card">
+              <div><p className="eyebrow">Demo controls</p><h3>Restore the sample campaign</h3><p>This replaces disposable demo data in this browser only. No signed-in workspace is changed.</p></div>
+              <button className="button button--danger" onClick={onReset}><RotateCcw size={16} /> Restore demo sample</button>
+            </section>
+          )}
+        </div>
       )}
 
-      {mode === "cloud" && user && (
-        <GuildHallCard
-          activeGuild={activeGuild}
-          guilds={guilds}
-          onSelectGuild={onSelectGuild}
-          onCreateGuild={onCreateGuild}
-          onInviteGuildmate={onInviteGuildmate}
-          onJoinGuild={onJoinGuild}
-          sentInvites={sentInvites}
-          onCancelInvite={onCancelInvite}
-          onOpenCampaign={onOpenCampaign}
-        />
+      {settingsTab === "layout" && (
+        <div
+          className="settings-panel"
+          role="tabpanel"
+          id="settings-panel-layout"
+          aria-labelledby="settings-tab-layout"
+        >
+          <section className="settings-card">
+            <div className="settings-icon"><Palette size={22} /></div>
+            <div>
+              <p className="eyebrow">{calm ? "Display" : "Layout skin"}</p>
+              <h3>Choose how Forth feels</h3>
+              <p>
+                Same projects and tasks either way. Adventure keeps the guild theme;
+                Calm uses plain labels and quieter chrome for people who prefer a simpler PM tool.
+              </p>
+              <div className="layout-options" role="radiogroup" aria-label="Layout style">
+                {LAYOUT_OPTIONS.map((option) => {
+                  const selected = layoutMode === option.id;
+                  const OptionIcon = option.id === "calm" ? Leaf : Sparkles;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      className={selected ? "layout-option is-active" : "layout-option"}
+                      onClick={() => onLayoutChange(option.id)}
+                    >
+                      <span className="layout-option-icon" aria-hidden="true">
+                        <OptionIcon size={20} />
+                      </span>
+                      <span>
+                        <strong>{option.title}</strong>
+                        <small>{option.summary}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="layout-note">
+                Preference stays on this device{mode === "cloud" ? " for your signed-in account" : ""}.
+                It does not sync to teammates.
+              </p>
+            </div>
+          </section>
+        </div>
       )}
 
-      <section className="settings-card">
-        <div className="settings-icon"><Target size={22} /></div>
-        <div>
-          <p className="eyebrow">Guild code</p>
-          <h3>What earns renown</h3>
-          <ul>
-            <li>Shipping meaningful engineering tickets earns gold equal to effort</li>
-            <li>Completed quests advance your private guild rank</li>
-            <li>The release chronicle preserves the definition of value</li>
-            <li>There are no penalties, broken streaks, or public rankings</li>
-          </ul>
-        </div>
-      </section>
+      {settingsTab === "progress" && (
+        <div
+          className="settings-panel"
+          role="tabpanel"
+          id="settings-panel-progress"
+          aria-labelledby="settings-tab-progress"
+        >
+          <section className="settings-card">
+            <div className="settings-icon"><Award size={22} /></div>
+            <div>
+              <p className="eyebrow">{calm ? "Milestones" : "Private renown"}</p>
+              <h3>
+                {earnedCount === 0
+                  ? "Badges unlock as you finish work"
+                  : `${earnedCount} of ${badges.length} badges earned`}
+              </h3>
+              <p>
+                Quiet recognition for completed tasks and levels — private to you,
+                with no streaks, leaderboards, or penalties.
+              </p>
+              <ul className="badge-grid">
+                {badges.map((badge) => (
+                  <li
+                    key={badge.id}
+                    className={badge.earned ? "badge-tile is-earned" : "badge-tile"}
+                  >
+                    <span className="badge-glyph" aria-hidden="true">
+                      {badge.earned ? <Award size={18} /> : <Target size={18} />}
+                    </span>
+                    <div>
+                      <strong>{badge.title}</strong>
+                      <small>{badge.description}</small>
+                      {badge.progress && !badge.earned && (
+                        <span className="badge-progress">
+                          {badge.progress.current} / {badge.progress.target}
+                        </span>
+                      )}
+                      {badge.earned && <span className="badge-earned-label">Earned</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
 
-      {mode === "demo" && (
-        <section className="reset-card">
-          <div><p className="eyebrow">Demo controls</p><h3>Restore the sample campaign</h3><p>This replaces disposable demo data in this browser only. No signed-in workspace is changed.</p></div>
-          <button className="button button--danger" onClick={onReset}><RotateCcw size={16} /> Restore demo sample</button>
-        </section>
+          <section className="settings-card">
+            <div className="settings-icon"><Target size={22} /></div>
+            <div>
+              <p className="eyebrow">{calm ? "How progress works" : "Guild code"}</p>
+              <h3>{calm ? "What counts as progress" : "What earns renown"}</h3>
+              <ul>
+                <li>Finishing meaningful tickets earns effort points equal to their weight</li>
+                <li>Completed work advances your private level</li>
+                <li>The completed-work view keeps a clear record of value shipped</li>
+                <li>There are no penalties, broken streaks, or public rankings</li>
+              </ul>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );
@@ -2251,10 +2451,10 @@ function EditTaskDialog({
           <label className="field">
             <span>Province</span>
             <select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}>
-              <option value="ready">Quest Log</option>
-              <option value="moving">In Forge</option>
-              <option value="paused">Camped</option>
-              <option value="done">Shipped</option>
+              <option value="ready">Ready (Quest Log)</option>
+              <option value="moving">In progress (In Forge)</option>
+              <option value="paused">Paused (Camped)</option>
+              <option value="done">Done (Shipped)</option>
             </select>
           </label>
         </div>
