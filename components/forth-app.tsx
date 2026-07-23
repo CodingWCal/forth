@@ -63,12 +63,20 @@ import {
   workspaceReducer,
   type DueSoonEntry,
 } from "@/lib/workspace";
+import {
+  resolveCloudSyncPhase,
+  shouldAttemptLocalRetry,
+  syncBadgeLabel,
+  syncFailureCopy,
+  syncStampLabel,
+  type CloudSyncPhase,
+} from "@/lib/sync-state";
 
 type View = "today" | "board" | "proof" | "settings";
 
 const DUE_PANEL_LIMIT = 6;
 
-type SyncState = "demo" | "syncing" | "synced" | "error";
+type SyncState = CloudSyncPhase;
 
 type ForthAppBaseProps = {
   initialState: WorkspaceState;
@@ -160,6 +168,9 @@ export function ForthApp({
   const [persistentSyncError, setPersistentSyncError] = useState("");
   const [demoStorageWarning, setDemoStorageWarning] = useState(initialDemoStorageWarning);
   const [transitionBusy, setTransitionBusy] = useState(false);
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [localDirty, setLocalDirty] = useState(false);
   const cloudReadyRef = useRef(false);
   const hasValidatedSnapshotRef = useRef(mode === "demo");
   const latestStateRef = useRef(state);
@@ -172,6 +183,30 @@ export function ForthApp({
   const pendingSaveCountRef = useRef(0);
   const transitionBusyRef = useRef(false);
   latestStateRef.current = state;
+
+  useEffect(() => {
+    const markOnline = () => {
+      setOnline(true);
+      if (mode === "cloud" && (dirtyRef.current || pendingSaveCountRef.current > 0 || saveFailed)) {
+        setPersistentSyncError(syncFailureCopy({ online: true, kind: "save" }));
+        setSyncState("retry-required");
+      }
+    };
+    const markOffline = () => {
+      setOnline(false);
+      if (mode === "cloud") {
+        setSyncState("offline");
+        setPersistentSyncError(syncFailureCopy({ online: false, kind: "save" }));
+      }
+    };
+    window.addEventListener("online", markOnline);
+    window.addEventListener("offline", markOffline);
+    return () => {
+      window.removeEventListener("online", markOnline);
+      window.removeEventListener("offline", markOffline);
+    };
+  }, [mode, saveFailed]);
+
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const campaignDialogRef = useRef<HTMLDialogElement>(null);
@@ -201,15 +236,32 @@ export function ForthApp({
       await saveAttempt;
       if (savedRevisionRef.current >= revisionRef.current && pendingSaveCountRef.current <= 1) {
         dirtyRef.current = false;
+        setLocalDirty(false);
+        setSaveFailed(false);
         setPersistentSyncError("");
-        setSyncState("synced");
+        setSyncState(resolveCloudSyncPhase({
+          mode: "cloud",
+          online: typeof navigator === "undefined" ? true : navigator.onLine,
+          syncing: false,
+          dirty: false,
+          saveFailed: false,
+        }));
       }
       return true;
     } catch {
-      setPersistentSyncError(
-        "Forth could not save your latest changes. Stay in this workspace and retry before switching or signing out.",
-      );
-      setSyncState("error");
+      setSaveFailed(true);
+      setLocalDirty(true);
+      setPersistentSyncError(syncFailureCopy({
+        online: typeof navigator === "undefined" ? true : navigator.onLine,
+        kind: "save",
+      }));
+      setSyncState(resolveCloudSyncPhase({
+        mode: "cloud",
+        online: typeof navigator === "undefined" ? true : navigator.onLine,
+        syncing: false,
+        dirty: true,
+        saveFailed: true,
+      }));
       return false;
     } finally {
       pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1);
@@ -224,10 +276,12 @@ export function ForthApp({
     if (mode !== "cloud") return true;
     if (!dirtyRef.current && pendingSaveCountRef.current === 0) return true;
     if (!activeWorkspaceId || !hasValidatedSnapshotRef.current) {
-      setPersistentSyncError(
-        "Forth has not confirmed this cloud workspace yet. No navigation occurred; wait for cloud loading to finish and retry.",
-      );
-      setSyncState("error");
+      setSaveFailed(true);
+      setPersistentSyncError(syncFailureCopy({
+        online: typeof navigator === "undefined" ? true : navigator.onLine,
+        kind: "validate",
+      }));
+      setSyncState("retry-required");
       return false;
     }
 
@@ -249,6 +303,8 @@ export function ForthApp({
     }
 
     dirtyRef.current = false;
+    setLocalDirty(false);
+    setSaveFailed(false);
     setPersistentSyncError("");
     setSyncState("synced");
     return true;
@@ -365,17 +421,21 @@ export function ForthApp({
         }
       },
       () => {
-        setPersistentSyncError(
-          hasValidatedSnapshotRef.current
-            ? "Live cloud updates were interrupted. Your visible workspace remains in place; retry saving before leaving it."
-            : "Forth could not validate this cloud workspace. No tickets can be edited until the connection succeeds.",
-        );
-        setSyncState("error");
+        setSaveFailed(true);
+        setPersistentSyncError(syncFailureCopy({
+          online: typeof navigator === "undefined" ? true : navigator.onLine,
+          kind: hasValidatedSnapshotRef.current ? "watch" : "validate",
+        }));
+        setSyncState("retry-required");
       },
     ) ?? undefined;
     if (!unsubscribe) {
-      setPersistentSyncError("Forth could not start cloud sync for this workspace. No tickets can be edited.");
-      setSyncState("error");
+      setSaveFailed(true);
+      setPersistentSyncError(syncFailureCopy({
+        online: typeof navigator === "undefined" ? true : navigator.onLine,
+        kind: "validate",
+      }));
+      setSyncState("retry-required");
     }
     return () => {
       cloudReadyRef.current = false;
@@ -392,7 +452,8 @@ export function ForthApp({
 
     revisionRef.current += 1;
     dirtyRef.current = true;
-    setSyncState("syncing");
+    setLocalDirty(true);
+    setSyncState(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "syncing");
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
@@ -617,7 +678,8 @@ export function ForthApp({
     try {
       await runDurableTransition(() => onOpenWorkspace(workspaceId));
     } catch (error) {
-      setSyncState("error");
+      setSaveFailed(true);
+      setSyncState("retry-required");
       announce(safeWorkspaceActionError(error, "The selected guild could not be opened. Your current workspace remains active."));
     }
   }
@@ -626,21 +688,32 @@ export function ForthApp({
     try {
       await runDurableTransition(onExit);
     } catch {
-      setPersistentSyncError("Forth could not finish leaving this workspace. Your saved cloud data was not changed; try again.");
-      setSyncState("error");
+      setSaveFailed(true);
+      setPersistentSyncError(syncFailureCopy({ online, kind: "leave" }));
+      setSyncState("retry-required");
     }
   }
 
   async function retryCloudSync() {
-    if (dirtyRef.current || pendingSaveCountRef.current > 0) {
-      await flushCloudSave();
+    if (!online) {
+      setPersistentSyncError(syncFailureCopy({ online: false, kind: "save" }));
+      setSyncState("offline");
       return;
     }
-    window.location.reload();
+    // Always attempt to push the latest local snapshot first. Reload only when
+    // there is nothing pending locally and the live listener still needs a fresh start.
+    dirtyRef.current = true;
+    setLocalDirty(true);
+    setSaveFailed(false);
+    const saved = await flushCloudSave();
+    if (saved) return;
+    if (!shouldAttemptLocalRetry({ dirty: dirtyRef.current, pendingSaves: pendingSaveCountRef.current })) {
+      window.location.reload();
+    }
   }
 
   if (mode === "cloud" && !cloudSnapshotReady) {
-    const failed = syncState === "error";
+    const failed = syncState === "retry-required" || syncState === "offline";
     return (
       <div className="entry-page">
         <main className="entry-status-page" aria-labelledby="cloud-validation-title" aria-busy={!failed}>
@@ -648,17 +721,22 @@ export function ForthApp({
             {failed ? <LockKeyhole aria-hidden="true" size={28} /> : <span aria-hidden="true">Loading</span>}
             <p className="eyebrow">Cloud workspace</p>
             <h1 id="cloud-validation-title">
-              {failed ? "Editing is safely paused." : "Validating your workspaceâ€¦"}
+              {failed ? "Editing is safely paused." : "Validating your workspace…"}
             </h1>
             <p>
               {failed
-                ? persistentSyncError || "Forth could not validate this workspace. No tickets can be edited."
+                ? persistentSyncError || syncFailureCopy({ online, kind: "validate" })
                 : "Forth is waiting for the first verified Firestore snapshot. Tickets stay read-only until it arrives."}
             </p>
             {failed && (
-              <button className="button button--quiet" onClick={() => void exitAfterSave()}>
-                Sign out safely
-              </button>
+              <div className="entry-actions">
+                <button className="button button--primary" onClick={() => void retryCloudSync()}>
+                  Retry cloud sync
+                </button>
+                <button className="button button--quiet" onClick={() => void exitAfterSave()}>
+                  Sign out safely
+                </button>
+              </div>
             )}
           </div>
         </main>
@@ -927,15 +1005,10 @@ export function ForthApp({
 }
 
 function EnvironmentBadge({ mode, syncState }: { mode: "demo" | "cloud"; syncState: SyncState }) {
-  const label = mode === "demo"
-    ? "Disposable demo - this device only"
-    : syncState === "synced"
-      ? "Cloud workspace - saved"
-      : syncState === "syncing"
-        ? "Cloud workspace - syncing"
-        : "Cloud workspace - sync error";
+  const label = syncBadgeLabel({ mode, phase: syncState });
+  const connected = mode === "cloud" && (syncState === "synced" || syncState === "syncing" || syncState === "local-only");
   return (
-    <span className={mode === "cloud" && syncState !== "error" ? "env-badge is-connected" : "env-badge"}>
+    <span className={connected ? "env-badge is-connected" : "env-badge"}>
       <span aria-hidden="true" /> {label}
     </span>
   );
@@ -1596,13 +1669,8 @@ function SettingsView({
   onExit: () => Promise<void>;
   onShowGuide: () => void;
 }) {
-  const syncLabel = syncState === "synced"
-    ? "Saved to cloud"
-    : syncState === "syncing"
-      ? "Syncing with cloud"
-      : syncState === "error"
-        ? "Cloud sync error"
-        : "Demo on this device";
+  const syncLabel = mode === "demo" ? "Demo on this device" : syncStampLabel(syncState);
+  const syncReady = mode === "cloud" && syncState === "synced";
 
   return (
     <div className="settings-view">
@@ -1620,12 +1688,12 @@ function SettingsView({
         <div>
           <p className="eyebrow">Save ward</p>
           <h3>{mode === "cloud" ? `Signed in as ${user?.displayName ?? user?.email ?? "your account"}` : "Disposable local demo"}</h3>
-          <p>{mode === "cloud" ? `${syncLabel}. Forth saves this workspace only to its authorized Firestore record.` : "Sample tickets persist on this device only until you reset or clear the demo. They are never uploaded to Firebase."}</p>
+          <p>{mode === "cloud" ? `${syncBadgeLabel({ mode, phase: syncState })}. Forth saves this workspace only to its authorized Firestore record.` : "Sample tickets persist on this device only until you reset or clear the demo. They are never uploaded to Firebase."}</p>
           <button className="button button--primary" onClick={() => void onExit()}>
             {mode === "cloud" ? "Sign out" : "Exit demo"}
           </button>
         </div>
-        <span className={mode === "cloud" && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{syncLabel}</span>
+        <span className={syncReady ? "status-stamp is-ready" : "status-stamp"}>{syncLabel}</span>
       </section>
 
       {mode === "cloud" && user && (
