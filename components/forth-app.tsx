@@ -45,6 +45,7 @@ import {
   type PendingGuildInvite,
   saveWorkspace,
   watchWorkspace,
+  WorkspaceConflictError,
 } from "@/lib/firebase/workspace";
 import { createCleanWorkspace, DEMO_STORAGE_KEY } from "@/lib/entry";
 import { createSeedWorkspace } from "@/lib/seed";
@@ -164,6 +165,8 @@ export function ForthApp({
   const hasValidatedSnapshotRef = useRef(mode === "demo");
   const latestStateRef = useRef(state);
   const remoteStateRef = useRef<WorkspaceState | null>(null);
+  const remoteRevisionRef = useRef(0);
+  const cloudConflictRef = useRef(false);
   const dirtyRef = useRef(false);
   const revisionRef = useRef(0);
   const savedRevisionRef = useRef(0);
@@ -192,7 +195,12 @@ export function ForthApp({
     const saveAttempt = saveChainRef.current
       .catch(() => undefined)
       .then(async () => {
-        await saveWorkspace(activeWorkspaceId, snapshot);
+        const nextRemoteRevision = await saveWorkspace(
+          activeWorkspaceId,
+          snapshot,
+          remoteRevisionRef.current,
+        );
+        remoteRevisionRef.current = nextRemoteRevision;
         savedRevisionRef.current = Math.max(savedRevisionRef.current, targetRevision);
       });
     saveChainRef.current = saveAttempt;
@@ -205,9 +213,12 @@ export function ForthApp({
         setSyncState("synced");
       }
       return true;
-    } catch {
+    } catch (error) {
+      if (error instanceof WorkspaceConflictError) cloudConflictRef.current = true;
       setPersistentSyncError(
-        "Forth could not save your latest changes. Stay in this workspace and retry before switching or signing out.",
+        error instanceof WorkspaceConflictError
+          ? "This guild was changed somewhere else while you were editing. Reload the workspace to reconcile the latest version before making more changes."
+          : "Forth could not save your latest changes. Stay in this workspace and retry before switching or signing out.",
       );
       setSyncState("error");
       return false;
@@ -341,7 +352,9 @@ export function ForthApp({
     savedRevisionRef.current = 0;
     const unsubscribe = watchWorkspace(
       activeWorkspaceId,
-      (cloudState) => {
+      (cloudSnapshot) => {
+        const cloudState = cloudSnapshot.state;
+        remoteRevisionRef.current = cloudSnapshot.revision;
         if (hasValidatedSnapshotRef.current && (dirtyRef.current || pendingSaveCountRef.current > 0)) {
           // Preserve local edits while their ordered save is pending. The
           // listener will receive the committed state after Firestore accepts
@@ -632,6 +645,10 @@ export function ForthApp({
   }
 
   async function retryCloudSync() {
+    if (cloudConflictRef.current) {
+      window.location.reload();
+      return;
+    }
     if (dirtyRef.current || pendingSaveCountRef.current > 0) {
       await flushCloudSave();
       return;

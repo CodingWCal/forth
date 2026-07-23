@@ -14,6 +14,7 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -352,24 +353,63 @@ export async function loadWorkspaceState(workspaceId: string): Promise<Workspace
   return parseStoredWorkspace(JSON.stringify(snapshot.data().state ?? null));
 }
 
+export type WorkspaceSnapshot = {
+  state: WorkspaceState;
+  revision: number;
+};
+
+export class WorkspaceConflictError extends Error {
+  constructor() {
+    super("This guild changed in another session. Reload before saving again.");
+    this.name = "WorkspaceConflictError";
+  }
+}
+
 export function watchWorkspace(
   workspaceId: string,
-  onState: (state: WorkspaceState) => void,
+  onState: (snapshot: WorkspaceSnapshot) => void,
   onError: (error: Error) => void,
 ): Unsubscribe | null {
   const services = getFirebaseServices();
   if (!services) return null;
   return onSnapshot(doc(services.db, "workspaces", workspaceId, "data", "current"), (snapshot) => {
-    const state = parseStoredWorkspace(JSON.stringify(snapshot.data()?.state ?? null));
-    if (state) onState(state);
+    const data = snapshot.data();
+    const state = parseStoredWorkspace(JSON.stringify(data?.state ?? null));
+    if (state) {
+      const revision = typeof data?.revision === "number" && Number.isInteger(data.revision)
+        ? data.revision
+        : 0;
+      onState({ state, revision });
+    }
     else onError(new Error("The cloud workspace contains missing or invalid ticket data."));
   }, onError);
 }
 
-export async function saveWorkspace(workspaceId: string, state: WorkspaceState) {
+export async function saveWorkspace(
+  workspaceId: string,
+  state: WorkspaceState,
+  expectedRevision: number,
+): Promise<number> {
   const services = requireServices();
-  await setDoc(doc(services.db, "workspaces", workspaceId, "data", "current"), {
-    state,
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
+  const workspaceRef = doc(services.db, "workspaces", workspaceId, "data", "current");
+
+  return runTransaction(services.db, async (transaction) => {
+    const snapshot = await transaction.get(workspaceRef);
+    const data = snapshot.data();
+    const currentRevision = typeof data?.revision === "number" && Number.isInteger(data.revision)
+      ? data.revision
+      : 0;
+
+    if (currentRevision !== expectedRevision) {
+      throw new WorkspaceConflictError();
+    }
+
+    const nextRevision = currentRevision + 1;
+    transaction.set(workspaceRef, {
+      state,
+      revision: nextRevision,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    return nextRevision;
+  });
 }
