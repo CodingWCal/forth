@@ -147,13 +147,14 @@ For account entry, enable the Google provider and the GitHub provider in Firebas
 pnpm lint          # ESLint
 pnpm typecheck     # strict TypeScript
 pnpm test          # reducer, selector, parser, and persistence-domain tests
+pnpm test:e2e      # auth-entry, keyboard, and responsive browser tests
 pnpm test:rules    # emulator-backed Firestore authorization tests
 pnpm build         # production Next.js build
 ```
 
 The rules command uses the Firebase Emulator Suite and may download `firebase-tools` through `npx` on its first run.
 
-Release QA also exercises Today, Realm Map, Chronicle, Guild Hall, ticket creation/editing/deletion, every status transition, WIP enforcement, refresh persistence, authentication/sync states, empty/error states, keyboard operation, reduced motion, and 375px/768px/1440px responsive layouts.
+Release QA also exercises Today, Realm Map, Chronicle, Guild Hall, ticket creation/editing/deletion, every status transition, WIP enforcement, refresh persistence, authentication/sync states, empty/error states, keyboard operation, reduced motion, and 320px/375px/768px/1440px responsive layouts.
 
 ## Deployment
 
