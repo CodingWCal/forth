@@ -35,7 +35,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-029 | Planned | Add an optional, accessible two-minute coach-mark tour after PR #21 lands; keep it separate so the verified static guide remains a reliable fallback. |
 | TICKET-030 | Planned quick fix | Keep the daily energy meter and note inside the provisions card at every supported viewport; screenshot evidence shows the grid item crossing beneath the campaign rail. |
 | TICKET-031 | Planned quick feature | After authentication, eligible Cursor Boston fellows can join the designated cohort guild from one explicit button without copying a guild code; authorization must be enforced beyond the client UI. |
-| TICKET-032 | Planned security patch | GitHub advisory GHSA-f88m-g3jw-g9cj, published 2026-07-21, flags transitive `sharp@0.34.5`; update to a compatible patched path and rerun image/build/deploy QA before the next production promotion. |
+| TICKET-032 | Implemented in draft PR [#23](https://github.com/CodingWCal/forth/pull/23); preview build passed | A root pnpm override resolves Next's transitive image dependency to `sharp@0.35.0`; audit, frozen install, runtime load, local image optimization, lint, types, unit, E2E, build, GitGuardian, and Vercel pass. Maintainer preview sprite smoke remains before merge. |
 
 ## External Contribution Intake
 

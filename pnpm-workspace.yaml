@@ -10,3 +10,5 @@ onlyBuiltDependencies:
   - "unrs-resolver"
 overrides:
   postcss: 8.5.10
+  # Next 16.2.10 still requests vulnerable sharp ^0.34.5; remove after upstream accepts >=0.35.
+  sharp: 0.35.0
