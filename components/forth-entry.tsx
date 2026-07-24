@@ -22,6 +22,16 @@ import {
   DEMO_STORAGE_KEY,
   selectPreferredWorkspace,
 } from "@/lib/entry";
+import {
+  getSeedFingerprint,
+  looksLikeEngineeringSeed,
+} from "@/lib/seed-detection";
+import {
+  hasMigrationDecision,
+  recordMigrationChoice,
+  type MigrationChoice,
+} from "@/lib/migration";
+import { createSeedWorkspace } from "@/lib/seed";
 import { hasFirebaseConfig } from "@/lib/firebase/config";
 import {
   acceptGuildInvite,
@@ -35,6 +45,7 @@ import {
   listPendingGuildInvites,
   loadWorkspaceState,
   type PendingGuildInvite,
+  saveWorkspace,
   signInWithProvider,
   signInWithRedirectProvider,
   signOutOfForth,
@@ -50,6 +61,7 @@ type EntryScreen =
   | "loading-workspaces"
   | "opening-workspace"
   | "onboarding"
+  | "migration-choice"
   | "workspace-error"
   | "cloud"
   | "demo";
@@ -94,6 +106,9 @@ export function ForthEntry() {
   const [inviteLoadState, setInviteLoadState] = useState<InviteLoadState>("loading");
   const [onboardingBusy, setOnboardingBusy] = useState(false);
   const [onboardingError, setOnboardingError] = useState("");
+  const [pendingMigration, setPendingMigration] = useState<CloudLaunch | null>(null);
+  const [migrationBusy, setMigrationBusy] = useState(false);
+  const [migrationError, setMigrationError] = useState("");
   const requestIdRef = useRef(0);
   const providerButtonRefs = useRef<Partial<Record<ForthAuthProvider, HTMLButtonElement | null>>>({});
 
@@ -142,12 +157,23 @@ export function ForthEntry() {
       // This preference is a convenience only. A blocked localStorage API must
       // never prevent an authenticated user from opening their cloud data.
       writeBrowserStorage(`forth.active-workspace.${nextUser.uid}`, selected.id);
-      setCloudLaunch({
+      const launch: CloudLaunch = {
         workspaceId: selected.id,
         guilds,
         state: workspaceSnapshot.state,
         revision: workspaceSnapshot.revision,
-      });
+      };
+      const seedFingerprint = getSeedFingerprint();
+      if (
+        looksLikeEngineeringSeed(workspaceSnapshot.state)
+        && !hasMigrationDecision(nextUser.uid, selected.id, seedFingerprint)
+      ) {
+        setPendingMigration(launch);
+        setMigrationError("");
+        setScreen("migration-choice");
+        return;
+      }
+      setCloudLaunch(launch);
       setScreen("cloud");
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
@@ -293,6 +319,108 @@ export function ForthEntry() {
     }
   }
 
+  async function finishMigrationLaunch(launch: CloudLaunch, choice: MigrationChoice) {
+    if (!user) return;
+    recordMigrationChoice({
+      userId: user.uid,
+      workspaceId: launch.workspaceId,
+      seedFingerprint: getSeedFingerprint(),
+      choice,
+    });
+    setPendingMigration(null);
+    setCloudLaunch(launch);
+    setScreen("cloud");
+  }
+
+  async function applyMigrationChoice(choice: MigrationChoice) {
+    if (!user || !pendingMigration || migrationBusy) return;
+    setMigrationBusy(true);
+    setMigrationError("");
+    try {
+      if (choice === "keep") {
+        await finishMigrationLaunch(pendingMigration, choice);
+        return;
+      }
+
+      const confirmMessage = choice === "replace-demo"
+        ? "Replace this workspace with the engineering demo sample? Your current tickets will be overwritten in cloud storage."
+        : "Start with an empty workspace? Your current tickets will be removed from cloud storage after you confirm the new campaign.";
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+
+      const nextState = choice === "replace-demo"
+        ? createSeedWorkspace()
+        : createCleanWorkspace({
+          campaignTitle: "My first campaign",
+          outcome: "Define the real outcome for this project.",
+          targetDate: new Date().toISOString().slice(0, 10),
+        });
+
+      const saved = await saveWorkspace(
+        pendingMigration.workspaceId,
+        pendingMigration.revision,
+        pendingMigration.state,
+        nextState,
+      );
+
+      await finishMigrationLaunch({
+        ...pendingMigration,
+        state: saved.state,
+        revision: saved.revision,
+      }, choice);
+    } catch (error) {
+      setMigrationError(safeEntryError(
+        error,
+        "Forth could not update your workspace. Your previous tickets were not changed. Try again.",
+      ));
+    } finally {
+      setMigrationBusy(false);
+    }
+  }
+
+  async function applyMigrationEmptyForm(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user || !pendingMigration || migrationBusy) return;
+    const data = new FormData(event.currentTarget);
+    const campaignTitle = String(data.get("campaignTitle") ?? "").trim();
+    const outcome = String(data.get("outcome") ?? "").trim();
+    const targetDate = String(data.get("targetDate") ?? "").trim();
+    if (!campaignTitle || !outcome || !targetDate) {
+      setMigrationError("Complete the campaign name, outcome, and target date.");
+      return;
+    }
+    if (!window.confirm(
+      "Start with this empty campaign? Your current sample tickets will be removed from cloud storage.",
+    )) {
+      return;
+    }
+
+    setMigrationBusy(true);
+    setMigrationError("");
+    try {
+      const nextState = createCleanWorkspace({ campaignTitle, outcome, targetDate });
+      const saved = await saveWorkspace(
+        pendingMigration.workspaceId,
+        pendingMigration.revision,
+        pendingMigration.state,
+        nextState,
+      );
+      await finishMigrationLaunch({
+        ...pendingMigration,
+        state: saved.state,
+        revision: saved.revision,
+      }, "start-empty");
+    } catch (error) {
+      setMigrationError(safeEntryError(
+        error,
+        "Forth could not replace your workspace. Your previous tickets were not changed. Try again.",
+      ));
+    } finally {
+      setMigrationBusy(false);
+    }
+  }
+
   if (screen === "demo" && demoState) {
     return (
       <ForthApp
@@ -317,7 +445,73 @@ export function ForthEntry() {
         activeWorkspaceId={cloudLaunch.workspaceId}
         onOpenWorkspace={(workspaceId) => openAuthenticatedUser(user, workspaceId)}
         onExit={leaveWorkspace}
+        showsSampleDataBanner={looksLikeEngineeringSeed(cloudLaunch.state)}
       />
+    );
+  }
+
+  if (screen === "migration-choice" && user && pendingMigration) {
+    return (
+      <EntryFrame>
+        <main className="entry-shell entry-shell--onboarding" aria-labelledby="migration-title">
+          <section className="entry-onboarding entry-migration">
+            <p className="eyebrow">Sample data review</p>
+            <h1 id="migration-title">This workspace still contains earlier sample tickets.</h1>
+            <p className="entry-lede">
+              Forth found engineering demo content in your cloud workspace. Choose how to proceed.
+              Forth will never replace your data without an explicit choice.
+            </p>
+
+            {migrationError && (
+              <div className="entry-error" role="alert">
+                <AlertTriangle aria-hidden="true" size={20} />
+                <p>{migrationError}</p>
+              </div>
+            )}
+
+            <div className="entry-migration-actions">
+              <button
+                className="button button--primary entry-primary-action"
+                disabled={migrationBusy}
+                onClick={() => void applyMigrationChoice("keep")}
+              >
+                Keep my current tickets
+              </button>
+              <button
+                className="button button--quiet"
+                disabled={migrationBusy}
+                onClick={() => void applyMigrationChoice("replace-demo")}
+              >
+                Replace with engineering demo
+              </button>
+            </div>
+
+            <form className="entry-workspace-form entry-migration-empty" onSubmit={applyMigrationEmptyForm}>
+              <p className="eyebrow">Or start empty</p>
+              <h2>Begin with one real campaign and zero tickets</h2>
+              <label className="field">
+                <span>Campaign name</span>
+                <input name="campaignTitle" required maxLength={80} placeholder="Ship cohort ticketing" />
+              </label>
+              <label className="field">
+                <span>Campaign outcome</span>
+                <textarea name="outcome" rows={3} required maxLength={240} placeholder="What should be true when this project succeeds?" />
+              </label>
+              <label className="field">
+                <span>Target date</span>
+                <input name="targetDate" type="date" required />
+              </label>
+              <button className="button button--quiet" disabled={migrationBusy}>
+                {migrationBusy ? "Updating workspace…" : "Start empty workspace"}
+              </button>
+            </form>
+
+            <button className="entry-text-action" onClick={() => void leaveWorkspace()}>
+              <LogOut aria-hidden="true" size={16} /> Sign out without changing data
+            </button>
+          </section>
+        </main>
+      </EntryFrame>
     );
   }
 

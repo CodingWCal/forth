@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Bookmark,
@@ -31,6 +32,7 @@ import { type DragEvent, FormEvent, useCallback, useEffect, useMemo, useReducer,
 import Image from "next/image";
 import { BrandMark } from "@/components/brand-mark";
 import { readBrowserStorage, writeBrowserStorage } from "@/lib/browser-storage";
+import { clearMigrationRecord } from "@/lib/migration";
 import type { User } from "firebase/auth";
 import {
   acceptGuildInvite,
@@ -77,6 +79,7 @@ type SyncState = "demo" | "syncing" | "synced" | "conflict" | "error";
 type ForthAppBaseProps = {
   initialState: WorkspaceState;
   onExit: () => Promise<void>;
+  showsSampleDataBanner?: boolean;
 };
 
 type ForthAppProps = ForthAppBaseProps & (
@@ -152,6 +155,7 @@ export function ForthApp({
   activeWorkspaceId,
   onOpenWorkspace,
   onExit,
+  showsSampleDataBanner = false,
 }: ForthAppProps) {
   const [state, dispatch] = useReducer(workspaceReducer, initialState);
   const [displayDate, setDisplayDate] = useState(() => new Date());
@@ -488,6 +492,13 @@ export function ForthApp({
   function markWelcomeSeen() {
     writeBrowserStorage(welcomeSeenKey, "seen");
   }
+
+  async function reviewSampleData() {
+    if (mode !== "cloud" || !cloudUser || !activeWorkspaceId || !onOpenWorkspace) return;
+    clearMigrationRecord(cloudUser.uid, activeWorkspaceId);
+    await onOpenWorkspace(activeWorkspaceId);
+  }
+
   async function refreshPendingInvites(user: User) {
     setInviteStatus("loading");
     try {
@@ -823,6 +834,13 @@ export function ForthApp({
           </div>
         </header>
 
+        {mode === "cloud" && showsSampleDataBanner && (
+          <div className="sample-data-banner" role="status">
+            <AlertTriangle aria-hidden="true" size={18} />
+            <p>This workspace still contains earlier engineering sample tickets. You chose to keep them.</p>
+          </div>
+        )}
+
         {persistentSyncError && (
           <div className="entry-error" role="alert">
             <LockKeyhole aria-hidden="true" size={20} />
@@ -910,6 +928,7 @@ export function ForthApp({
             onOpenCampaign={openCampaignDialog}
             onExit={exitAfterSave}
             onShowGuide={openWelcome}
+            onReviewSampleData={showsSampleDataBanner ? () => void reviewSampleData() : undefined}
           />
         )}
       </main>
@@ -1612,6 +1631,7 @@ function SettingsView({
   onOpenCampaign,
   onExit,
   onShowGuide,
+  onReviewSampleData,
 }: {
   mode: "demo" | "cloud";
   onReset: () => void;
@@ -1634,6 +1654,7 @@ function SettingsView({
   onOpenCampaign: () => void;
   onExit: () => Promise<void>;
   onShowGuide: () => void;
+  onReviewSampleData?: () => void;
 }) {
   const syncLabel = syncState === "synced"
     ? "Saved to cloud"
@@ -1654,6 +1675,11 @@ function SettingsView({
         <button type="button" className="button button--quiet" onClick={onShowGuide} aria-haspopup="dialog">
           <Scroll size={15} /> How Forth works
         </button>
+        {onReviewSampleData && (
+          <button type="button" className="button button--quiet" onClick={onReviewSampleData}>
+            <Scroll size={15} /> Review sample data choice
+          </button>
+        )}
       </section>
 
       <section className="settings-card">
