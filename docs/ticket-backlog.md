@@ -7,9 +7,9 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 ## Product Intent Snapshot
 
 - Plain English: Forth turns a small engineering team’s real ticket queue into a calm fantasy quest board. It rewards finishing meaningful work without leaderboards, punishment, or streak anxiety.
-- Engineering framing: Next.js 16/React 19 with a strict TypeScript reducer domain, localStorage fallback, and an authenticated Firestore workspace document synchronized through a client adapter.
+- Engineering framing: Next.js 16/React 19 with a strict TypeScript reducer domain, an explicit demo-only localStorage adapter, and authenticated Firestore persistence. TICKET-001's isolated implementation normalizes projects/tasks and adds revision-checked transactions; production remains on the prior schema until coordinated release approval.
 - Brand/design guardrails: Preserve Iron & Parchment: SNES-era medieval guild framing, warm parchment, near-black green, moss, oxblood, amber, square pixel edges, serif display type, restrained sprite motion, and literal engineering meaning beneath themed labels.
-- Assumptions: The current target is a small private beta. It is not yet a conflict-safe, multi-team production SaaS.
+- Assumptions: The current target is a small private beta. Conflict-safe persistence is implemented in an isolated branch but still requires review, staging migration validation, and coordinated rules/application promotion before production can be called conflict-safe.
 
 ## Verification Summary
 
@@ -25,7 +25,8 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 
 | Ticket | Status | Note |
 |---|---|---|
-| TICKET-001–006 | Planned | Still required for production cohort use; TICKET-006 is partially unblocked by the invitation work. |
+| TICKET-001 | Draft PR [#24](https://github.com/CodingWCal/forth/pull/24) | Normalized records, revision-checked transactions, stale-write recovery UI, legacy migration recovery point, and emulator races are implemented. Automated gates pass; manual authenticated two-tab staging validation and a coordinated rules/application release remain required. |
+| TICKET-002–006 | Planned | Still required for production cohort use; TICKET-006 is partially unblocked by the invitation work. |
 | TICKET-007 | Implemented on `main` | Pending invitations exist in code and rules; still needs live two-account E2E verification. |
 | TICKET-008 | Implemented on `agent/invite-lifecycle` | Cancel/decline/expiry and rule tests pass; not yet released to production. |
 | TICKET-009 | Planned | Optional email delivery must remain downstream of a reliable in-app invitation flow. |
@@ -36,7 +37,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-029 | Planned | Add an optional, accessible two-minute coach-mark tour after PR #21 lands; keep it separate so the verified static guide remains a reliable fallback. |
 | TICKET-030 | Implemented within draft PR [#22](https://github.com/CodingWCal/forth/pull/22); preview pending | Capacity grid children can shrink, the meter stacks before collision, copy wraps safely, and Playwright compares the energy region bounds with its card at 320/375/768/1440px. |
 | TICKET-031 | Planned quick feature | After authentication, eligible Cursor Boston fellows can join the designated cohort guild from one explicit button without copying a guild code; authorization must be enforced beyond the client UI. |
-| TICKET-032 | Planned security patch | GitHub advisory GHSA-f88m-g3jw-g9cj, published 2026-07-21, flags transitive `sharp@0.34.5`; update to a compatible patched path and rerun image/build/deploy QA before the next production promotion. |
+| TICKET-032 | Implemented in draft PR [#23](https://github.com/CodingWCal/forth/pull/23); preview build passed | A root pnpm override resolves Next's transitive image dependency to `sharp@0.35.0`; audit, frozen install, runtime load, local image optimization, lint, types, unit, E2E, build, GitGuardian, and Vercel pass. Maintainer preview sprite smoke remains before merge. |
 
 ## External Contribution Intake
 
@@ -71,6 +72,7 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 ### TICKET-001: Prevent last-write-wins data loss during concurrent cloud edits
 
 - Priority: P0 Critical
+- Status: Draft PR [#24](https://github.com/CodingWCal/forth/pull/24); automated gates pass, with authenticated staging migration smoke testing and coordinated release approval still required.
 - Type: Architecture/Reliability
 - Area: `lib/firebase/workspace.ts`, Firestore workspace data model
 - Effort: L

@@ -40,8 +40,10 @@ import {
   type GuildInviteSummary,
   type GuildWorkspace,
   inviteGuildMember,
+  isWorkspaceConflictError,
   listGuildInvites,
   listPendingGuildInvites,
+  loadWorkspaceState,
   type PendingGuildInvite,
   saveWorkspace,
   watchWorkspace,
@@ -68,7 +70,7 @@ type View = "today" | "board" | "proof" | "settings";
 
 const DUE_PANEL_LIMIT = 6;
 
-type SyncState = "demo" | "syncing" | "synced" | "error";
+type SyncState = "demo" | "syncing" | "synced" | "conflict" | "error";
 
 type ForthAppBaseProps = {
   initialState: WorkspaceState;
@@ -79,6 +81,7 @@ type ForthAppProps = ForthAppBaseProps & (
   | {
     mode: "demo";
     initialDemoStorageWarning?: string;
+    initialCloudRevision?: never;
     cloudUser?: never;
     initialGuilds?: never;
     activeWorkspaceId?: never;
@@ -87,6 +90,7 @@ type ForthAppProps = ForthAppBaseProps & (
   | {
     mode: "cloud";
     initialDemoStorageWarning?: never;
+    initialCloudRevision: number;
     cloudUser: User;
     initialGuilds: GuildWorkspace[];
     activeWorkspaceId: string;
@@ -139,6 +143,7 @@ function safeWorkspaceActionError(error: unknown, fallback: string) {
 export function ForthApp({
   mode,
   initialState,
+  initialCloudRevision = 0,
   initialDemoStorageWarning = "",
   cloudUser,
   initialGuilds = [],
@@ -164,6 +169,7 @@ export function ForthApp({
   const hasValidatedSnapshotRef = useRef(mode === "demo");
   const latestStateRef = useRef(state);
   const remoteStateRef = useRef<WorkspaceState | null>(null);
+  const cloudRevisionRef = useRef(initialCloudRevision);
   const dirtyRef = useRef(false);
   const revisionRef = useRef(0);
   const savedRevisionRef = useRef(0);
@@ -192,7 +198,16 @@ export function ForthApp({
     const saveAttempt = saveChainRef.current
       .catch(() => undefined)
       .then(async () => {
-        await saveWorkspace(activeWorkspaceId, snapshot);
+        const baseState = remoteStateRef.current;
+        if (!baseState) throw new Error("Forth has not established a safe cloud-save baseline yet.");
+        const saved = await saveWorkspace(
+          activeWorkspaceId,
+          cloudRevisionRef.current,
+          baseState,
+          snapshot,
+        );
+        remoteStateRef.current = snapshot;
+        cloudRevisionRef.current = saved.revision;
         savedRevisionRef.current = Math.max(savedRevisionRef.current, targetRevision);
       });
     saveChainRef.current = saveAttempt;
@@ -205,11 +220,21 @@ export function ForthApp({
         setSyncState("synced");
       }
       return true;
-    } catch {
-      setPersistentSyncError(
-        "Forth could not save your latest changes. Stay in this workspace and retry before switching or signing out.",
-      );
-      setSyncState("error");
+    } catch (error) {
+      if (isWorkspaceConflictError(error)) {
+        setPersistentSyncError(
+          "Another teammate saved first. Your visible edits are still here, but Forth stopped this stale save instead of overwriting their work. Load the latest cloud version before editing again.",
+        );
+        setSyncState("conflict");
+      } else {
+        const safeSaveMessage = error instanceof Error
+          && (error.message.startsWith("This legacy workspace is too large")
+            || error.message.startsWith("This change is too large"))
+          ? error.message
+          : "Forth could not save your latest changes. Stay in this workspace and retry before switching or signing out.";
+        setPersistentSyncError(safeSaveMessage);
+        setSyncState("error");
+      }
       return false;
     } finally {
       pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1);
@@ -339,17 +364,19 @@ export function ForthApp({
     dirtyRef.current = false;
     revisionRef.current = 0;
     savedRevisionRef.current = 0;
+    cloudRevisionRef.current = initialCloudRevision;
     const unsubscribe = watchWorkspace(
       activeWorkspaceId,
-      (cloudState) => {
+      (cloudSnapshot) => {
         if (hasValidatedSnapshotRef.current && (dirtyRef.current || pendingSaveCountRef.current > 0)) {
           // Preserve local edits while their ordered save is pending. The
           // listener will receive the committed state after Firestore accepts
           // it; applying an older snapshot here could erase visible work.
           return;
         }
-        remoteStateRef.current = cloudState;
-        dispatch({ type: "RESET", state: cloudState });
+        remoteStateRef.current = cloudSnapshot.state;
+        cloudRevisionRef.current = cloudSnapshot.revision;
+        dispatch({ type: "RESET", state: cloudSnapshot.state });
         if (!hasValidatedSnapshotRef.current) {
           window.requestAnimationFrame(() => {
             hasValidatedSnapshotRef.current = true;
@@ -381,7 +408,7 @@ export function ForthApp({
       cloudReadyRef.current = false;
       unsubscribe?.();
     };
-  }, [activeWorkspaceId, cloudUser, hydrated, mode]);
+  }, [activeWorkspaceId, cloudUser, hydrated, initialCloudRevision, mode]);
 
   useEffect(() => {
     if (mode !== "cloud" || !cloudUser || !activeWorkspaceId || !cloudReadyRef.current) return;
@@ -639,6 +666,33 @@ export function ForthApp({
     window.location.reload();
   }
 
+  async function loadLatestAfterConflict() {
+    if (mode !== "cloud" || !activeWorkspaceId) return;
+    if (!window.confirm(
+      "Load the latest cloud version? Your unsaved visible edits from this tab will be discarded so you can continue from your teammate's saved work.",
+    )) return;
+
+    setSyncState("syncing");
+    try {
+      const latest = await loadWorkspaceState(activeWorkspaceId);
+      if (!latest) throw new Error("The latest cloud workspace could not be read.");
+      remoteStateRef.current = latest.state;
+      cloudRevisionRef.current = latest.revision;
+      dirtyRef.current = false;
+      revisionRef.current = 0;
+      savedRevisionRef.current = 0;
+      dispatch({ type: "RESET", state: latest.state });
+      setPersistentSyncError("");
+      setSyncState("synced");
+      announce("Latest cloud workspace loaded. You can edit again.");
+    } catch {
+      setPersistentSyncError(
+        "Forth could not load the latest cloud version. Your visible edits remain in this tab; try again before leaving.",
+      );
+      setSyncState("conflict");
+    }
+  }
+
   if (mode === "cloud" && !cloudSnapshotReady) {
     const failed = syncState === "error";
     return (
@@ -758,10 +812,13 @@ export function ForthApp({
           <div className="entry-error" role="alert">
             <LockKeyhole aria-hidden="true" size={20} />
             <div>
-              <strong>Cloud save needs attention</strong>
+              <strong>{syncState === "conflict" ? "Concurrent edit stopped safely" : "Cloud save needs attention"}</strong>
               <p>{persistentSyncError}</p>
-              <button className="entry-text-action" onClick={() => void retryCloudSync()}>
-                Retry cloud sync
+              <button
+                className="entry-text-action"
+                onClick={() => void (syncState === "conflict" ? loadLatestAfterConflict() : retryCloudSync())}
+              >
+                {syncState === "conflict" ? "Load latest cloud version" : "Retry cloud sync"}
               </button>
             </div>
           </div>
@@ -934,9 +991,11 @@ function EnvironmentBadge({ mode, syncState }: { mode: "demo" | "cloud"; syncSta
       ? "Cloud workspace - saved"
       : syncState === "syncing"
         ? "Cloud workspace - syncing"
+        : syncState === "conflict"
+          ? "Cloud workspace - newer teammate edit available"
         : "Cloud workspace - sync error";
   return (
-    <span className={mode === "cloud" && syncState !== "error" ? "env-badge is-connected" : "env-badge"}>
+    <span className={mode === "cloud" && syncState === "synced" ? "env-badge is-connected" : "env-badge"}>
       <span aria-hidden="true" /> {label}
     </span>
   );
@@ -1562,6 +1621,8 @@ function SettingsView({
     ? "Saved to cloud"
     : syncState === "syncing"
       ? "Syncing with cloud"
+      : syncState === "conflict"
+        ? "Newer cloud version available"
       : syncState === "error"
         ? "Cloud sync error"
         : "Demo on this device";

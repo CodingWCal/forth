@@ -46,16 +46,36 @@ Auth/entry state machine
      -> demo-only localStorage OR authenticated Firestore workspace
 ```
 
-The initial Firestore shape is intentionally simple:
+The private-beta Firestore shape keeps the reducer contract intact while
+storing collaborative records separately:
 
 ```text
-workspaces/{ownerUid}
-  members/{ownerUid}
+workspaces/{workspaceId}
+  members/{userUid}
   data/current
-    state: WorkspaceState
+    storageVersion: 1
+    schemaVersion: 2
+    revision: integer
+    pace: light | steady | full
+  projects/{projectId}
+  tasks/{taskId}
+  recovery/legacy-v2   # immutable, created only during old-snapshot migration
 ```
 
-This supports a deliberately small shared-team beta. The invitation is matched against the signed-in account email before that account can create its own member record. The whole-workspace snapshot remains a private-beta tradeoff, so simultaneous edits can still resolve last-write-wins.
+The invitation is matched against the signed-in account email before that
+account can create its own member record. Each cloud save runs in a Firestore
+transaction, checks the revision it originally loaded, changes only the affected
+project/ticket records, and advances the revision once. If another client saved
+first, the stale write is rejected and the user chooses when to load the latest
+cloud version; Forth does not silently overwrite either tab. Existing
+whole-workspace documents remain readable and migrate on their first successful
+write. That migration keeps one immutable recovery snapshot while all future
+Proof entries grow as separate task documents.
+
+This is optimistic concurrency control: users may edit without holding a lock,
+but the commit succeeds only when its expected revision is still current.
+TICKET-024 remains responsible for granular listeners, pagination, load testing,
+and proving the complete 30+ user scale target.
 
 ## Security boundary
 
@@ -64,6 +84,23 @@ This supports a deliberately small shared-team beta. The invitation is matched a
 - A new user explicitly creates a first workspace and real campaign; Forth never provisions cloud data from demo state.
 - Public Firebase configuration belongs in Vercel environment variables, never source control.
 - The deployed host `forth-bice.vercel.app` must remain in Firebase Authentication's authorized-domain list.
+- Normalized persistence and its Firestore rules must be released together. Deploy rules first, promote the matching app immediately afterward, and require old open tabs to refresh before further edits.
+
+## Migration and rollback
+
+This change crosses a persistence boundary, so it is not an ordinary frontend-only release.
+
+1. Export or otherwise back up the production `workspaces` collection before promotion.
+2. Publish the matching revision-aware rules to a staging Firebase project, then deploy the matching app build.
+3. Exercise one legacy workspace with two authenticated browser sessions. Confirm the first edit creates `projects`, `tasks`, and `recovery/legacy-v2`; confirm a stale second edit is stopped.
+4. Publish the rules and application as one coordinated production release, then ask users with an already-open tab to refresh before editing.
+5. Verify the normalized metadata revision, member access, ticket persistence, and immutable recovery record before declaring the release healthy.
+
+If rollback is required after a workspace has migrated, stop writes first. Restore the immutable `recovery/legacy-v2.state` value to the old `data/current` shape, then restore the old application and old rules together. Do not roll back only the application: an old client cannot safely write through the new normalized rules, and a new client cannot safely assume old rules enforce revision checks.
+
+Plain English: the first safe save converts one big board file into smaller project and ticket records and keeps a sealed copy of the old board. App code and database rules are two halves of that safety mechanism.
+
+Engineering terms: this is a lazy, transactional schema migration with an immutable recovery snapshot and a coordinated compatibility window; it is not backward-compatible with blind legacy writers after rules promotion.
 
 ## Acceptance checks
 
@@ -77,3 +114,4 @@ This supports a deliberately small shared-team beta. The invitation is matched a
 8. An uninvited authenticated user cannot read or write another guild's workspace.
 9. An invited account can join only a workspace addressed to its authenticated account email.
 10. Demo data remains under its demo key and never becomes an authenticated provisioning payload.
+11. Two clients starting from the same revision cannot both commit; the stale client retains its visible edits and receives an explicit recovery choice.
