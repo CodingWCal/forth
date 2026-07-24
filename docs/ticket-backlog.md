@@ -1310,3 +1310,27 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
   - Re-run the full release suite, `pnpm audit --prod`, and a Vercel preview image smoke test.
 - Subagent prompt:
   > Implement TICKET-032 as an isolated security dependency patch. Prefer a Next.js-supported route to sharp 0.35.0 or newer, keep the lockfile reproducible, prove image rendering and the complete test/build suite, and do not suppress the official GitHub advisory.
+
+### TICKET-033: MCP server so coding agents can work the Forth quest board
+
+- Priority: P2 Medium
+- Type: Feature/Integration/Security
+- Area: New `mcp/` module, Firestore workspace adapter, agent tooling
+- Effort: M
+- Confidence: High
+- Evidence: Proposed by @gge513 in issue #30. The cohort runs real ticket queues through coding agents; a Model Context Protocol server closes the loop so agents can read the board and ship/file quests directly.
+- Plain English: Connect Claude Code / Cursor / Codex to a Forth board so an agent can see what is in focus, create and update quests, and move status — using the same rules and validation the app already trusts.
+- Engineering framing: Standalone Node/TypeScript MCP server (stdio transport, `@modelcontextprotocol/sdk`) in a separate `mcp/` module. Read tools (`get_workspace`, `list_projects`, `list_tasks`, `get_chronicle`) plus write tools mapped 1:1 onto the `WorkspaceAction` union, dispatched through `workspaceReducer` and persisted via the existing Firestore adapter under existing `firestore.rules`. Writes route through the TICKET-001 revision-safe path.
+- Scope (v1, approved = read + write, user-owned credentials):
+  - Read + write tools; no new domain logic, no reducer changes, no `firestore.rules` changes.
+  - Auth: one-time browser sign-in handoff storing the user's Firebase refresh token locally; server acts as that user, bounded by existing rules.
+  - Separate `mcp/` module; local stdio only (no hosted/remote endpoint).
+- Out of scope: UI changes, email, deploy changes, production secrets, hosted MCP endpoint.
+- Acceptance criteria:
+  - Agent can read board/chronicle and create/update/move/focus quests in a workspace the user already has access to; nothing a signed-in user could not do.
+  - Credentials never logged or committed; restrictive file permissions; documented storage location.
+  - Full gate passes (lint, typecheck, unit, rules, build) plus emulator integration tests for the MCP tools and a documented end-to-end smoke test.
+- Suggested files: `mcp/` (new), `lib/firebase/workspace.ts`, `docs/ticket-backlog.md`
+- Owner: @gge513 (claim against this ticket)
+- Subagent prompt:
+  > Implement TICKET-033 as a standalone stdio MCP server in a separate module. Map tools onto the existing WorkspaceAction union, route all writes through the reducer and the TICKET-001 revision-safe adapter under existing firestore.rules with no rules changes, handle the user's local Firebase credential securely, and prove the full gate plus emulator integration tests.
