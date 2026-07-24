@@ -133,10 +133,8 @@ service cloud.firestore {
     // self-join this one specific, publicly-shared cohort guild with no invite
     // and no eligibility allowlist. Scoped to a single literal workspace id so
     // every other guild keeps its normal invite-only boundary untouched.
-    // Maintainer: replace the id below with the real guild id, then redeploy
-    // rules. Until replaced this matches no real workspace and stays inert.
     function isOpenCohortGuild(workspaceId) {
-      return workspaceId == 'REPLACE-WITH-CURSOR-BOSTON-GUILD-ID';
+      return workspaceId == 'guild-7ea24403-64f6-424c-b2d7-0d7e44209492';
     }
 
     // A signed-in person may discover only member documents whose UID is

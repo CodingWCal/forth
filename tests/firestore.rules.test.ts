@@ -605,7 +605,7 @@ describe("Firestore workspace rules", () => {
   });
 
   it("lets any signed-in account self-join only the configured open cohort guild (TICKET-031, simplified)", async () => {
-    const openGuildId = "REPLACE-WITH-CURSOR-BOSTON-GUILD-ID";
+    const openGuildId = "guild-7ea24403-64f6-424c-b2d7-0d7e44209492";
     const otherGuildId = "some-other-private-guild";
     const joinerId = "cohort-joiner";
     const joinerEmail = "joiner@example.com";

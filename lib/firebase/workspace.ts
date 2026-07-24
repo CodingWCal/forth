@@ -202,11 +202,13 @@ async function createWorkspaceAt(
 }
 
 // TICKET-031 (simplified): id of the one publicly-shared cohort guild that any
-// signed-in account may self-join with no invite and no eligibility check, set
-// via NEXT_PUBLIC_COHORT_GUILD_ID. Unset by default, so the feature is inert
-// until a maintainer opts in by configuring it. Must match the literal id
-// baked into isOpenCohortGuild() in firestore.rules.
-export const COHORT_GUILD_ID = (process.env.NEXT_PUBLIC_COHORT_GUILD_ID ?? "").trim() || null;
+// signed-in account may self-join with no invite and no eligibility check.
+// Not a secret -- it is the same "guild code" already shown to any guild
+// owner. Defaults to the maintainer's Cursor Boston guild; overridable via
+// NEXT_PUBLIC_COHORT_GUILD_ID without a code change. Must match the literal
+// id baked into isOpenCohortGuild() in firestore.rules.
+const DEFAULT_COHORT_GUILD_ID = "guild-7ea24403-64f6-424c-b2d7-0d7e44209492";
+export const COHORT_GUILD_ID = (process.env.NEXT_PUBLIC_COHORT_GUILD_ID ?? "").trim() || DEFAULT_COHORT_GUILD_ID;
 
 export async function joinOpenCohortGuild(user: User) {
   if (!COHORT_GUILD_ID) throw new Error("The shared cohort guild is not configured yet.");
