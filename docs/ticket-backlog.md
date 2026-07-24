@@ -31,10 +31,11 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-008 | Implemented on `agent/invite-lifecycle` | Cancel/decline/expiry and rule tests pass; not yet released to production. |
 | TICKET-009 | Planned | Optional email delivery must remain downstream of a reliable in-app invitation flow. |
 | TICKET-010 | Implemented on `codex/ticket-010-auth-entry` | Automated gates pass; live Google/GitHub two-account smoke testing remains a release requirement. |
+| TICKET-013 | Revised in draft PR [#22](https://github.com/CodingWCal/forth/pull/22) after maintainer preview rejection | Dashboard now contains only today’s tickets and compact capacity; literal navigation replaces fantasy-only labels; deadlines live in Tickets; rank/gold/history live in Activity; fake dispatch/oath cards are removed; one global New ticket action and persistent Exit demo remain. Fresh preview and three-person usability review are still required. |
 | TICKET-019 | Repository policy merged via PRs [#19](https://github.com/CodingWCal/forth/pull/19) and [#20](https://github.com/CodingWCal/forth/pull/20) | Human/agent contribution contract, ownership, templates, security reporting, decision log, and backlog-ownership policy are on `main`; hosted branch-protection settings and a fresh-contributor dry run still require maintainer verification. |
 | TICKET-022 | Ready PR [#21](https://github.com/CodingWCal/forth/pull/21) | Roger's original PR #18 commit and authorship are preserved. The guide distinguishes authenticated cloud data from disposable demo data, pairs core fantasy terms with literal PM language, passes automated gates, and passed the maintainer's live authenticated preview smoke test. The centralized terminology map and plain-language preference remain planned. |
 | TICKET-029 | Planned | Add an optional, accessible two-minute coach-mark tour after PR #21 lands; keep it separate so the verified static guide remains a reliable fallback. |
-| TICKET-030 | Planned quick fix | Keep the daily energy meter and note inside the provisions card at every supported viewport; screenshot evidence shows the grid item crossing beneath the campaign rail. |
+| TICKET-030 | Implemented within draft PR [#22](https://github.com/CodingWCal/forth/pull/22); preview pending | Capacity grid children can shrink, the meter stacks before collision, copy wraps safely, and Playwright compares the energy region bounds with its card at 320/375/768/1440px. |
 | TICKET-031 | Planned quick feature | After authentication, eligible Cursor Boston fellows can join the designated cohort guild from one explicit button without copying a guild code; authorization must be enforced beyond the client UI. |
 | TICKET-032 | Implemented in draft PR [#23](https://github.com/CodingWCal/forth/pull/23); preview build passed | A root pnpm override resolves Next's transitive image dependency to `sharp@0.35.0`; audit, frozen install, runtime load, local image optimization, lint, types, unit, E2E, build, GitGuardian, and Vercel pass. Maintainer preview sprite smoke remains before merge. |
 
@@ -514,36 +515,37 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 - Subagent prompt:
   > Implement TICKET-012 using explicit reducer transitions and referential-integrity rules. Preserve task and Chronicle history, and make every destructive consequence understandable before confirmation.
 
-### TICKET-013: Rebuild the default Quest Log around fast daily triage
+### TICKET-013: Rebuild the default Dashboard around fast daily triage
 
 - Priority: P1 High
 - Type: UX/Information Architecture
-- Area: Quest Log, desktop sidebar, mobile first screen
+- Area: Dashboard, navigation, Tickets, Activity, desktop sidebar, mobile first screen
 - Effort: L
 - Confidence: High
 - Evidence: Production’s first screen includes rank/gold, provisions, focused quests, seven-day expedition, campaign charter, tavern dispatch, and guild oath. The peer review and browser audit both found the functional task path obscured by thematic chrome. Roger's open PR #13 contributes pure due-date selectors, five focused test cases, and a “Nearing the moon” Today panel; the behavior is valuable, but another full panel must be reconciled with this task-first hierarchy rather than simply stacked above existing modules.
-- Plain English: Keep the magic, but put “What am I doing today?” and “Add a ticket” ahead of decorative story modules.
+- Plain English: Keep the magic in the materials and artwork, but let people use familiar words and see only today’s work on the Dashboard.
 - Learning brief (layman terms):
   - What is happening now: Many equally prominent panels compete for attention.
   - Why it matters: Newer and older users can lose the main task workflow before they learn the theme.
-  - What changing it means: Show today’s tasks, status, assignee, and add/search controls first; move motivation modules into a collapsible secondary area.
+  - What changing it means: Show today’s tasks first, use one global ticket-creation action, move deadlines to Tickets, move progress to Activity, and remove fake decorative content.
   - Concept to learn: Progressive disclosure shows essential choices first and reveals detail when a person asks for it.
-- Engineering framing: Establish a task-first visual hierarchy, reduce above-the-fold competing regions, persist optional panel disclosure, and retain literal semantics alongside themed labels.
+- Engineering framing: Establish a task-first information architecture with literal global navigation, single-responsibility views, one global create action, responsive intrinsic sizing, and theme expressed through visual design rather than mandatory terminology.
 - Scope:
-  - Make Today’s quests and a prominent Add ticket action the primary region.
-  - Integrate overdue, due-today, and due-soon work into that primary task region or one compact disclosure; do not create another equally prominent dashboard module.
+  - Make today’s selected tickets the primary Dashboard region and expose exactly one global New ticket action per viewport.
+  - Keep overdue, due-today, and due-soon work in the Tickets view; do not create another equally prominent Dashboard module.
   - Reuse or adapt PR #13's storage-agnostic timing selectors and calm rule that completed work is never nagged.
   - Document the default due-soon window and let future notification settings consume the same domain policy instead of duplicating urgency logic.
-  - Collapse rank/history/dispatch/oath into one optional “Guild progress” drawer or secondary route.
+  - Move rank, gold, avatar, and history to Activity; remove fake dispatch/oath content from the working product.
   - Show current workspace and save mode near the page title.
-  - Add a first-use pointer to Realm Map without a blocking product tour.
+  - Use literal Dashboard, Tickets, Activity, and Workspace & team navigation labels. Fantasy names may appear only as secondary flavor.
+  - Keep one persistent Exit demo action visible outside settings.
 - Out of scope:
-  - Removing the fantasy system, XP/proof model, or Chronicle.
+  - Removing the fantasy visual system, private XP/progress model, or completion record.
 - Acceptance criteria:
-  - A first-time tester can locate add, edit, move, and find-ticket actions within five seconds.
+  - A first-time tester can locate New ticket, edit, move, Tickets, Activity, Workspace & team, and Exit demo without learning fantasy vocabulary.
   - Active dated tickets clearly expose overdue, due-today, and due-soon timing in urgency order without relying on color or shame-based language; completed tickets never appear as overdue.
   - At 375px, the first focused ticket begins within the initial viewport or one short scroll.
-  - Theme modules remain available but never interrupt ticket operations.
+  - Dashboard contains no campaign charter, fake dispatch, oath, deadline, rank, gold, or history modules; real progress remains available in Activity.
   - Usability testing with at least three cohort members, including one less-technical/older participant, records task completion time and confusion points.
 - Suggested files:
   - `components/forth-app.tsx`
@@ -552,7 +554,7 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 - Validation:
   - Preserve PR #13's calendar-day, custom-window, filtering, ordering, and tie-break unit cases; add DST/time-zone boundary cases plus desktop/mobile browser coverage, keyboard navigation, 200% zoom, and a moderated five-task usability script.
 - Subagent prompt:
-  > Implement TICKET-013 as a task-first Quest Log redesign. Preserve the fantasy identity through materials, typography, and optional progress modules while making core PM actions unmistakable.
+  > Implement TICKET-013 as a task-first Dashboard redesign. Use literal project-management language for navigation and controls, preserve the fantasy identity through materials and secondary flavor, keep one global create action and visible demo exit, move deadlines to Tickets and progress to Activity, and prove responsive behavior with browser tests.
 
 ### TICKET-014: Establish an accessibility baseline across disability needs
 

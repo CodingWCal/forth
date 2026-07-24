@@ -5,49 +5,51 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 ## Current checkpoint
 
 - Date: 2026-07-21
-- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket001`
-- Branch: `codex/ticket-001-conflict-safe-sync`
-- Base: `origin/staging` at `9ace9c5`
-- Checkpoint commit: `4739d46` (`Prevent concurrent cloud save data loss`), pushed to origin
-- Active ticket: TICKET-001 conflict-safe cloud persistence
-- Draft PR: [#24](https://github.com/CodingWCal/forth/pull/24) into `staging`
-- Release state: isolated implementation only; do not merge, publish Firestore rules, or deploy to production without maintainer approval and the coordinated migration procedure in `docs/PHASE2.md`
-- Related isolated work: draft PR #22 owns the task-first dashboard cleanup; draft PR #23 owns the patched `sharp` dependency. Do not combine their diffs into this ticket.
+- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket013`
+- Branch: `codex/ticket-013-task-first-quest-log`
+- Production baseline: `origin/main` at merge commit `d547e4b` after PR #21
+- Staging baseline at branch creation: `30e71f4`; canonical `staging` has since added TICKET-031 and TICKET-032 backlog commits
+- Active ticket: TICKET-013 task-first Dashboard redesign, including the TICKET-030 responsive-capacity fix
+- Draft PR: https://github.com/CodingWCal/forth/pull/22 (targets `staging`)
+- Previous implementation commit: `7c10e00`; the current branch tip contains the revised, locally validated usability implementation
+- Release state: PR #21 merged and deployed successfully; production and stable staging both return HTTP 200
+- Stable staging URL: https://forth-git-staging-calvintrinhvan-2763s-projects.vercel.app/
 
 ## Implemented in this checkpoint
 
-- Replaced blind whole-board cloud writes with normalized project/ticket records and a small revision metadata document.
-- Added optimistic concurrency control: a save commits only if the cloud revision still matches the revision originally loaded.
-- Added an explicit conflict state that preserves the stale tab's visible edits and asks before discarding them to load the latest cloud version.
-- Added a lazy legacy migration that writes one immutable `recovery/legacy-v2` snapshot before normalizing the first save.
-- Tightened Firestore rules so record mutations must be coupled atomically to exactly one revision advance.
-- Added real adapter-plus-emulator coverage for sequential stale writes, simultaneous saves, uncoupled writes, and legacy migration.
-- Documented the schema, migration, rollback boundary, and remaining TICKET-024 scale work.
+- Replaced fantasy-first navigation with literal `Dashboard`, `Tickets`, `Activity`, and `Workspace & team` labels; fantasy wording is now secondary flavor.
+- Reduced Dashboard to two responsibilities: today's selected tickets and daily capacity. Deadlines moved to Tickets; avatar/rank/gold/history moved to Activity; fake campaign, dispatch, and oath modules were removed.
+- Consolidated ticket creation into one global `New ticket` action and added a persistent `Exit demo` control, so neither action must be rediscovered in another view.
+- Replaced visible quest/status jargon with ticket language and `Ready`, `In progress`, `Paused`, and `Done` while preserving the parchment-and-pixel art direction.
+- Fixed the capacity meter's intrinsic sizing so it stacks before colliding with neighboring content, and added element-boundary regression coverage at 320, 375, 768, 1024, 1280, and 1440px.
+- Updated browser tests and the design/backlog contracts to reflect the revised information architecture.
 
 ## Validation at handoff
 
 - `pnpm install --frozen-lockfile`: passed; 455 packages reused from the locked store.
-- `pnpm run lint`: passed after the final code/rules edits.
-- `pnpm run typecheck`: passed after the final code/rules edits.
+- `pnpm run lint`: passed.
+- `pnpm run typecheck`: passed.
 - `pnpm run test`: passed, 50/50 unit tests.
-- `pnpm run test:rules`: passed, 21/21 Firestore emulator tests after the final field-validation tightening.
-- `pnpm run test:e2e`: passed, 7/7 Playwright tests across 320, 375, 768, and 1440px coverage.
+- `pnpm run test:rules`: not rerun because this branch changes no Firebase adapter, schema, or rules behavior; the staging baseline passed 17/17.
+- `pnpm run test:e2e`: passed, 10/10 Playwright tests across 320, 375, 768, 1024, 1280, and 1440px viewports.
 - `pnpm run build`: passed.
-- `pnpm audit --prod`: baseline advisory remains for `sharp@0.34.5`; isolated draft PR #23 updates to the clean patched path. Do not promote this branch until that patch is integrated or this branch is rebased on it.
-- `git diff --check`: passed before final documentation edits; rerun before commit.
-- Still required: authenticated two-tab staging smoke, a legacy migration dry run, and production backup/rollback rehearsal.
+- `pnpm audit --prod`: reports one newly published high-severity transitive `sharp@0.34.5` advisory; independently verified as GHSA-f88m-g3jw-g9cj and recorded as TICKET-032 on canonical `staging` rather than mixed into this UX branch.
+- `git diff --check`: passed.
+- Added-line credential-pattern scan: passed.
+- Fresh 375px and 1440px local visual captures inspected: one New ticket action and Exit demo are visible, the first ticket begins within the initial phone viewport, and only today's tickets plus capacity remain on Dashboard.
+- Hosted GitGuardian and the previous Vercel deployment for PR #22 passed; the revised commit still needs a fresh hosted preview and maintainer smoke.
 
 ## Next delivery sequence
 
-1. Review draft PR #24; do not merge it yet.
-2. Integrate or stack the dependency patch from draft PR #23 before any production promotion.
-3. On a stable authenticated staging hostname, run the documented two-tab race and legacy migration checks.
-4. Review the migration/rollback plan with the maintainer before publishing rules or promoting the app.
-5. Keep the dashboard simplification in draft PR #22 separately reviewable.
+1. Commit and push the revised TICKET-013 implementation to draft PR #22, then wait for a fresh hosted preview.
+2. Run a maintainer visual/usability smoke on that preview; merge into `staging` only after explicit approval.
+3. After merge, use the stable staging hostname for authenticated cloud testing; do not authorize the temporary feature URL in Firebase.
+4. Conduct the still-unverified three-person usability exercise, including a third account and one less-technical/older cohort member.
+5. Start TICKET-029 only after this information architecture is accepted so guided-tour anchors do not immediately become stale.
 
 ## Known next risk
 
-The new application and new Firestore rules are a matched pair. Deploying only one side can block saves, and rolling back only the frontend after any workspace migrates is unsafe. TICKET-024 still owns 30+ user load testing, granular listeners, pagination, and richer merge UX; TICKET-001 prevents silent overwrites but does not claim Google Docs-style merging.
+The newly disclosed sharp/libvips advisory is tracked as TICKET-032 and should be patched before the next production promotion. Firebase Authentication requires the stable staging hostname only once; temporary feature-preview hostnames should not be added after every push.
 
 ## Required end-of-session update
 

@@ -8,8 +8,8 @@ import {
   CirclePause,
   Gauge,
   LayoutGrid,
-  Leaf,
   ListChecks,
+  LogOut,
   LockKeyhole,
   Map as MapIcon,
   Plus,
@@ -105,20 +105,20 @@ type NewGuildInput = {
   targetDate: string;
 };
 
-const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Gauge }> = [
-  { id: "today", label: "Quest Log", icon: Gauge },
-  { id: "board", label: "Realm Map", icon: LayoutGrid },
-  { id: "proof", label: "Chronicle", icon: ListChecks },
-  { id: "settings", label: "Guild Hall", icon: Settings },
+const NAV_ITEMS: Array<{ id: View; label: string; mobileLabel: string; icon: typeof Gauge }> = [
+  { id: "today", label: "Dashboard", mobileLabel: "Dashboard", icon: Gauge },
+  { id: "board", label: "Tickets", mobileLabel: "Tickets", icon: LayoutGrid },
+  { id: "proof", label: "Activity", mobileLabel: "Activity", icon: ListChecks },
+  { id: "settings", label: "Workspace & team", mobileLabel: "Workspace", icon: Settings },
 ];
 
 /** Device-local flag: the welcome guide has been seen. Kept out of WorkspaceState (never synced). */
 const WELCOME_SEEN_KEY = "forth.welcome.v2";
 
 const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
-  light: { label: "Scout", hint: "A short expedition" },
-  steady: { label: "Venture", hint: "A grounded build day" },
-  full: { label: "Raid", hint: "Deep-work reserves ready" },
+  light: { label: "Light", hint: "Scout pace" },
+  steady: { label: "Steady", hint: "Venture pace" },
+  full: { label: "Full", hint: "Raid pace" },
 };
 
 const SAFE_WORKSPACE_ERROR_PREFIXES = [
@@ -526,12 +526,12 @@ export function ForthApp({
 
   const title =
     view === "today"
-      ? "Choose today’s three quests."
+      ? "Your work today."
       : view === "board"
-        ? "Survey the engineering realm."
+        ? "All tickets."
         : view === "proof"
-        ? "Read what the guild has shipped."
-        : "Tend the guild hall.";
+        ? "Completed work."
+        : "Workspace & team.";
 
   function deleteTask(task: Task) {
     if (window.confirm(`Delete “${task.title}”? This cannot be undone.`)) {
@@ -795,9 +795,14 @@ export function ForthApp({
           </div>
           <div className="desktop-actions">
             <EnvironmentBadge mode={mode} syncState={syncState} />
+            {mode === "demo" && (
+              <button className="button button--quiet demo-exit-button" onClick={() => void exitAfterSave()}>
+                <LogOut size={16} aria-hidden="true" /> Exit demo
+              </button>
+            )}
             {view !== "settings" && (
               <button className="button button--primary" onClick={openAddDialog}>
-                <Plus size={17} /> New quest
+                <Plus size={17} /> New ticket
               </button>
             )}
           </div>
@@ -832,16 +837,12 @@ export function ForthApp({
         {view === "today" && (
           <TodayView
             state={state}
-            activeProject={activeProject}
+            workspaceName={activeGuild?.name ?? "Disposable demo"}
             focusTasks={focusTasks}
             plannedWeight={plannedWeight}
             capacity={capacity}
-            now={displayDate}
-            useUtc={!hydrated}
-            temporalReady={hydrated}
             onSetPace={(pace) => dispatch({ type: "SET_PACE", pace })}
             onSetStatus={setStatus}
-            onOpenAdd={openAddDialog}
             onEdit={openEditDialog}
             onDelete={deleteTask}
             onGoToBoard={() => setView("board")}
@@ -851,6 +852,7 @@ export function ForthApp({
           <BoardView
             state={state}
             activeProject={activeProject}
+            dueEntries={hydrated ? getDueSoonTasks(state, displayDate) : []}
             onSelectProject={setActiveProjectId}
             onSetStatus={setStatus}
             onToggleFocus={(taskId) => {
@@ -858,17 +860,16 @@ export function ForthApp({
               const task = state.tasks.find((item) => item.id === taskId);
               dispatch({ type: "TOGGLE_FOCUS", taskId });
               if (task && !task.isFocus && before >= 3) {
-                announce("Today’s quest pouch is full. Ship or remove one first.");
+                announce("Today’s plan already has three tickets. Complete or remove one first.");
               } else if (task) {
                 announce(task.isFocus ? "Removed from today." : "Added to today.");
               }
             }}
-            onOpenAdd={openAddDialog}
             onEdit={openEditDialog}
             onDelete={deleteTask}
           />
         )}
-        {view === "proof" && <ProofView state={state} onEdit={openEditDialog} onDelete={deleteTask} />}
+        {view === "proof" && <ProofView state={state} now={displayDate} useUtc={!hydrated} onEdit={openEditDialog} onDelete={deleteTask} />}
         {view === "settings" && (
           <SettingsView
             mode={mode}
@@ -908,7 +909,7 @@ export function ForthApp({
               aria-current={view === item.id ? "page" : undefined}
             >
               <Icon size={19} strokeWidth={1.8} />
-              <span>{item.id === "board" ? "Map" : item.label}</span>
+              <span>{item.mobileLabel}</span>
             </button>
           );
         })}
@@ -924,7 +925,7 @@ export function ForthApp({
         onSubmit={(input) => {
           dispatch({ type: "ADD_TASK", task: createTask(input) });
           dialogRef.current?.close();
-          announce(`Quest logged: ${input.title.trim()}`);
+          announce(`Ticket created: ${input.title.trim()}`);
         }}
       />
 
@@ -1011,71 +1012,78 @@ function dueLabel(entry: DueSoonEntry): string {
 
 function TodayView({
   state,
-  activeProject,
+  workspaceName,
   focusTasks,
   plannedWeight,
   capacity,
-  now,
-  useUtc,
-  temporalReady,
   onSetPace,
   onSetStatus,
-  onOpenAdd,
   onEdit,
   onDelete,
   onGoToBoard,
 }: {
   state: WorkspaceState;
-  activeProject: Project;
+  workspaceName: string;
   focusTasks: Task[];
   plannedWeight: number;
   capacity: number;
-  now: Date;
-  useUtc: boolean;
-  temporalReady: boolean;
   onSetPace: (pace: Pace) => void;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
-  onOpenAdd: () => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onGoToBoard: () => void;
 }) {
-  const [showAllDue, setShowAllDue] = useState(false);
-  const momentum = getMomentumDays(state.tasks, now, useUtc);
-  const maxMomentum = Math.max(...momentum.map((day) => day.weight), 1);
-  const progress = getProjectProgress(state, activeProject.id);
-  const completedToday = momentum[momentum.length - 1]?.weight ?? 0;
-  const nearing = temporalReady ? getDueSoonTasks(state, now) : [];
-  const visibleNearing = showAllDue ? nearing : nearing.slice(0, DUE_PANEL_LIMIT);
-  const hiddenNearingCount = nearing.length - visibleNearing.length;
   const overPlan = plannedWeight > capacity;
-  const totalGold = state.tasks.filter((task) => task.status === "done").reduce((sum, task) => sum + task.weight * 10, 0);
-  const level = Math.floor(totalGold / 100) + 1;
-  const levelProgress = totalGold % 100;
+
+  function openTickets() {
+    onGoToBoard();
+  }
 
   return (
     <div className="today-layout">
       <div className="today-main">
-        <section className="adventurer-hud" aria-label="Guild progress">
-          <div className="pixel-portrait" aria-hidden="true">
-            <Image src="/sprites/code-squire.png" alt="" width={76} height={76} unoptimized priority />
+        <p className="workspace-context"><strong>Workspace:</strong> {workspaceName}</p>
+
+        <section className="focus-panel focus-panel--primary" aria-labelledby="focus-title">
+          <div className="section-heading focus-heading">
+            <div>
+              <p className="eyebrow">Daily plan · Up to three tickets</p>
+              <h2 id="focus-title">Today’s tickets</h2>
+            </div>
+            <span className="quiet-stat"><strong>{focusTasks.length}</strong> of 3 selected</span>
           </div>
-          <div className="adventurer-copy">
-            <p className="eyebrow">Engineer class · Rank {level}</p>
-            <h2>Code Squire</h2>
-            <div className="xp-track" role="progressbar" aria-label="Progress to next level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
-            <small>{100 - levelProgress} craft XP until the next rank</small>
+
+          <div className="quest-primary-actions" aria-label="Ticket navigation">
+            <button className="button button--quiet" onClick={openTickets}><Search size={16} /> View all tickets</button>
           </div>
-          <dl className="reward-stats">
-            <div><dt><Coins size={14} /> Gold</dt><dd>{totalGold}</dd></div>
-            <div><dt><ScrollText size={14} /> Quests</dt><dd>{state.tasks.filter((task) => task.status === "done").length}</dd></div>
-          </dl>
+
+          <div className="focus-list">
+            {focusTasks.map((task, index) => (
+              <FocusTaskRow
+                key={task.id}
+                task={task}
+                project={state.projects.find((project) => project.id === task.projectId)!}
+                index={index}
+                onSetStatus={onSetStatus}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            ))}
+            {focusTasks.length < 3 && (
+              <div className="empty-focus empty-focus--static">
+                <Plus size={18} />
+                <span><strong>No ticket selected for this slot</strong><small>Open Tickets to choose up to three items for today.</small></span>
+              </div>
+            )}
+          </div>
+
         </section>
+
         <section className="pace-panel" aria-labelledby="pace-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">I · Choose provisions</p>
-              <h2 id="pace-title">How far can the party travel?</h2>
+              <p className="eyebrow">II · Set today’s capacity</p>
+              <h2 id="pace-title">How much work fits today?</h2>
             </div>
             <span className="capacity-number"><strong>{plannedWeight}</strong> / {capacity} energy</span>
           </div>
@@ -1107,158 +1115,14 @@ function TodayView({
               </div>
               <p className={overPlan ? "capacity-note is-over" : "capacity-note"}>
                 {overPlan
-                  ? "The party is over-encumbered. Remove a quest or choose a larger expedition."
-                  : `${capacity - plannedWeight} energy remain. Keep some provisions for the unexpected.`}
+                  ? "Over capacity. Remove a ticket from today or choose a higher capacity."
+                  : `${capacity - plannedWeight} energy remaining. Leave room for unexpected work.`}
               </p>
             </div>
           </div>
         </section>
 
-        <section className="focus-panel" aria-labelledby="focus-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">II · Ready the party</p>
-              <h2 id="focus-title">Today’s three quests</h2>
-            </div>
-            <button className="text-button" onClick={onGoToBoard}>Open realm map <ArrowRight size={15} /></button>
-          </div>
-
-          <div className="focus-list">
-            {focusTasks.map((task, index) => (
-              <FocusTaskRow
-                key={task.id}
-                task={task}
-                project={state.projects.find((project) => project.id === task.projectId)!}
-                index={index}
-                onSetStatus={onSetStatus}
-                onEdit={onEdit}
-                onDelete={onDelete}
-              />
-            ))}
-            {focusTasks.length < 3 && (
-              <button className="empty-focus" onClick={onOpenAdd}>
-                <Plus size={18} />
-                <span><strong>Take another quest</strong><small>Only three may travel in the active party.</small></span>
-              </button>
-            )}
-          </div>
-        </section>
-
-        {nearing.length > 0 && (
-          <section className="nearing-panel" aria-labelledby="nearing-title">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Mind the horizon</p>
-                <h2 id="nearing-title">Due soon and overdue</h2>
-              </div>
-              <span className="quiet-stat">
-                Across all campaigns · <strong>{nearing.length}</strong> {nearing.length === 1 ? "quest" : "quests"}
-              </span>
-            </div>
-            <ul className="nearing-list" id="due-task-summary">
-              {visibleNearing.map((entry) => {
-                const project = state.projects.find((item) => item.id === entry.task.projectId);
-                return (
-                  <li key={entry.task.id} className={`nearing-row is-${entry.category}`}>
-                    <button
-                      type="button"
-                      className="nearing-main"
-                      onClick={() => onEdit(entry.task)}
-                      aria-label={`Edit quest ${entry.task.title} — ${dueLabel(entry)}`}
-                    >
-                      <span className="nearing-dot" aria-hidden="true" />
-                      <span className="nearing-copy">
-                        <strong>{entry.task.title}</strong>
-                        {project && <small>{project.code} · {STATUS_LABELS[entry.task.status]}</small>}
-                      </span>
-                      <time dateTime={entry.task.dueDate} className={`due-badge is-${entry.category}`}>{dueLabel(entry)}</time>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {nearing.length > DUE_PANEL_LIMIT && (
-              <button
-                type="button"
-                className="nearing-view-all"
-                aria-controls="due-task-summary"
-                aria-expanded={showAllDue}
-                onClick={() => setShowAllDue((current) => !current)}
-              >
-                <span>
-                  <strong>{showAllDue ? `Show first ${DUE_PANEL_LIMIT} due quests` : `View all ${nearing.length} due quests`}</strong>
-                  <small>{showAllDue ? "Collapse this deadline summary" : `${hiddenNearingCount} more beyond this summary`}</small>
-                </span>
-                <ArrowRight size={15} aria-hidden="true" />
-              </button>
-            )}
-          </section>
-        )}
-
-        <section className="momentum-panel" aria-labelledby="momentum-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">III · Read the campaign</p>
-              <h2 id="momentum-title">Seven-day expedition</h2>
-            </div>
-            <span className="quiet-stat"><strong>{completedToday}</strong> effort shipped today</span>
-          </div>
-          <div className="trail-chart">
-            <div className="trail-copy">
-              <p>No cursed streaks. No public leaderboard.</p>
-              <span>The chronicle simply proves the guild can return and ship.</span>
-            </div>
-            <div className="trail-bars" aria-label="Completed effort over the last seven days">
-              {momentum.map((day, index) => (
-                <div className="trail-day" key={day.date}>
-                  <span className="trail-value">{day.weight || "·"}</span>
-                  <span className="trail-bar-wrap">
-                    <i style={{ height: `${Math.max((day.weight / maxMomentum) * 100, 8)}%` }} />
-                  </span>
-                  <small>{index === 6 ? "Now" : day.label}</small>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
       </div>
-
-      <aside className="context-rail">
-        <section className="signal-card">
-          <div className="card-kicker"><Target size={16} /><span>Campaign charter</span></div>
-          <p className="project-code">{activeProject.code} · QUESTING</p>
-          <h2>{activeProject.title}</h2>
-          <p className="outcome-copy">{activeProject.outcome}</p>
-          <div className="project-progress">
-            <div><span>Map cleared</span><strong>{progress}%</strong></div>
-            <div
-              className="progress-track"
-              role="progressbar"
-              aria-label={`${activeProject.title} progress`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={progress}
-            >
-              <span style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-          <p className="target-date">
-            Target {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(activeProject.targetDate))}
-          </p>
-        </section>
-
-        <section className="field-note-card">
-          <div className="card-kicker"><Leaf size={16} /><span>Tavern dispatch</span></div>
-          <blockquote>“The build failed at the gate, not in production. The wards held.”</blockquote>
-          <div className="note-author"><span>MM</span><p><strong>Maya M.</strong><small>Platform · 18 min ago</small></p></div>
-        </section>
-
-        <section className="principle-card">
-          <BrandMark compact />
-          <p>Guild oath · II</p>
-          <strong>Ship proof, share context, leave no engineer cursed by hidden state.</strong>
-        </section>
-      </aside>
     </div>
   );
 }
@@ -1319,26 +1183,29 @@ function FocusTaskRow({
 function BoardView({
   state,
   activeProject,
+  dueEntries,
   onSelectProject,
   onSetStatus,
   onToggleFocus,
-  onOpenAdd,
   onEdit,
   onDelete,
 }: {
   state: WorkspaceState;
   activeProject: Project;
+  dueEntries: DueSoonEntry[];
   onSelectProject: (id: string) => void;
   onSetStatus: (taskId: string, status: TaskStatus) => void;
   onToggleFocus: (taskId: string) => void;
-  onOpenAdd: () => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
 }) {
   const statuses: TaskStatus[] = ["ready", "moving", "paused", "done"];
   const [query, setQuery] = useState("");
+  const [showAllDue, setShowAllDue] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
+  const visibleDueEntries = showAllDue ? dueEntries : dueEntries.slice(0, DUE_PANEL_LIMIT);
+  const hiddenDueCount = dueEntries.length - visibleDueEntries.length;
 
   const startDragging = (event: DragEvent<HTMLElement>, task: Task) => {
     if ((event.target as HTMLElement).closest("button")) {
@@ -1384,27 +1251,72 @@ function BoardView({
 
       <section className="board-intro">
         <div>
-          <p className="eyebrow">{activeProject.code} · Campaign objective</p>
+          <p className="eyebrow">{activeProject.code} · Project objective</p>
           <h2>{activeProject.outcome}</h2>
         </div>
         <div className="board-progress">
           <strong>{getProjectProgress(state, activeProject.id)}%</strong>
-          <span>realm cleared</span>
+          <span>work complete</span>
         </div>
       </section>
 
       <div className="quest-tools">
         <Search size={16} aria-hidden="true" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search engineering quests" placeholder="Search quests, runes, and requirements…" />
-        <button className="button button--primary" onClick={onOpenAdd}><Plus size={15} /> Inscribe quest</button>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search tickets" placeholder="Search tickets and requirements…" />
       </div>
+
+      {dueEntries.length > 0 && (
+        <details className="deadline-drawer ticket-deadlines">
+          <summary>
+            <span><strong>Deadlines needing attention</strong><small>Due today, due soon, and overdue · {dueEntries.length}</small></span>
+            <ArrowRight size={15} aria-hidden="true" />
+          </summary>
+          <ul className="nearing-list" id="ticket-deadline-summary">
+            {visibleDueEntries.map((entry) => {
+              const project = state.projects.find((item) => item.id === entry.task.projectId);
+              return (
+                <li key={entry.task.id} className={`nearing-row is-${entry.category}`}>
+                  <button
+                    type="button"
+                    className="nearing-main"
+                    onClick={() => onEdit(entry.task)}
+                    aria-label={`Edit ticket ${entry.task.title} — ${dueLabel(entry)}`}
+                  >
+                    <span className="nearing-dot" aria-hidden="true" />
+                    <span className="nearing-copy">
+                      <strong>{entry.task.title}</strong>
+                      {project && <small>{project.code} · {STATUS_LABELS[entry.task.status]}</small>}
+                    </span>
+                    <time dateTime={entry.task.dueDate} className={`due-badge is-${entry.category}`}>{dueLabel(entry)}</time>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {dueEntries.length > DUE_PANEL_LIMIT && (
+            <button
+              type="button"
+              className="nearing-view-all"
+              aria-controls="ticket-deadline-summary"
+              aria-expanded={showAllDue}
+              onClick={() => setShowAllDue((current) => !current)}
+            >
+              <span>
+                <strong>{showAllDue ? `Show first ${DUE_PANEL_LIMIT} due tickets` : `View all ${dueEntries.length} due tickets`}</strong>
+                <small>{showAllDue ? "Collapse this deadline summary" : `${hiddenDueCount} more beyond this summary`}</small>
+              </span>
+              <ArrowRight size={15} aria-hidden="true" />
+            </button>
+          )}
+        </details>
+      )}
 
       <p className="drag-help" id="kanban-drag-help">
         <GripVertical size={15} aria-hidden="true" />
-        Drag a quest between provinces with your cursor. On phone or keyboard, use its move arrows.
+        Drag a ticket between status columns with your cursor. On phone or keyboard, use its move arrows.
       </p>
 
-      <section className="kanban" aria-label={`${activeProject.title} work map`} aria-describedby="kanban-drag-help">
+      <section className="kanban" aria-label={`${activeProject.title} ticket board`} aria-describedby="kanban-drag-help">
         {statuses.map((status) => {
           const tasks = state.tasks.filter(
             (task) => task.projectId === activeProject.id && task.status === status &&
@@ -1447,11 +1359,8 @@ function BoardView({
                 {tasks.length === 0 && (
                   <div className="column-empty">
                     <MapIcon size={20} />
-                    <span>No quests in this province.</span>
+                    <span>No tickets in this status.</span>
                   </div>
-                )}
-                {status === "ready" && (
-                  <button className="column-add" onClick={onOpenAdd}><Plus size={15} /> Inscribe quest</button>
                 )}
               </div>
             </div>
@@ -1541,10 +1450,14 @@ function BoardTaskCard({
 
 function ProofView({
   state,
+  now,
+  useUtc,
   onEdit,
   onDelete,
 }: {
   state: WorkspaceState;
+  now: Date;
+  useUtc: boolean;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
 }) {
@@ -1557,30 +1470,79 @@ function ProofView({
   );
   const totalWeight = completed.reduce((sum, task) => sum + task.weight, 0);
   const contributors = new Set(completed.map((task) => task.assignee)).size;
+  const totalGold = totalWeight * 10;
+  const level = Math.floor(totalGold / 100) + 1;
+  const levelProgress = totalGold % 100;
+  const momentum = getMomentumDays(state.tasks, now, useUtc);
+  const maxMomentum = Math.max(...momentum.map((day) => day.weight), 1);
+  const completedToday = momentum[momentum.length - 1]?.weight ?? 0;
 
   return (
     <div className="proof-view">
       <section className="proof-summary">
         <div className="proof-symbol"><BrandMark /></div>
         <div>
-          <p className="eyebrow">Guild chronicle</p>
-          <h2>Every shipped quest becomes part of the record.</h2>
-          <p>The chronicle keeps the ticket, its purpose, and its builder together—evidence of engineering progress without a public score.</p>
+          <p className="eyebrow">Activity · Guild chronicle</p>
+          <h2>Completed tickets become part of the record.</h2>
+          <p>Activity keeps the ticket, its purpose, and its assignee together—evidence of progress without a public score.</p>
         </div>
         <dl>
-          <div><dt>Shipped</dt><dd>{completed.length}</dd></div>
+          <div><dt>Completed</dt><dd>{completed.length}</dd></div>
           <div><dt>Energy</dt><dd>{totalWeight}</dd></div>
           <div><dt>Guildmates</dt><dd>{contributors}</dd></div>
         </dl>
       </section>
 
+      <section className="activity-progress" aria-labelledby="private-progress-title">
+        <section className="adventurer-hud" aria-label="Private rank and rewards">
+          <div className="pixel-portrait" aria-hidden="true">
+            <Image src="/sprites/code-squire.png" alt="" width={76} height={76} unoptimized />
+          </div>
+          <div className="adventurer-copy">
+            <p className="eyebrow">Private progress · Rank {level}</p>
+            <h2 id="private-progress-title">Code Squire</h2>
+            <div className="xp-track" role="progressbar" aria-label="Progress to next rank" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
+            <small>{100 - levelProgress} craft XP until the next rank</small>
+          </div>
+          <dl className="reward-stats">
+            <div><dt><Coins size={14} /> Gold</dt><dd>{totalGold}</dd></div>
+            <div><dt><ScrollText size={14} /> Tickets</dt><dd>{completed.length}</dd></div>
+          </dl>
+        </section>
+
+        <section className="momentum-panel" aria-labelledby="activity-history-title">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Seven-day history</p>
+              <h2 id="activity-history-title">Recent completed effort</h2>
+            </div>
+            <span className="quiet-stat"><strong>{completedToday}</strong> effort completed today</span>
+          </div>
+          <div className="trail-chart">
+            <div className="trail-copy">
+              <p>No streak penalties. No public leaderboard.</p>
+              <span>This private history records completed effort without grading you.</span>
+            </div>
+            <div className="trail-bars" aria-label="Completed effort over the last seven days">
+              {momentum.map((day, index) => (
+                <div className="trail-day" key={day.date}>
+                  <span className="trail-value">{day.weight || "·"}</span>
+                  <span className="trail-bar-wrap"><i style={{ height: `${Math.max((day.weight / maxMomentum) * 100, 8)}%` }} /></span>
+                  <small>{index === 6 ? "Now" : day.label}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </section>
+
       <section className="proof-ledger" aria-labelledby="ledger-title">
         <div className="ledger-head">
-          <p className="eyebrow">Newest inscription first</p>
-          <h2 id="ledger-title">Release chronicle</h2>
+          <p className="eyebrow">Newest completion first</p>
+          <h2 id="ledger-title">Completed tickets</h2>
         </div>
         {completed.length === 0 ? (
-          <div className="proof-empty"><BrandMark /><h3>The first inscription awaits.</h3><p>Ship one engineering quest and its record will live here.</p></div>
+          <div className="proof-empty"><BrandMark /><h3>No completed tickets yet.</h3><p>Move a ticket to Done and its record will appear here.</p></div>
         ) : (
           <div className="ledger-list">
             {completed.map((task, index) => {
@@ -1668,8 +1630,8 @@ function SettingsView({
   return (
     <div className="settings-view">
       <section className="settings-intro">
-        <p className="eyebrow">Guild hall · Save altar</p>
-        <h2>Account wards and cloud runes.</h2>
+        <p className="eyebrow">Workspace & team · Guild hall</p>
+        <h2>Manage your account and workspace.</h2>
         <p>{mode === "cloud" ? "This signed-in workspace saves to private cloud storage for authorized guild members." : "This disposable demo stays in this browser and never copies sample tickets into a real account."}</p>
         <button type="button" className="button button--quiet" onClick={onShowGuide} aria-haspopup="dialog">
           <Scroll size={15} /> How Forth works
@@ -1682,9 +1644,11 @@ function SettingsView({
           <p className="eyebrow">Save ward</p>
           <h3>{mode === "cloud" ? `Signed in as ${user?.displayName ?? user?.email ?? "your account"}` : "Disposable local demo"}</h3>
           <p>{mode === "cloud" ? `${syncLabel}. Forth saves this workspace only to its authorized Firestore record.` : "Sample tickets persist on this device only until you reset or clear the demo. They are never uploaded to Firebase."}</p>
-          <button className="button button--primary" onClick={() => void onExit()}>
-            {mode === "cloud" ? "Sign out" : "Exit demo"}
-          </button>
+          {mode === "cloud" && (
+            <button className="button button--primary" onClick={() => void onExit()}>
+              Sign out
+            </button>
+          )}
         </div>
         <span className={mode === "cloud" && syncState === "synced" ? "status-stamp is-ready" : "status-stamp"}>{syncLabel}</span>
       </section>
@@ -1720,7 +1684,7 @@ function SettingsView({
           <h3>What earns renown</h3>
           <ul>
             <li>Shipping meaningful engineering tickets earns gold equal to effort</li>
-            <li>Completed quests advance your private guild rank</li>
+            <li>Completed tickets advance your private guild rank</li>
             <li>The release chronicle preserves the definition of value</li>
             <li>There are no penalties, broken streaks, or public rankings</li>
           </ul>
@@ -1874,7 +1838,7 @@ function GuildHallCard({
       <div>
         <p className="eyebrow">Guild roster</p>
         <h3>Build campaigns with real guildmates.</h3>
-        <p>Invite a teammate by the account email they will use for Forth. After they sign in, the invitation appears in their own Guild Hall under Pending invitations. The guild code below is a backup path if that panel is unavailable.</p>
+        <p>Invite a teammate by the account email they will use for Forth. After they sign in, the invitation appears in Workspace & team under Pending invitations. The guild code below is a backup path if that panel is unavailable.</p>
         {activeGuild?.role === "owner" && <p className="guild-code">Guild code: <code>{activeGuild.id}</code></p>}
 
         <label className="field guild-field">
@@ -1967,16 +1931,16 @@ const COMMON_WELCOME_STEPS = [
     body: "Scout, Venture, or Raid sets a realistic effort budget for today. It never grades you or creates a public score.",
   },
   {
-    title: "Add quests (tickets)",
-    body: "Create a ticket with its campaign, purpose, assignee, priority, due date, and effort. Keep up to three unfinished quests in Today.",
+    title: "Create and plan tickets",
+    body: "Use New ticket to capture work with its project, purpose, assignee, priority, due date, and effort. Keep up to three unfinished tickets on your Dashboard.",
   },
   {
-    title: "Use the Realm Map (Kanban board)",
-    body: "Drag with a mouse, or use Move controls with keyboard or touch, to send tickets through Quest Log (Ready), In Forge (In progress), Camped (Paused), and Shipped (Done).",
+    title: "Use Tickets (Kanban board)",
+    body: "Drag with a mouse, or use Move controls with keyboard or touch, to move tickets through Ready, In progress, Paused, and Done.",
   },
   {
-    title: "Review the Chronicle (completed work)",
-    body: "Shipped quests remain visible as proof of progress. There are no public rankings, streak penalties, or random rewards.",
+    title: "Review Activity (completed work)",
+    body: "Completed tickets remain visible as proof of progress. There are no public rankings, streak penalties, or random rewards.",
   },
 ];
 
@@ -2152,12 +2116,12 @@ function AddTaskDialog({
     }}>
       <form onSubmit={submit}>
         <header className="dialog-head">
-          <div><p className="eyebrow">Guild registrar</p><h2>Inscribe an engineering quest</h2></div>
+          <div><p className="eyebrow">New ticket · Quest inscription</p><h2>Create a ticket</h2></div>
           <button type="button" className="icon-button" onClick={() => dialogRef.current?.close()} aria-label="Close dialog"><X size={19} /></button>
         </header>
 
         <label className="field">
-          <span>Quest title</span>
+          <span>Ticket title</span>
           <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={90} autoFocus placeholder="Add retry behavior to failed sync writes" />
           <small>Lead with an engineering verb and expose the finish line.</small>
         </label>
@@ -2196,7 +2160,7 @@ function AddTaskDialog({
 
         <label className="field">
           <span>Why it matters <i>optional</i></span>
-          <textarea value={meaning} onChange={(event) => setMeaning(event.target.value)} maxLength={180} rows={3} placeholder="Connect this quest to the campaign objective" />
+          <textarea value={meaning} onChange={(event) => setMeaning(event.target.value)} maxLength={180} rows={3} placeholder="Connect this ticket to the project objective" />
         </label>
 
         <fieldset className="weight-field">
@@ -2212,12 +2176,12 @@ function AddTaskDialog({
 
         <label className={canFocus ? "focus-check" : "focus-check is-disabled"}>
           <input type="checkbox" checked={isFocus} onChange={(event) => setIsFocus(event.target.checked)} disabled={!canFocus} />
-          <span><strong>Add to today’s party</strong><small>{canFocus ? "Keep this quest in the active three." : "Today’s party already holds three quests."}</small></span>
+          <span><strong>Add to today’s plan</strong><small>{canFocus ? "Keep this ticket in the active three." : "Today’s plan already holds three tickets."}</small></span>
         </label>
 
         <footer className="dialog-foot">
           <button type="button" className="button button--quiet" onClick={() => dialogRef.current?.close()}>Cancel</button>
-          <button className="button button--primary" type="submit">Inscribe quest <Sword size={16} /></button>
+          <button className="button button--primary" type="submit">Create ticket <Sword size={16} /></button>
         </footer>
       </form>
     </dialog>
@@ -2288,12 +2252,12 @@ function EditTaskDialog({
     }}>
       <form onSubmit={submit}>
         <header className="dialog-head">
-          <div><p className="eyebrow">Quest scribe</p><h2>Edit the complete ticket</h2></div>
+          <div><p className="eyebrow">Edit ticket · Quest record</p><h2>Edit ticket</h2></div>
           <button type="button" className="icon-button" onClick={() => dialogRef.current?.close()} aria-label="Close edit dialog"><X size={19} /></button>
         </header>
 
         <label className="field">
-          <span>Quest title</span>
+          <span>Ticket title</span>
           <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={90} autoFocus />
         </label>
 
@@ -2310,12 +2274,12 @@ function EditTaskDialog({
             </select>
           </label>
           <label className="field">
-            <span>Province</span>
+            <span>Status</span>
             <select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}>
-              <option value="ready">Quest Log</option>
-              <option value="moving">In Forge</option>
-              <option value="paused">Camped</option>
-              <option value="done">Shipped</option>
+              <option value="ready">Ready</option>
+              <option value="moving">In progress</option>
+              <option value="paused">Paused</option>
+              <option value="done">Done</option>
             </select>
           </label>
         </div>
@@ -2363,7 +2327,7 @@ function EditTaskDialog({
             onChange={(event) => setIsFocus(event.target.checked)}
             disabled={!canFocus || status === "done"}
           />
-          <span><strong>Keep in today’s party</strong><small>{status === "done" ? "Shipped quests live in the Chronicle." : canFocus ? "This quest counts toward the active three." : "Today’s party already holds three other quests."}</small></span>
+          <span><strong>Keep in today’s plan</strong><small>{status === "done" ? "Completed tickets live in Activity." : canFocus ? "This ticket counts toward the active three." : "Today’s plan already holds three other tickets."}</small></span>
         </label>
 
         <footer className="dialog-foot">
