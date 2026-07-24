@@ -603,4 +603,31 @@ describe("Firestore workspace rules", () => {
     expect(current.data()).toMatchObject({ storageVersion: 1, revision: 1, pace: "full" });
     expect(current.data()).not.toHaveProperty("state");
   });
+
+  it("lets any signed-in account self-join only the configured open cohort guild (TICKET-031, simplified)", async () => {
+    const openGuildId = "REPLACE-WITH-CURSOR-BOSTON-GUILD-ID";
+    const otherGuildId = "some-other-private-guild";
+    const joinerId = "cohort-joiner";
+    const joinerEmail = "joiner@example.com";
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", openGuildId), { ownerId, name: "Cursor Boston guild" });
+      await setDoc(doc(adminDb, "workspaces", otherGuildId), { ownerId, name: "Someone else's guild" });
+    });
+
+    const joinerDb = testEnv.authenticatedContext(joinerId, { email: joinerEmail }).firestore();
+    await assertSucceeds(setDoc(doc(joinerDb, "workspaces", openGuildId, "members", joinerId), {
+      uid: joinerId,
+      email: joinerEmail,
+      role: "member",
+    }));
+
+    // The open-join allowance is scoped to exactly the one configured guild id;
+    // every other workspace keeps its normal invite-only boundary.
+    await assertFails(setDoc(doc(joinerDb, "workspaces", otherGuildId, "members", joinerId), {
+      uid: joinerId,
+      email: joinerEmail,
+      role: "member",
+    }));
+  });
 });

@@ -35,12 +35,14 @@ import type { User } from "firebase/auth";
 import {
   acceptGuildInvite,
   cancelGuildInvite,
+  COHORT_GUILD_ID,
   createGuildWorkspace,
   declineGuildInvite,
   type GuildInviteSummary,
   type GuildWorkspace,
   inviteGuildMember,
   isWorkspaceConflictError,
+  joinOpenCohortGuild,
   listGuildInvites,
   listPendingGuildInvites,
   loadWorkspaceState,
@@ -612,6 +614,19 @@ export function ForthApp({
     }
   }
 
+  async function joinCohortGuild(): Promise<boolean> {
+    if (mode !== "cloud" || !cloudUser || !onOpenWorkspace) return false;
+    try {
+      return await runDurableTransition(async () => {
+        const workspaceId = await joinOpenCohortGuild(cloudUser);
+        await onOpenWorkspace(workspaceId);
+      });
+    } catch (error) {
+      announce(safeWorkspaceActionError(error, "Could not join the cohort guild. Try again."));
+      return false;
+    }
+  }
+
   async function acceptPendingInvite(invite: PendingGuildInvite) {
     if (mode !== "cloud" || !cloudUser || !onOpenWorkspace) return;
     try {
@@ -882,6 +897,7 @@ export function ForthApp({
             onCreateGuild={createGuild}
             onInviteGuildmate={inviteGuildmate}
             onJoinGuild={joinGuild}
+            onJoinCohortGuild={joinCohortGuild}
             sentInvites={sentInvites}
             onCancelInvite={cancelInvite}
             pendingInvites={pendingInvites}
@@ -1585,6 +1601,7 @@ function SettingsView({
   onCreateGuild,
   onInviteGuildmate,
   onJoinGuild,
+  onJoinCohortGuild,
   sentInvites,
   onCancelInvite,
   pendingInvites,
@@ -1606,6 +1623,7 @@ function SettingsView({
   onCreateGuild: (input: NewGuildInput) => Promise<boolean>;
   onInviteGuildmate: (email: string) => Promise<boolean>;
   onJoinGuild: (workspaceId: string) => Promise<boolean>;
+  onJoinCohortGuild: () => Promise<boolean>;
   sentInvites: GuildInviteSummary[];
   onCancelInvite: (email: string) => Promise<void>;
   pendingInvites: PendingGuildInvite[];
@@ -1671,6 +1689,7 @@ function SettingsView({
           onCreateGuild={onCreateGuild}
           onInviteGuildmate={onInviteGuildmate}
           onJoinGuild={onJoinGuild}
+          onJoinCohortGuild={onJoinCohortGuild}
           sentInvites={sentInvites}
           onCancelInvite={onCancelInvite}
           onOpenCampaign={onOpenCampaign}
@@ -1801,6 +1820,7 @@ function GuildHallCard({
   onCreateGuild,
   onInviteGuildmate,
   onJoinGuild,
+  onJoinCohortGuild,
   sentInvites,
   onCancelInvite,
   onOpenCampaign,
@@ -1811,6 +1831,7 @@ function GuildHallCard({
   onCreateGuild: (input: NewGuildInput) => Promise<boolean>;
   onInviteGuildmate: (email: string) => Promise<boolean>;
   onJoinGuild: (workspaceId: string) => Promise<boolean>;
+  onJoinCohortGuild: () => Promise<boolean>;
   sentInvites: GuildInviteSummary[];
   onCancelInvite: (email: string) => Promise<void>;
   onOpenCampaign: () => void;
@@ -1822,6 +1843,18 @@ function GuildHallCard({
   const [inviteEmail, setInviteEmail] = useState("");
   const [guildCode, setGuildCode] = useState("");
   const [cancelingEmail, setCancelingEmail] = useState<string | null>(null);
+  const [joiningCohort, setJoiningCohort] = useState(false);
+  const cohortGuildId = COHORT_GUILD_ID;
+  const isCohortMember = cohortGuildId !== null && guilds.some((guild) => guild.id === cohortGuildId);
+
+  async function handleJoinCohort() {
+    setJoiningCohort(true);
+    try {
+      await onJoinCohortGuild();
+    } finally {
+      setJoiningCohort(false);
+    }
+  }
 
   async function cancel(email: string) {
     setCancelingEmail(email);
@@ -1907,6 +1940,26 @@ function GuildHallCard({
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {cohortGuildId !== null && (
+          <div className="guild-actions">
+            <button
+              type="button"
+              className="button button--primary"
+              disabled={joiningCohort}
+              onClick={() => {
+                if (isCohortMember) {
+                  onSelectGuild(cohortGuildId);
+                } else {
+                  void handleJoinCohort();
+                }
+              }}
+            >
+              <UserPlus size={15} />
+              {isCohortMember ? "Open the Cursor Boston guild" : "Join the Cursor Boston guild"}
+            </button>
           </div>
         )}
 

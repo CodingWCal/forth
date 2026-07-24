@@ -1238,6 +1238,9 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 
 ### TICKET-031: Add a safe one-click Cursor Boston guild join path
 
+**Status update:** Implemented in simplified form per explicit maintainer decision — no eligibility allowlist. Any signed-in account may self-join the one configured cohort guild via `isOpenCohortGuild()` in `firestore.rules` and `joinOpenCohortGuild()` in `lib/firebase/workspace.ts`. Scoped to exactly one workspace id (every other guild keeps its normal invite-only boundary); requires the maintainer to set the real guild id in `firestore.rules` and `NEXT_PUBLIC_COHORT_GUILD_ID` before it activates. The eligibility-allowlist scope below is intentionally not built and can be revisited later if trust requirements change.
+
+
 - Priority: P1 High
 - Type: Feature/Auth/Membership/Security
 - Area: Authenticated onboarding, guild membership, Firestore rules

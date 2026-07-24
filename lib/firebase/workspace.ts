@@ -201,6 +201,27 @@ async function createWorkspaceAt(
   return workspaceId;
 }
 
+// TICKET-031 (simplified): id of the one publicly-shared cohort guild that any
+// signed-in account may self-join with no invite and no eligibility check, set
+// via NEXT_PUBLIC_COHORT_GUILD_ID. Unset by default, so the feature is inert
+// until a maintainer opts in by configuring it. Must match the literal id
+// baked into isOpenCohortGuild() in firestore.rules.
+export const COHORT_GUILD_ID = (process.env.NEXT_PUBLIC_COHORT_GUILD_ID ?? "").trim() || null;
+
+export async function joinOpenCohortGuild(user: User) {
+  if (!COHORT_GUILD_ID) throw new Error("The shared cohort guild is not configured yet.");
+  const services = requireServices();
+  const email = requireAuthEmail(user);
+  await setDoc(doc(services.db, "workspaces", COHORT_GUILD_ID, "members", user.uid), {
+    uid: user.uid,
+    email,
+    displayName: user.displayName ?? email,
+    role: "member",
+    joinedAt: serverTimestamp(),
+  }, { merge: true });
+  return COHORT_GUILD_ID;
+}
+
 export async function createGuildWorkspace(user: User, name: string, initialState: WorkspaceState) {
   if (typeof crypto === "undefined" || typeof crypto.randomUUID !== "function") {
     throw new Error("This browser cannot safely create a guild identifier. Update the browser and try again.");

@@ -129,6 +129,16 @@ service cloud.firestore {
         .data.get('expiresAt', request.time + duration.value(3650, 'd')) > request.time;
     }
 
+    // TICKET-031 (simplified per maintainer decision): any signed-in account may
+    // self-join this one specific, publicly-shared cohort guild with no invite
+    // and no eligibility allowlist. Scoped to a single literal workspace id so
+    // every other guild keeps its normal invite-only boundary untouched.
+    // Maintainer: replace the id below with the real guild id, then redeploy
+    // rules. Until replaced this matches no real workspace and stays inert.
+    function isOpenCohortGuild(workspaceId) {
+      return workspaceId == 'REPLACE-WITH-CURSOR-BOSTON-GUILD-ID';
+    }
+
     // A signed-in person may discover only member documents whose UID is
     // their own. This powers the guild switcher without exposing rosters
     // from unrelated workspaces through a collection-group query.
@@ -173,7 +183,14 @@ service cloud.firestore {
             && request.resource.data.role == "member"
             && hasInviteForCurrentUser(workspaceId, request.auth.token.email)
             && inviteNotExpired(workspaceId, request.auth.token.email)
-            && !existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(request.auth.token.email)));
+            && !existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(request.auth.token.email)))
+          || (isOpenCohortGuild(workspaceId)
+            && signedIn()
+            && memberId == request.auth.uid
+            && request.auth.token.email != null
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.email == request.auth.token.email
+            && request.resource.data.role == "member");
         allow update, delete: if ownsWorkspace(workspaceId);
       }
 
