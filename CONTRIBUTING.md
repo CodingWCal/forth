@@ -148,3 +148,14 @@ Agent-generated code receives the same human review, test, accessibility, securi
 - Feedback or adaptation is not a rejection of the contribution; it is how Forth keeps one coherent architecture and product direction.
 
 Thanks for helping make Forth useful, calm, accessible, and dependable for the cohort.
+
+## When a PR may be closed without full review
+
+To keep review time sustainable, a pull request may be closed with a short note (and is welcome to be reopened once addressed) if it:
+
+- fails CI — lint, typecheck, tests, or the production build are red;
+- has no linked, scope-confirmed ticket claim (trivial doc/typo fixes excepted);
+- duplicates work already open in another PR or in flight per [`docs/AGENT_HANDOFF.md`](docs/AGENT_HANDOFF.md);
+- leaves the PR template unfilled.
+
+This is never a judgment of you or your effort — it keeps the signal high and the maintainer's time focused. Address the item and reopen (or open a fresh PR) any time.
