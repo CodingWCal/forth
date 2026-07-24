@@ -457,7 +457,13 @@ export async function loadWorkspaceStateFromDatabase(
   // reads with the small revision document so the client never assembles a
   // mixture from two commits. Entity writes cannot happen without advancing
   // this revision under the security rules.
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  //
+  // A revision that keeps advancing between the two metadata reads means a
+  // save is actively landing concurrently -- not a real error. Back off
+  // briefly between attempts so the in-flight write has time to settle
+  // instead of racing it with zero delay and giving up too eagerly.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 120 * attempt));
     const metadata = await getDoc(metadataRef);
     if (!metadata.exists()) return null;
     const data = metadata.data();
