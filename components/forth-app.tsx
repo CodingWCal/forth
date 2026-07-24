@@ -27,7 +27,7 @@ import {
   UserPlus,
   Scroll,
 } from "lucide-react";
-import { type DragEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { type DragEvent, FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Image from "next/image";
 import { BrandMark } from "@/components/brand-mark";
 import { readBrowserStorage, writeBrowserStorage } from "@/lib/browser-storage";
@@ -52,6 +52,7 @@ import {
 } from "@/lib/firebase/workspace";
 import { createCleanWorkspace, DEMO_STORAGE_KEY } from "@/lib/entry";
 import { createSeedWorkspace } from "@/lib/seed";
+import { resolveTabNavigation } from "@/lib/tabs";
 import type { Pace, Project, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
 import {
   createTask,
@@ -1220,6 +1221,33 @@ function BoardView({
   const [showAllDue, setShowAllDue] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const activeProjectIndex = state.projects.findIndex(
+    (project) => project.id === activeProject.id,
+  );
+
+  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    // Navigate from the tab that actually holds focus, not the selected one.
+    // They match once React re-renders, but a held arrow key repeats faster
+    // than that, so reading focus here keeps repeat navigation moving.
+    const focusedIndex = tabRefs.current.indexOf(event.currentTarget);
+    const currentIndex = focusedIndex >= 0 ? focusedIndex : activeProjectIndex;
+    const nextIndex = resolveTabNavigation(
+      event.key,
+      currentIndex,
+      state.projects.length,
+    );
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const nextProject = state.projects[nextIndex];
+    if (!nextProject) return;
+
+    // Automatic-activation Tabs pattern: moving focus also selects, so the
+    // controlled ticket board stays in sync with the focused tab.
+    onSelectProject(nextProject.id);
+    tabRefs.current[nextIndex]?.focus();
+  };
   const visibleDueEntries = showAllDue ? dueEntries : dueEntries.slice(0, DUE_PANEL_LIMIT);
   const hiddenDueCount = dueEntries.length - visibleDueEntries.length;
 
@@ -1251,18 +1279,30 @@ function BoardView({
   return (
     <div className="board-view">
       <div className="project-tabs" role="tablist" aria-label="Projects">
-        {state.projects.map((project) => (
-          <button
-            key={project.id}
-            className={activeProject.id === project.id ? "project-tab is-active" : "project-tab"}
-            onClick={() => onSelectProject(project.id)}
-            role="tab"
-            aria-selected={activeProject.id === project.id}
-          >
-            <span className={`project-dot project-dot--${project.color}`} />
-            {project.title}
-          </button>
-        ))}
+        {state.projects.map((project, index) => {
+          const isActive = activeProject.id === project.id;
+          return (
+            <button
+              key={project.id}
+              ref={(node) => {
+                tabRefs.current[index] = node;
+              }}
+              id={`project-tab-${project.id}`}
+              className={isActive ? "project-tab is-active" : "project-tab"}
+              onClick={() => onSelectProject(project.id)}
+              onKeyDown={onTabKeyDown}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls="project-ticket-board"
+              // Roving tabindex: only the active tab is a tab stop; the rest
+              // are reached with the arrow keys.
+              tabIndex={isActive ? 0 : -1}
+            >
+              <span className={`project-dot project-dot--${project.color}`} />
+              {project.title}
+            </button>
+          );
+        })}
       </div>
 
       <section className="board-intro">
@@ -1332,7 +1372,14 @@ function BoardView({
         Drag a ticket between status columns with your cursor. On phone or keyboard, use its move arrows.
       </p>
 
-      <section className="kanban" aria-label={`${activeProject.title} ticket board`} aria-describedby="kanban-drag-help">
+      <section
+        className="kanban"
+        id="project-ticket-board"
+        role="tabpanel"
+        aria-labelledby={`project-tab-${activeProject.id}`}
+        aria-label={`${activeProject.title} ticket board`}
+        aria-describedby="kanban-drag-help"
+      >
         {statuses.map((status) => {
           const tasks = state.tasks.filter(
             (task) => task.projectId === activeProject.id && task.status === status &&
