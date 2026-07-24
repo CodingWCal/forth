@@ -41,17 +41,18 @@ After scope is confirmed:
 ```bash
 git remote add upstream https://github.com/CodingWCal/forth.git  # once; skip if it already exists
 git fetch upstream
-git switch main
-git pull --ff-only upstream main
+git switch staging
+git pull --ff-only upstream staging
 git switch -c <your-handle>/ticket-###-short-description
 ```
 
-If the maintainer gives you a different base branch, use that exact branch and identify the dependency in your PR.
+Open normal feature and fix pull requests into `staging`. The maintainer promotes a tested release from `staging` to `main`; contributors should not target `main` unless the maintainer explicitly requests an emergency production fix. If the maintainer gives you a different base branch, use that exact branch and identify the dependency in your PR.
 
 - Keep one ticket or independently reviewable slice per branch.
 - Use focused, imperative commit subjects such as `Add keyboard movement for quest cards`.
 - Do not force-push after review begins unless the reviewer asks you to clean up the branch.
 - Never merge your own PR. `@CodingWCal` owns final integration and release timing.
+- Do not add every temporary Vercel preview hostname to Firebase. Authenticated team testing uses the stable staging hostname documented in [`docs/STAGING.md`](docs/STAGING.md).
 
 ## Local setup
 

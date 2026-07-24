@@ -92,6 +92,7 @@ In a non-interactive Codex runtime where the `pnpm` wrapper attempts to reinstal
 
 - Keep commits focused and use imperative subjects (for example, `Add recovery-aware task transitions`).
 - Preserve user-owned changes and inspect `git status`/diffs before committing.
+- Base normal feature branches on `staging` and target pull requests to `staging`. Only the maintainer promotes a verified `staging` release to production `main`; see `docs/STAGING.md`.
 - Vercel should import the GitHub repository and use the default Next.js build. Add Firebase values in Vercel project settings; do not commit them.
 - Update `docs/ticket-backlog.md` after broad audits instead of silently expanding current scope.
 - Summarize changed files, validation commands, remaining risks, and the plain-English/engineering rationale in the final handoff.

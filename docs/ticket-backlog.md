@@ -7,9 +7,9 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 ## Product Intent Snapshot
 
 - Plain English: Forth turns a small engineering team’s real ticket queue into a calm fantasy quest board. It rewards finishing meaningful work without leaderboards, punishment, or streak anxiety.
-- Engineering framing: Next.js 16/React 19 with a strict TypeScript reducer domain, localStorage fallback, and an authenticated Firestore workspace document synchronized through a client adapter.
+- Engineering framing: Next.js 16/React 19 with a strict TypeScript reducer domain, an explicit demo-only localStorage adapter, and authenticated Firestore persistence. TICKET-001's isolated implementation normalizes projects/tasks and adds revision-checked transactions; production remains on the prior schema until coordinated release approval.
 - Brand/design guardrails: Preserve Iron & Parchment: SNES-era medieval guild framing, warm parchment, near-black green, moss, oxblood, amber, square pixel edges, serif display type, restrained sprite motion, and literal engineering meaning beneath themed labels.
-- Assumptions: The current target is a small private beta. It is not yet a conflict-safe, multi-team production SaaS.
+- Assumptions: The current target is a small private beta. Conflict-safe persistence is implemented in an isolated branch but still requires review, staging migration validation, and coordinated rules/application promotion before production can be called conflict-safe.
 
 ## Verification Summary
 
@@ -25,14 +25,19 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 
 | Ticket | Status | Note |
 |---|---|---|
-| TICKET-001–006 | Planned | Still required for production cohort use; TICKET-006 is partially unblocked by the invitation work. |
+| TICKET-001 | Draft PR [#24](https://github.com/CodingWCal/forth/pull/24) | Normalized records, revision-checked transactions, stale-write recovery UI, legacy migration recovery point, and emulator races are implemented. Automated gates pass; manual authenticated two-tab staging validation and a coordinated rules/application release remain required. |
+| TICKET-002–006 | Planned | Still required for production cohort use; TICKET-006 is partially unblocked by the invitation work. |
 | TICKET-007 | Implemented on `main` | Pending invitations exist in code and rules; still needs live two-account E2E verification. |
 | TICKET-008 | Implemented on `agent/invite-lifecycle` | Cancel/decline/expiry and rule tests pass; not yet released to production. |
 | TICKET-009 | Planned | Optional email delivery must remain downstream of a reliable in-app invitation flow. |
 | TICKET-010 | Implemented on `codex/ticket-010-auth-entry` | Automated gates pass; live Google/GitHub two-account smoke testing remains a release requirement. |
+| TICKET-013 | Revised in draft PR [#22](https://github.com/CodingWCal/forth/pull/22) after maintainer preview rejection | Dashboard now contains only today’s tickets and compact capacity; literal navigation replaces fantasy-only labels; deadlines live in Tickets; rank/gold/history live in Activity; fake dispatch/oath cards are removed; one global New ticket action and persistent Exit demo remain. Fresh preview and three-person usability review are still required. |
 | TICKET-019 | Repository policy merged via PRs [#19](https://github.com/CodingWCal/forth/pull/19) and [#20](https://github.com/CodingWCal/forth/pull/20) | Human/agent contribution contract, ownership, templates, security reporting, decision log, and backlog-ownership policy are on `main`; hosted branch-protection settings and a fresh-contributor dry run still require maintainer verification. |
 | TICKET-022 | Ready PR [#21](https://github.com/CodingWCal/forth/pull/21) | Roger's original PR #18 commit and authorship are preserved. The guide distinguishes authenticated cloud data from disposable demo data, pairs core fantasy terms with literal PM language, passes automated gates, and passed the maintainer's live authenticated preview smoke test. The centralized terminology map and plain-language preference remain planned. |
 | TICKET-029 | Planned | Add an optional, accessible two-minute coach-mark tour after PR #21 lands; keep it separate so the verified static guide remains a reliable fallback. |
+| TICKET-030 | Implemented within draft PR [#22](https://github.com/CodingWCal/forth/pull/22); preview pending | Capacity grid children can shrink, the meter stacks before collision, copy wraps safely, and Playwright compares the energy region bounds with its card at 320/375/768/1440px. |
+| TICKET-031 | Planned quick feature | After authentication, eligible Cursor Boston fellows can join the designated cohort guild from one explicit button without copying a guild code; authorization must be enforced beyond the client UI. |
+| TICKET-032 | Implemented in draft PR [#23](https://github.com/CodingWCal/forth/pull/23); preview build passed | A root pnpm override resolves Next's transitive image dependency to `sharp@0.35.0`; audit, frozen install, runtime load, local image optimization, lint, types, unit, E2E, build, GitGuardian, and Vercel pass. Maintainer preview sprite smoke remains before merge. |
 
 ## External Contribution Intake
 
@@ -47,13 +52,13 @@ PR #18's themed walkthrough and contextual-help entry point have been reconciled
 
 ## Recommended Delivery Order
 
-1. **Identity and data safety:** TICKET-010, TICKET-001, TICKET-024, TICKET-011, TICKET-002.
+1. **Identity and data safety:** TICKET-032, TICKET-010, TICKET-001, TICKET-024, TICKET-011, TICKET-002, then the scoped cohort-entry path in TICKET-031.
 2. **Complete the PM contract:** TICKET-028, TICKET-012, TICKET-006, TICKET-005, then discovery epic TICKET-025.
-3. **Make daily use obvious and inclusive:** TICKET-013, TICKET-014, TICKET-022, TICKET-029, TICKET-027, TICKET-004, TICKET-026.
+3. **Make daily use obvious and inclusive:** TICKET-030, TICKET-013, TICKET-014, TICKET-022, TICKET-029, TICKET-027, TICKET-004, TICKET-026.
 4. **Prove and operate it:** TICKET-003/TICKET-015, TICKET-016, TICKET-017, TICKET-018, TICKET-020, TICKET-021.
 5. **Expand engagement safely:** TICKET-023, then TICKET-009 and later notification work.
 
-Active inventory after this audit: **4 P0**, **15 P1**, and **8 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
+Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, plus **2 implemented invitation tickets awaiting final live/release verification**.
 
 ## Priority Guide
 
@@ -67,6 +72,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **8 P2** tickets, pl
 ### TICKET-001: Prevent last-write-wins data loss during concurrent cloud edits
 
 - Priority: P0 Critical
+- Status: Draft PR [#24](https://github.com/CodingWCal/forth/pull/24); automated gates pass, with authenticated staging migration smoke testing and coordinated release approval still required.
 - Type: Architecture/Reliability
 - Area: `lib/firebase/workspace.ts`, Firestore workspace data model
 - Effort: L
@@ -509,36 +515,37 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **8 P2** tickets, pl
 - Subagent prompt:
   > Implement TICKET-012 using explicit reducer transitions and referential-integrity rules. Preserve task and Chronicle history, and make every destructive consequence understandable before confirmation.
 
-### TICKET-013: Rebuild the default Quest Log around fast daily triage
+### TICKET-013: Rebuild the default Dashboard around fast daily triage
 
 - Priority: P1 High
 - Type: UX/Information Architecture
-- Area: Quest Log, desktop sidebar, mobile first screen
+- Area: Dashboard, navigation, Tickets, Activity, desktop sidebar, mobile first screen
 - Effort: L
 - Confidence: High
 - Evidence: Production’s first screen includes rank/gold, provisions, focused quests, seven-day expedition, campaign charter, tavern dispatch, and guild oath. The peer review and browser audit both found the functional task path obscured by thematic chrome. Roger's open PR #13 contributes pure due-date selectors, five focused test cases, and a “Nearing the moon” Today panel; the behavior is valuable, but another full panel must be reconciled with this task-first hierarchy rather than simply stacked above existing modules.
-- Plain English: Keep the magic, but put “What am I doing today?” and “Add a ticket” ahead of decorative story modules.
+- Plain English: Keep the magic in the materials and artwork, but let people use familiar words and see only today’s work on the Dashboard.
 - Learning brief (layman terms):
   - What is happening now: Many equally prominent panels compete for attention.
   - Why it matters: Newer and older users can lose the main task workflow before they learn the theme.
-  - What changing it means: Show today’s tasks, status, assignee, and add/search controls first; move motivation modules into a collapsible secondary area.
+  - What changing it means: Show today’s tasks first, use one global ticket-creation action, move deadlines to Tickets, move progress to Activity, and remove fake decorative content.
   - Concept to learn: Progressive disclosure shows essential choices first and reveals detail when a person asks for it.
-- Engineering framing: Establish a task-first visual hierarchy, reduce above-the-fold competing regions, persist optional panel disclosure, and retain literal semantics alongside themed labels.
+- Engineering framing: Establish a task-first information architecture with literal global navigation, single-responsibility views, one global create action, responsive intrinsic sizing, and theme expressed through visual design rather than mandatory terminology.
 - Scope:
-  - Make Today’s quests and a prominent Add ticket action the primary region.
-  - Integrate overdue, due-today, and due-soon work into that primary task region or one compact disclosure; do not create another equally prominent dashboard module.
+  - Make today’s selected tickets the primary Dashboard region and expose exactly one global New ticket action per viewport.
+  - Keep overdue, due-today, and due-soon work in the Tickets view; do not create another equally prominent Dashboard module.
   - Reuse or adapt PR #13's storage-agnostic timing selectors and calm rule that completed work is never nagged.
   - Document the default due-soon window and let future notification settings consume the same domain policy instead of duplicating urgency logic.
-  - Collapse rank/history/dispatch/oath into one optional “Guild progress” drawer or secondary route.
+  - Move rank, gold, avatar, and history to Activity; remove fake dispatch/oath content from the working product.
   - Show current workspace and save mode near the page title.
-  - Add a first-use pointer to Realm Map without a blocking product tour.
+  - Use literal Dashboard, Tickets, Activity, and Workspace & team navigation labels. Fantasy names may appear only as secondary flavor.
+  - Keep one persistent Exit demo action visible outside settings.
 - Out of scope:
-  - Removing the fantasy system, XP/proof model, or Chronicle.
+  - Removing the fantasy visual system, private XP/progress model, or completion record.
 - Acceptance criteria:
-  - A first-time tester can locate add, edit, move, and find-ticket actions within five seconds.
+  - A first-time tester can locate New ticket, edit, move, Tickets, Activity, Workspace & team, and Exit demo without learning fantasy vocabulary.
   - Active dated tickets clearly expose overdue, due-today, and due-soon timing in urgency order without relying on color or shame-based language; completed tickets never appear as overdue.
   - At 375px, the first focused ticket begins within the initial viewport or one short scroll.
-  - Theme modules remain available but never interrupt ticket operations.
+  - Dashboard contains no campaign charter, fake dispatch, oath, deadline, rank, gold, or history modules; real progress remains available in Activity.
   - Usability testing with at least three cohort members, including one less-technical/older participant, records task completion time and confusion points.
 - Suggested files:
   - `components/forth-app.tsx`
@@ -547,7 +554,7 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **8 P2** tickets, pl
 - Validation:
   - Preserve PR #13's calendar-day, custom-window, filtering, ordering, and tie-break unit cases; add DST/time-zone boundary cases plus desktop/mobile browser coverage, keyboard navigation, 200% zoom, and a moderated five-task usability script.
 - Subagent prompt:
-  > Implement TICKET-013 as a task-first Quest Log redesign. Preserve the fantasy identity through materials, typography, and optional progress modules while making core PM actions unmistakable.
+  > Implement TICKET-013 as a task-first Dashboard redesign. Use literal project-management language for navigation and controls, preserve the fantasy identity through materials and secondary flavor, keep one global create action and visible demo exit, move deadlines to Tickets and progress to Activity, and prove responsive behavior with browser tests.
 
 ### TICKET-014: Establish an accessibility baseline across disability needs
 
@@ -1190,3 +1197,116 @@ Active inventory after this audit: **4 P0**, **15 P1**, and **8 P2** tickets, pl
   - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `pnpm build`.
 - Subagent prompt:
   > Implement TICKET-029 after PR #21 merges. Preserve the verified quick-start dialog as a fallback, add an optional accessible coach-mark tour over the real Forth controls, never mutate user data for demonstration, and prove responsive, keyboard, screen-reader, persistence, and missing-anchor behavior with focused tests.
+
+### TICKET-030: Contain the daily energy meter inside its responsive card
+
+- Priority: P1 High
+- Type: Bug/UI/Responsive/A11y
+- Area: Quest Log provisions panel and capacity meter
+- Effort: S
+- Confidence: High
+- Evidence: The maintainer's desktop preview screenshot shows the capacity bar and “energy remain” note leaving the left provisions card and drawing underneath the right campaign rail. `app/globals.css` defines `.pace-row` as `minmax(420px, 1.3fr) minmax(210px, 0.7fr)`, but its `.capacity-wrap` grid item has no explicit `min-width: 0` or overflow-safe wrapping contract. The current E2E suite checks page-level horizontal overflow, which does not detect overlap between sibling grid regions.
+- Plain English: The energy bar should resize or stack inside its own parchment card instead of stretching underneath neighboring content.
+- Learning brief (layman terms):
+  - What is happening now: The page itself may still fit the browser, but one child section is wider than the space its card gave it.
+  - Why it matters: Overlapping panels make the interface look broken and can hide text or controls even when no horizontal scrollbar appears.
+  - What changing it means: Let the energy area shrink and wrap, and stack it below the pace buttons before it can cross the card boundary.
+  - Concept to learn: A grid item's default minimum width can be based on its content. `min-width: 0` explicitly permits that child to shrink within its assigned CSS Grid column instead of overflowing into a sibling.
+- Engineering framing: Correct the `.pace-row`/`.capacity-wrap` intrinsic sizing contract, add a content-aware stacking breakpoint or container rule, and test element-to-container bounds rather than relying only on document `scrollWidth`.
+- Scope:
+  - Keep `.capacity-wrap`, `.capacity-track`, and `.capacity-note` fully inside `.pace-panel` at all supported widths.
+  - Add `min-width: 0`, safe text wrapping, and a breakpoint/container behavior that stacks the meter when the two-column row is too narrow.
+  - Preserve the current 8-bit bar styling, progressbar semantics, numeric energy text, and over-capacity warning.
+  - Add a stable test selector only if semantic roles and nearby labels cannot identify the elements reliably.
+- Out of scope:
+  - Redesigning capacity mathematics, changing pace choices, or folding the broader TICKET-013 information-architecture work into this small fix.
+- Acceptance criteria:
+  - The capacity track and note remain within the provisions card with no overlap at 320, 375, 768, 1024, 1280, and 1440px.
+  - The meter stacks below pace choices before either region falls below a readable width.
+  - Long localized or warning copy wraps without increasing document-level horizontal overflow.
+  - The progressbar retains its accessible name and correct min/max/current values.
+  - A Playwright assertion compares the energy region bounds with the provisions-card bounds and fails on the screenshot's current overlap regression.
+- Suggested files:
+  - `app/globals.css`
+  - `components/forth-app.tsx` only if a stable semantic/test hook is required
+  - `tests/e2e/auth-entry.spec.ts`
+- Validation:
+  - Run the focused Playwright responsive matrix, keyboard/accessibility smoke, `pnpm lint`, `pnpm typecheck`, and `pnpm build`.
+  - Inspect the normal and over-capacity states at desktop, tablet, and phone widths.
+- Subagent prompt:
+  > Implement TICKET-030 as a small responsive regression fix. Keep the energy meter and note inside the provisions card, preserve the fantasy styling and progressbar semantics, add element-boundary browser assertions across the supported viewports, and do not expand into the TICKET-013 redesign.
+
+### TICKET-031: Add a safe one-click Cursor Boston guild join path
+
+- Priority: P1 High
+- Type: Feature/Auth/Membership/Security
+- Area: Authenticated onboarding, guild membership, Firestore rules
+- Effort: M
+- Confidence: Medium
+- Depends on: TICKET-007 invitation acceptance, TICKET-011 real member identity, and an explicit maintainer decision about the authoritative Cursor Boston eligibility source.
+- Evidence: Current members must receive an email-matched invitation or copy a guild code after sign-in. The maintainer requested a quick button that lets Cursor Boston users join the shared Forth guild directly after authentication.
+- Plain English: An eligible fellow should be able to sign in, press one obvious “Join the Cursor Boston guild” button, and enter the right shared workspace—without hunting for a code or asking the maintainer to repeat setup steps.
+- Learning brief (layman terms):
+  - What is happening now: The app knows who signed in, but it does not have a trusted, automatic way to know whether that person belongs to the cohort.
+  - Why it matters: A public join button with only a hidden client check would let outsiders bypass the intended invitation boundary.
+  - What changing it means: Choose a trustworthy cohort allowlist or signed invitation source, verify eligibility in the backend/security layer, then expose one clear join action to eligible accounts.
+  - Concept to learn: Authentication proves who a user is; authorization decides what that identified user is allowed to join or change.
+- Engineering framing: Add an idempotent cohort-membership enrollment transition backed by a server-controlled eligibility record or equivalent verifiable claim. Enforce the transition in Firestore rules or a trusted server endpoint, bind the resulting member record to `request.auth.uid`, and make repeated clicks safe.
+- Scope:
+  - Show a literal “Join the Cursor Boston guild” action after Google or GitHub authentication when the account is eligible and not already a member.
+  - Define the canonical guild/workspace ID in safe configuration rather than hard-coding a temporary preview value in presentation code.
+  - Choose and document the eligibility source (for example, a maintainer-managed Firestore allowlist keyed by verified email/UID, or a trusted cohort-platform claim).
+  - Create membership once, open the cohort workspace, and show clear already-joined, not-eligible, loading, retry, and permission-denied states.
+  - Preserve the existing invitation/code path for other private guilds.
+- Out of scope:
+  - Letting every authenticated internet user join, trusting a client-side email-domain check, exposing the cohort roster publicly, or silently enrolling someone without an explicit button press.
+- Acceptance criteria:
+  - An eligible new account can sign in and join the designated cohort guild with one explicit action and no copied guild code.
+  - An ineligible authenticated account is denied by the backend/rules even if it manually calls the write operation.
+  - Repeated clicks or refreshes do not duplicate membership, overwrite another role, or corrupt the workspace.
+  - Existing members see “Open Cursor Boston guild” rather than another join mutation.
+  - Google and GitHub accounts follow the same UID-bound authorization contract; account-linking edge cases receive actionable copy.
+  - Two-account emulator/browser tests cover eligible, ineligible, already-member, retry, and concurrent-click behavior.
+- Suggested files:
+  - `components/forth-app.tsx`
+  - `lib/firebase/workspace.ts`
+  - `firestore.rules`
+  - `tests/firestore.rules.test.ts`
+  - `tests/e2e/auth-entry.spec.ts`
+  - `docs/PHASE2.md`
+- Validation:
+  - Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:rules`, `pnpm test:e2e`, and `pnpm build`.
+  - Perform a live staging smoke with one eligible fresh account and one ineligible account without exposing roster data or credentials.
+- Subagent prompt:
+  > Implement TICKET-031 as a one-click, explicitly confirmed Cursor Boston guild join flow. Use a trusted eligibility source, enforce UID-bound membership server-side or in Firestore rules, keep repeated attempts idempotent, preserve normal private-guild invitations, and prove eligible/ineligible boundaries with rules and two-account browser tests.
+
+### TICKET-032: Patch the newly disclosed sharp/libvips vulnerability
+
+- Priority: P1 High
+- Type: Security/Dependency/Release
+- Area: Next.js image pipeline, lockfile, Vercel build/runtime
+- Effort: S
+- Confidence: High
+- Evidence: `pnpm audit --prod` on 2026-07-21 reports high-severity [GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj). The lockfile resolves Next.js to `sharp@0.34.5`; the official GitHub advisory marks versions below `0.35.0` vulnerable and lists `0.35.0` as the first patched version. Forth currently processes only trusted local sprite assets, which limits present exploitability but does not justify carrying the vulnerable production dependency.
+- Plain English: A newly announced flaw affects the image-processing library bundled under Next.js. Forth does not currently accept user image uploads, so immediate exposure is limited, but the dependency should be patched and proven compatible before the next production release.
+- Engineering framing: Select a Next.js-supported resolution to `sharp>=0.35.0` (prefer an upstream Next.js patch over a blind override), regenerate the pnpm lockfile, verify platform-specific optional packages, and exercise local/Vercel image optimization without weakening reproducibility.
+- Scope:
+  - Check for a compatible Next.js patch release or documented dependency update before adding an override.
+  - Resolve every production `sharp` path to a non-vulnerable version and keep the lockfile deterministic.
+  - Verify the code-squire sprite and all `next/image` render paths locally and on Vercel.
+  - Record the advisory, chosen remediation, and rollback in release notes/handoff.
+- Out of scope:
+  - Suppressing the audit, deleting image optimization without evidence, or bundling unrelated dependency upgrades.
+- Acceptance criteria:
+  - `pnpm audit --prod` reports no GHSA-f88m-g3jw-g9cj finding.
+  - `pnpm install --frozen-lockfile`, lint, typecheck, unit tests, E2E, and production build pass on a fresh install.
+  - Vercel preview succeeds and local/static sprite images render sharply at supported sizes.
+  - If upstream compatibility blocks the patch, the release is explicitly held or a documented temporary mitigation proves that untrusted images cannot reach sharp.
+- Suggested files:
+  - `package.json`
+  - `pnpm-lock.yaml`
+  - `docs/AGENT_HANDOFF.md`
+- Validation:
+  - Re-run the full release suite, `pnpm audit --prod`, and a Vercel preview image smoke test.
+- Subagent prompt:
+  > Implement TICKET-032 as an isolated security dependency patch. Prefer a Next.js-supported route to sharp 0.35.0 or newer, keep the lockfile reproducible, prove image rendering and the complete test/build suite, and do not suppress the official GitHub advisory.

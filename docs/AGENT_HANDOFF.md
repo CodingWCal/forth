@@ -5,22 +5,24 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 ## Current checkpoint
 
 - Date: 2026-07-21
-- Worktree: `C:\Users\calvi\Documents\Codex\forth-contributor-agent-policy`
-- Branch: `codex/integrate-pr18-onboarding`
-- Integration commits: `99e9613` (Roger's original PR #18 commit, preserving authorship) and `c49f1e4` (maintainer reconciliation and QA)
-- Base: `origin/main` at `7aeb3c2` after merged PR #20
-- Draft PR: https://github.com/CodingWCal/forth/pull/21
-- Active ticket: TICKET-022 first-visit/contextual-help slice
-- Release state: pushed as PR #21; automated and hosted checks passed; maintainer reported the authenticated preview smoke test passed; original PR #18 closed as superseded; not merged or deployed
+- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket013`
+- Branch: `codex/ticket-013-task-first-quest-log`
+- Production baseline: `origin/main` at merge commit `d547e4b` after PR #21
+- Staging baseline at branch creation: `30e71f4`; canonical `staging` has since added TICKET-031 and TICKET-032 backlog commits
+- Active ticket: TICKET-013 task-first Dashboard redesign, including the TICKET-030 responsive-capacity fix
+- Draft PR: https://github.com/CodingWCal/forth/pull/22 (targets `staging`)
+- Previous implementation commit: `7c10e00`; the current branch tip contains the revised, locally validated usability implementation
+- Release state: PR #21 merged and deployed successfully; production and stable staging both return HTTP 200
+- Stable staging URL: https://forth-git-staging-calvintrinhvan-2763s-projects.vercel.app/
 
 ## Implemented in this checkpoint
 
-- Reconciled Roger's first-visit welcome guide with Forth's authenticated-entry architecture instead of merging the outdated local-first assumptions.
-- Opens the cloud guide only after a verified Firestore snapshot; demo copy explicitly states that sample tickets remain disposable and browser-local.
-- Stores welcome state safely and separately for demo mode and each authenticated account on a shared device.
-- Pairs the core fantasy labels with literal PM terms for daily capacity, tickets, Kanban status, and completed work.
-- Keeps the native dialog keyboard/backdrop/close behavior, returns focus to the Guild Hall help trigger, and enforces 44px actions.
-- Documents the feature in README and records PR #13/#18 intake status in the canonical backlog.
+- Replaced fantasy-first navigation with literal `Dashboard`, `Tickets`, `Activity`, and `Workspace & team` labels; fantasy wording is now secondary flavor.
+- Reduced Dashboard to two responsibilities: today's selected tickets and daily capacity. Deadlines moved to Tickets; avatar/rank/gold/history moved to Activity; fake campaign, dispatch, and oath modules were removed.
+- Consolidated ticket creation into one global `New ticket` action and added a persistent `Exit demo` control, so neither action must be rediscovered in another view.
+- Replaced visible quest/status jargon with ticket language and `Ready`, `In progress`, `Paused`, and `Done` while preserving the parchment-and-pixel art direction.
+- Fixed the capacity meter's intrinsic sizing so it stacks before colliding with neighboring content, and added element-boundary regression coverage at 320, 375, 768, 1024, 1280, and 1440px.
+- Updated browser tests and the design/backlog contracts to reflect the revised information architecture.
 
 ## Validation at handoff
 
@@ -28,24 +30,26 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 - `pnpm run lint`: passed.
 - `pnpm run typecheck`: passed.
 - `pnpm run test`: passed, 50/50 unit tests.
-- `pnpm run test:rules`: passed, 17/17 Firestore emulator tests.
-- `pnpm run test:e2e`: passed, 7/7 Playwright tests across 320, 375, 768, and 1440px viewports.
+- `pnpm run test:rules`: not rerun because this branch changes no Firebase adapter, schema, or rules behavior; the staging baseline passed 17/17.
+- `pnpm run test:e2e`: passed, 10/10 Playwright tests across 320, 375, 768, 1024, 1280, and 1440px viewports.
 - `pnpm run build`: passed.
-- `pnpm audit --prod`: no known vulnerabilities.
+- `pnpm audit --prod`: reports one newly published high-severity transitive `sharp@0.34.5` advisory; independently verified as GHSA-f88m-g3jw-g9cj and recorded as TICKET-032 on canonical `staging` rather than mixed into this UX branch.
 - `git diff --check`: passed.
 - Added-line credential-pattern scan: passed.
-- Hosted GitGuardian and Vercel checks on draft PR #21: passed.
-- Live authenticated preview guide (cloud timing, copy, close/reopen behavior): passed by maintainer on 2026-07-21.
+- Fresh 375px and 1440px local visual captures inspected: one New ticket action and Exit demo are visible, the first ticket begins within the initial phone viewport, and only today's tickets plus capacity remain on Dashboard.
+- Hosted GitGuardian and the previous Vercel deployment for PR #22 passed; the revised commit still needs a fresh hosted preview and maintainer smoke.
 
-## Remaining before merge/deploy
+## Next delivery sequence
 
-1. Review PR #21 and merge it when the maintainer is ready; all defined release gates for this slice have passed.
-2. Start TICKET-029 only from updated `main` after #21 merges; do not expand #21 with the interactive tour.
-3. Do not deploy until the maintainer explicitly approves release from updated `main`.
+1. Commit and push the revised TICKET-013 implementation to draft PR #22, then wait for a fresh hosted preview.
+2. Run a maintainer visual/usability smoke on that preview; merge into `staging` only after explicit approval.
+3. After merge, use the stable staging hostname for authenticated cloud testing; do not authorize the temporary feature URL in Firebase.
+4. Conduct the still-unverified three-person usability exercise, including a third account and one less-technical/older cohort member.
+5. Start TICKET-029 only after this information architecture is accepted so guided-tour anchors do not immediately become stale.
 
 ## Known next risk
 
-The automated suite covers signed-out protection, explicit demo entry, dialog behavior, keyboard focus, persistence, and responsive layouts. It does not automate a live third-party OAuth/Firestore session, so the cloud-guide timing still needs one manual preview smoke test. The centralized terminology map and persistent plain-language preference remain future TICKET-022 work.
+The newly disclosed sharp/libvips advisory is tracked as TICKET-032 and should be patched before the next production promotion. Firebase Authentication requires the stable staging hostname only once; temporary feature-preview hostnames should not be added after every push.
 
 ## Required end-of-session update
 

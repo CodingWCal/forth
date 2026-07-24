@@ -89,8 +89,9 @@ Reducer + selectors (`lib/workspace.ts`)
         │
         ├── demo-only localStorage namespace
         └── Firebase workspace boundary
-              ├── workspaces/{workspaceId}/data/current
-              └── owner/member Firestore Security Rules
+              ├── workspaces/{workspaceId}/data/current (pace + revision)
+              ├── projects/{projectId} + tasks/{taskId}
+              └── owner/member + atomic-revision Firestore Security Rules
 ```
 
 Core domain rules stay independent of storage so the local and cloud adapters use the same state contract.
@@ -157,7 +158,9 @@ Release QA also exercises Today, Realm Map, Chronicle, Guild Hall, ticket creati
 
 ## Deployment
 
-Vercel imports the GitHub repository and deploys the `main` branch with the standard Next.js build. The six Firebase browser variables are configured in Vercel for Production and Preview. Firebase Authentication authorizes `forth-bice.vercel.app`, and Firestore rules are deployed separately through Firebase tooling.
+Vercel imports the GitHub repository and deploys `main` to production with the standard Next.js build. Normal feature pull requests target `staging`, which has one stable pre-production URL for authenticated team QA. The maintainer promotes a tested release from `staging` to `main`; individual feature branches are not production releases.
+
+The six Firebase browser variables are configured in Vercel for Production and Preview. Firebase Authentication authorizes the production hostname and the one stable staging hostname; temporary per-commit previews use demo-mode QA unless a maintainer deliberately authorizes one. Firestore rules are deployed separately through Firebase tooling. See [`docs/STAGING.md`](docs/STAGING.md).
 
 ## Security model
 
@@ -173,7 +176,7 @@ Vercel imports the GitHub repository and deploys the `main` branch with the stan
 
 ## Known limitations
 
-- Firestore synchronization uses whole-workspace, last-write-wins documents; simultaneous multi-device editing has no conflict-resolution interface yet.
+- Concurrent saves use normalized project/ticket documents and revision-checked transactions. A stale tab is stopped and can explicitly load the newest cloud version; automatic field-level merge remains future work.
 - Invitations are delivered by the owner sharing the displayed guild code out of band; Forth does not send transactional email.
 - GitHub sign-in requires the external OAuth provider configuration documented above; code alone cannot enable it in Firebase.
 - Desktop supports native drag and drop; touch and keyboard users use the explicit ticket movement buttons.
@@ -210,3 +213,4 @@ This README contains each required description section. Creating the cohort-repo
 - [Agent operating instructions](AGENTS.md)
 - [Security policy](SECURITY.md)
 - [Decision log](docs/DECISIONS.md)
+- [Staging and release workflow](docs/STAGING.md)

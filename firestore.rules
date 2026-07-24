@@ -17,6 +17,96 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
+    function canUseWorkspace(workspaceId) {
+      return belongsToWorkspace(workspaceId) || ownsWorkspace(workspaceId);
+    }
+
+    function isIncompleteOwnerProvisioning(workspaceId) {
+      return ownsWorkspace(workspaceId)
+        && !exists(/databases/$(database)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid));
+    }
+
+    function currentDataPath(workspaceId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/data/current;
+    }
+
+    function isNormalizedWorkspaceData(data) {
+      return data.keys().hasOnly([
+          'storageVersion', 'schemaVersion', 'revision', 'pace', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'storageVersion', 'schemaVersion', 'revision', 'pace'
+        ])
+        && data.storageVersion == 1
+        && data.schemaVersion == 2
+        && data.revision is int
+        && data.revision >= 0
+        && data.get('updatedAt', request.time) is timestamp
+        && (data.pace == 'light' || data.pace == 'steady' || data.pace == 'full');
+    }
+
+    function isNormalizedProject(data, projectId) {
+      return data.keys().hasOnly([
+          'id', 'title', 'code', 'outcome', 'color', 'targetDate', 'position', 'revision'
+        ])
+        && data.keys().hasAll([
+          'id', 'title', 'code', 'outcome', 'color', 'targetDate', 'position', 'revision'
+        ])
+        && data.id == projectId
+        && data.title is string
+        && data.code is string
+        && data.outcome is string
+        && data.targetDate is string
+        && data.position is int
+        && data.position >= 0
+        && data.revision is int
+        && (data.color == 'clay' || data.color == 'moss' || data.color == 'slate');
+    }
+
+    function isNormalizedTask(workspaceId, data, taskId) {
+      return data.keys().hasOnly([
+          'id', 'title', 'projectId', 'status', 'weight', 'meaning', 'assignee',
+          'isFocus', 'createdAt', 'completedAt', 'description', 'priority',
+          'dueDate', 'revision'
+        ])
+        && data.keys().hasAll([
+          'id', 'title', 'projectId', 'status', 'weight', 'meaning', 'assignee',
+          'isFocus', 'createdAt', 'revision'
+        ])
+        && data.id == taskId
+        && data.title is string
+        && data.title.size() > 0
+        && data.projectId is string
+        && existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId)/projects/$(data.projectId))
+        && data.status in ['ready', 'moving', 'paused', 'done']
+        && data.weight is int
+        && data.weight >= 1
+        && data.weight <= 3
+        && data.meaning is string
+        && data.assignee is string
+        && data.isFocus is bool
+        && data.createdAt is string
+        && data.get('completedAt', '') is string
+        && data.get('description', '') is string
+        && data.get('priority', '') in ['', 'low', 'medium', 'high']
+        && data.get('dueDate', '') is string
+        && (data.status != 'done' || data.get('completedAt', '').size() > 0)
+        && data.revision is int;
+    }
+
+    function startsNormalizedWorkspace(workspaceId) {
+      return !exists(currentDataPath(workspaceId))
+        && isNormalizedWorkspaceData(getAfter(currentDataPath(workspaceId)).data)
+        && getAfter(currentDataPath(workspaceId)).data.revision == 0;
+    }
+
+    function advancesWorkspaceRevision(workspaceId) {
+      return exists(currentDataPath(workspaceId))
+        && isNormalizedWorkspaceData(getAfter(currentDataPath(workspaceId)).data)
+        && getAfter(currentDataPath(workspaceId)).data.revision
+          == get(currentDataPath(workspaceId)).data.get('revision', 0) + 1;
+    }
+
     function isNewGuildId(workspaceId) {
       // New roots use a namespaced UUID v4. Existing uid-keyed/legacy roots
       // remain readable and updatable, but can no longer be created by a
@@ -95,8 +185,61 @@ service cloud.firestore {
           || hasInviteForCurrentUser(workspaceId, inviteEmail);
       }
 
-      match /data/{document=**} {
-        allow read, write: if belongsToWorkspace(workspaceId) || ownsWorkspace(workspaceId);
+      match /data/current {
+        allow read: if canUseWorkspace(workspaceId);
+        // Legacy whole-state documents remain readable so the first current
+        // client save can migrate them. New clients create normalized metadata.
+        allow create: if canUseWorkspace(workspaceId)
+          && ((isNormalizedWorkspaceData(request.resource.data)
+            && request.resource.data.revision == 0)
+            || request.resource.data.get('state', null) != null);
+        // Every current client write advances exactly one revision. Legacy
+        // clients that still attempt blind whole-document updates fail closed.
+        allow update: if canUseWorkspace(workspaceId)
+          && isNormalizedWorkspaceData(request.resource.data)
+          && request.resource.data.revision == resource.data.get('revision', 0) + 1;
+        allow delete: if isIncompleteOwnerProvisioning(workspaceId);
+      }
+
+      match /projects/{projectId} {
+        allow read: if canUseWorkspace(workspaceId);
+        allow create, update: if canUseWorkspace(workspaceId)
+          && isNormalizedProject(request.resource.data, projectId)
+          && request.resource.data.revision == getAfter(currentDataPath(workspaceId)).data.revision
+          && (startsNormalizedWorkspace(workspaceId) || advancesWorkspaceRevision(workspaceId));
+        allow delete: if isIncompleteOwnerProvisioning(workspaceId)
+          || (canUseWorkspace(workspaceId) && advancesWorkspaceRevision(workspaceId));
+      }
+
+      match /tasks/{taskId} {
+        allow read: if canUseWorkspace(workspaceId);
+        allow create, update: if canUseWorkspace(workspaceId)
+          && isNormalizedTask(workspaceId, request.resource.data, taskId)
+          && request.resource.data.revision == getAfter(currentDataPath(workspaceId)).data.revision
+          && (startsNormalizedWorkspace(workspaceId) || advancesWorkspaceRevision(workspaceId));
+        allow delete: if isIncompleteOwnerProvisioning(workspaceId)
+          || (canUseWorkspace(workspaceId) && advancesWorkspaceRevision(workspaceId));
+      }
+
+      match /recovery/{recoveryId} {
+        allow read: if canUseWorkspace(workspaceId);
+        // The first normalized save may create one immutable recovery point
+        // from the legacy whole-state document. It cannot be edited or erased
+        // from the browser afterward.
+        allow create: if recoveryId == 'legacy-v2'
+          && canUseWorkspace(workspaceId)
+          && request.resource.data.keys().hasOnly([
+            'state', 'sourceStorageVersion', 'migratedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'state', 'sourceStorageVersion', 'migratedAt'
+          ])
+          && request.resource.data.get('sourceStorageVersion', '') == 'whole-state-v2'
+          && request.resource.data.state is map
+          && request.resource.data.migratedAt is timestamp
+          && get(currentDataPath(workspaceId)).data.get('storageVersion', 0) != 1
+          && advancesWorkspaceRevision(workspaceId);
+        allow update, delete: if false;
       }
     }
   }
