@@ -45,7 +45,7 @@ The full motivational loop works with seeded data and browser persistence. It mu
 
 ### Phase 2 — Private beta (active)
 
-Firebase Authentication and Cloud Firestore provide authenticated cloud persistence behind a professional entry boundary. Google/GitHub sign-in, owner-created guild workspaces, email-matched invitations, and emulator-tested rules are connected. A separately named local demo is available only after explicit selection and is never used to provision cloud data. Conflict-aware multi-member editing, activity attribution, and recovery UX remain future beta work.
+Firebase Authentication and Cloud Firestore provide authenticated cloud persistence behind a professional entry boundary. Google/GitHub sign-in, owner-created guild workspaces, email-matched invitations, normalized project/task records, revision-checked saves, and emulator-tested rules are connected. A separately named local demo is available only after explicit selection and is never used to provision cloud data. Automatic field-level conflict merging, activity attribution, and full recovery operations remain future beta work.
 
 ### Phase 3 — Public beta
 

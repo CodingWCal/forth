@@ -89,8 +89,9 @@ Reducer + selectors (`lib/workspace.ts`)
         │
         ├── demo-only localStorage namespace
         └── Firebase workspace boundary
-              ├── workspaces/{workspaceId}/data/current
-              └── owner/member Firestore Security Rules
+              ├── workspaces/{workspaceId}/data/current (pace + revision)
+              ├── projects/{projectId} + tasks/{taskId}
+              └── owner/member + atomic-revision Firestore Security Rules
 ```
 
 Core domain rules stay independent of storage so the local and cloud adapters use the same state contract.
@@ -175,7 +176,7 @@ The six Firebase browser variables are configured in Vercel for Production and P
 
 ## Known limitations
 
-- Firestore synchronization uses whole-workspace, last-write-wins documents; simultaneous multi-device editing has no conflict-resolution interface yet.
+- Concurrent saves use normalized project/ticket documents and revision-checked transactions. A stale tab is stopped and can explicitly load the newest cloud version; automatic field-level merge remains future work.
 - Invitations are delivered by the owner sharing the displayed guild code out of band; Forth does not send transactional email.
 - GitHub sign-in requires the external OAuth provider configuration documented above; code alone cannot enable it in Firebase.
 - Desktop supports native drag and drop; touch and keyboard users use the explicit ticket movement buttons.

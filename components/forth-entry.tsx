@@ -58,6 +58,7 @@ type CloudLaunch = {
   workspaceId: string;
   guilds: GuildWorkspace[];
   state: WorkspaceState;
+  revision: number;
 };
 
 type InviteLoadState = "loading" | "ready" | "error";
@@ -132,16 +133,21 @@ export function ForthEntry() {
       if (!selected) throw new Error("No accessible workspace was found.");
 
       setScreen("opening-workspace");
-      const workspaceState = await loadWorkspaceState(selected.id);
+      const workspaceSnapshot = await loadWorkspaceState(selected.id);
       if (requestId !== requestIdRef.current) return;
-      if (!workspaceState) {
+      if (!workspaceSnapshot) {
         throw new Error("This workspace has no valid ticket data. Forth did not replace it with sample content.");
       }
 
       // This preference is a convenience only. A blocked localStorage API must
       // never prevent an authenticated user from opening their cloud data.
       writeBrowserStorage(`forth.active-workspace.${nextUser.uid}`, selected.id);
-      setCloudLaunch({ workspaceId: selected.id, guilds, state: workspaceState });
+      setCloudLaunch({
+        workspaceId: selected.id,
+        guilds,
+        state: workspaceSnapshot.state,
+        revision: workspaceSnapshot.revision,
+      });
       setScreen("cloud");
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
@@ -305,6 +311,7 @@ export function ForthEntry() {
         key={`${user.uid}:${cloudLaunch.workspaceId}`}
         mode="cloud"
         initialState={cloudLaunch.state}
+        initialCloudRevision={cloudLaunch.revision}
         cloudUser={user}
         initialGuilds={cloudLaunch.guilds}
         activeWorkspaceId={cloudLaunch.workspaceId}

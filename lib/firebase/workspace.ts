@@ -14,14 +14,16 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
   writeBatch,
+  type Firestore,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
-import type { WorkspaceState } from "@/lib/types";
+import type { Project, Task, WorkspaceState } from "@/lib/types";
 import {
   createForthAuthProvider,
   requireAuthEmail,
@@ -42,6 +44,28 @@ export {
 } from "@/lib/firebase/auth";
 
 export type CloudSession = { user: User | null; loading: boolean };
+
+export type CloudWorkspaceSnapshot = {
+  state: WorkspaceState;
+  revision: number;
+};
+
+const NORMALIZED_STORAGE_VERSION = 1;
+const MAX_TRANSACTION_WRITES = 450;
+
+export class WorkspaceConflictError extends Error {
+  readonly code = "workspace/conflict";
+
+  constructor(readonly expectedRevision: number, readonly actualRevision: number) {
+    super("Another teammate saved this workspace first. Forth stopped your stale save instead of overwriting their work.");
+    this.name = "WorkspaceConflictError";
+  }
+}
+
+export function isWorkspaceConflictError(error: unknown): error is WorkspaceConflictError {
+  return error instanceof WorkspaceConflictError
+    || (error instanceof Error && "code" in error && error.code === "workspace/conflict");
+}
 
 export type GuildWorkspace = {
   id: string;
@@ -105,7 +129,7 @@ export function watchAuth(callback: (session: CloudSession) => void): Unsubscrib
   const services = getFirebaseServices();
   if (!services) return null;
   callback({ user: null, loading: true });
-  return onAuthStateChanged(services.auth, (user) => callback({ user, loading: false }));
+  return onAuthStateChanged(services.auth, (user: User | null) => callback({ user, loading: false }));
 }
 
 export async function signInWithProvider(provider: ForthAuthProvider) {
@@ -135,6 +159,8 @@ async function createWorkspaceAt(
   const workspaceRef = doc(services.db, "workspaces", workspaceId);
   const memberRef = doc(workspaceRef, "members", user.uid);
   const stateRef = doc(workspaceRef, "data", "current");
+  const projectRefs = initialState.projects.map((project) => doc(workspaceRef, "projects", project.id));
+  const taskRefs = initialState.tasks.map((task) => doc(workspaceRef, "tasks", task.id));
 
   // Firestore rules cannot safely authorize a brand-new root and its child
   // documents in one client batch without weakening existing-guild access.
@@ -148,7 +174,15 @@ async function createWorkspaceAt(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    await setDoc(stateRef, { state: initialState, updatedAt: serverTimestamp() });
+    const initialData = writeBatch(services.db);
+    initialData.set(stateRef, normalizedWorkspaceMetadata(initialState, 0));
+    initialState.projects.forEach((project, index) => {
+      initialData.set(projectRefs[index], serializeProject(project, 0, index));
+    });
+    initialState.tasks.forEach((task, index) => {
+      initialData.set(taskRefs[index], serializeTask(task, 0));
+    });
+    await initialData.commit();
     await setDoc(memberRef, {
       uid: user.uid,
       email,
@@ -158,6 +192,8 @@ async function createWorkspaceAt(
     });
   } catch (error) {
     await deleteDoc(memberRef).catch(() => undefined);
+    await Promise.all(taskRefs.map((reference) => deleteDoc(reference).catch(() => undefined)));
+    await Promise.all(projectRefs.map((reference) => deleteDoc(reference).catch(() => undefined)));
     await deleteDoc(stateRef).catch(() => undefined);
     await deleteDoc(workspaceRef).catch(() => undefined);
     throw error;
@@ -341,35 +377,234 @@ export async function acceptGuildInvite(user: User, workspaceId: string) {
   };
 }
 
-export async function loadWorkspaceState(workspaceId: string): Promise<WorkspaceState | null> {
-  const services = requireServices();
-  const snapshot = await getDoc(doc(services.db, "workspaces", workspaceId, "data", "current"));
-  if (!snapshot.exists()) return null;
+function isNormalizedMetadata(data: Record<string, unknown>): boolean {
+  return data.storageVersion === NORMALIZED_STORAGE_VERSION
+    && Number.isInteger(data.revision)
+    && typeof data.pace === "string";
+}
 
-  // Firestore data is an untrusted persistence boundary. Reuse the same
-  // runtime parser as local storage and leave missing/invalid state explicit;
-  // the caller decides whether to show onboarding, an error, or a demo.
-  return parseStoredWorkspace(JSON.stringify(snapshot.data().state ?? null));
+function normalizedWorkspaceMetadata(state: WorkspaceState, revision: number) {
+  return {
+    storageVersion: NORMALIZED_STORAGE_VERSION,
+    schemaVersion: state.version,
+    revision,
+    pace: state.pace,
+    updatedAt: serverTimestamp(),
+  };
+}
+
+function serializeProject(project: Project, revision: number, position: number) {
+  return { ...project, position, revision };
+}
+
+function serializeTask(task: Task, revision: number) {
+  return {
+    id: task.id,
+    title: task.title,
+    projectId: task.projectId,
+    status: task.status,
+    weight: task.weight,
+    meaning: task.meaning,
+    assignee: task.assignee,
+    isFocus: task.isFocus,
+    createdAt: task.createdAt,
+    ...(task.completedAt === undefined ? {} : { completedAt: task.completedAt }),
+    ...(task.description === undefined ? {} : { description: task.description }),
+    ...(task.priority === undefined ? {} : { priority: task.priority }),
+    ...(task.dueDate === undefined ? {} : { dueDate: task.dueDate }),
+    revision,
+  };
+}
+
+function withoutRevision(data: Record<string, unknown>) {
+  const value = { ...data };
+  delete value.revision;
+  delete value.position;
+  return value;
+}
+
+export async function loadWorkspaceStateFromDatabase(
+  database: Firestore,
+  workspaceId: string,
+): Promise<CloudWorkspaceSnapshot | null> {
+  const workspaceRef = doc(database, "workspaces", workspaceId);
+  const metadataRef = doc(workspaceRef, "data", "current");
+
+  // A normalized workspace spans several collections. Bracket the collection
+  // reads with the small revision document so the client never assembles a
+  // mixture from two commits. Entity writes cannot happen without advancing
+  // this revision under the security rules.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const metadata = await getDoc(metadataRef);
+    if (!metadata.exists()) return null;
+    const data = metadata.data();
+
+    // Legacy whole-document snapshots remain readable and migrate during their
+    // first successful write. No sample fallback is introduced at this boundary.
+    if (!isNormalizedMetadata(data)) {
+      const state = parseStoredWorkspace(JSON.stringify(data.state ?? null));
+      return state ? { state, revision: 0 } : null;
+    }
+
+    const [projects, tasks] = await Promise.all([
+      getDocs(collection(workspaceRef, "projects")),
+      getDocs(collection(workspaceRef, "tasks")),
+    ]);
+    const confirmedMetadata = await getDoc(metadataRef);
+    if (!confirmedMetadata.exists()) return null;
+    const confirmedData = confirmedMetadata.data();
+    if (!isNormalizedMetadata(confirmedData) || confirmedData.revision !== data.revision) continue;
+
+    const state = parseStoredWorkspace(JSON.stringify({
+      version: confirmedData.schemaVersion ?? 2,
+      pace: confirmedData.pace,
+      projects: projects.docs
+        .map((snapshot) => snapshot.data())
+        .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0))
+        .map(withoutRevision),
+      tasks: tasks.docs
+        .map((snapshot) => snapshot.data())
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(a.id).localeCompare(String(b.id)))
+        .map(withoutRevision),
+    }));
+    if (!state) return null;
+    return { state, revision: confirmedData.revision as number };
+  }
+
+  throw new Error("The cloud workspace changed repeatedly while Forth was loading it. Try again.");
+}
+
+export async function loadWorkspaceState(workspaceId: string): Promise<CloudWorkspaceSnapshot | null> {
+  return loadWorkspaceStateFromDatabase(requireServices().db, workspaceId);
 }
 
 export function watchWorkspace(
   workspaceId: string,
-  onState: (state: WorkspaceState) => void,
+  onState: (snapshot: CloudWorkspaceSnapshot) => void,
   onError: (error: Error) => void,
 ): Unsubscribe | null {
   const services = getFirebaseServices();
   if (!services) return null;
-  return onSnapshot(doc(services.db, "workspaces", workspaceId, "data", "current"), (snapshot) => {
-    const state = parseStoredWorkspace(JSON.stringify(snapshot.data()?.state ?? null));
-    if (state) onState(state);
-    else onError(new Error("The cloud workspace contains missing or invalid ticket data."));
-  }, onError);
+  let readSequence = 0;
+  let disposed = false;
+  const unsubscribe = onSnapshot(doc(services.db, "workspaces", workspaceId, "data", "current"), () => {
+    const currentRead = ++readSequence;
+    void loadWorkspaceStateFromDatabase(services.db, workspaceId).then((snapshot) => {
+      if (disposed || currentRead !== readSequence) return;
+      if (snapshot) onState(snapshot);
+      else onError(new Error("The cloud workspace contains missing or invalid ticket data."));
+    }).catch((error: unknown) => {
+      if (disposed || currentRead !== readSequence) return;
+      onError(error instanceof Error ? error : new Error("The cloud workspace could not be read."));
+    });
+  }, (error) => onError(new Error(error.message)));
+  return () => {
+    disposed = true;
+    unsubscribe();
+  };
 }
 
-export async function saveWorkspace(workspaceId: string, state: WorkspaceState) {
-  const services = requireServices();
-  await setDoc(doc(services.db, "workspaces", workspaceId, "data", "current"), {
-    state,
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
+function changedRecords<T extends { id: string }>(before: T[], after: T[]) {
+  const previous = new Map(before.map((record) => [record.id, record]));
+  const next = new Map(after.map((record) => [record.id, record]));
+  return {
+    upserts: after.filter((record) => JSON.stringify(previous.get(record.id)) !== JSON.stringify(record)),
+    deletes: before.filter((record) => !next.has(record.id)),
+  };
+}
+
+export async function saveWorkspaceToDatabase(
+  database: Firestore,
+  workspaceId: string,
+  expectedRevision: number,
+  baseState: WorkspaceState,
+  nextState: WorkspaceState,
+): Promise<CloudWorkspaceSnapshot> {
+  const workspaceRef = doc(database, "workspaces", workspaceId);
+  const metadataRef = doc(workspaceRef, "data", "current");
+  const projectChanges = changedRecords(baseState.projects, nextState.projects);
+  const taskChanges = changedRecords(baseState.tasks, nextState.tasks);
+
+  let revision: number;
+  try {
+    revision = await runTransaction(database, async (transaction) => {
+      const current = await transaction.get(metadataRef);
+      if (!current.exists()) throw new Error("The cloud workspace metadata is missing.");
+      const currentData = current.data();
+      const isLegacySnapshot = !isNormalizedMetadata(currentData);
+      const actualRevision = isLegacySnapshot ? 0 : currentData.revision as number;
+      if (actualRevision !== expectedRevision) {
+        throw new WorkspaceConflictError(expectedRevision, actualRevision);
+      }
+
+      const nextRevision = actualRevision + 1;
+      const projectsToUpsert = isLegacySnapshot ? nextState.projects : projectChanges.upserts;
+      const tasksToUpsert = isLegacySnapshot ? nextState.tasks : taskChanges.upserts;
+      const projectsToDelete = isLegacySnapshot ? [] : projectChanges.deletes;
+      const tasksToDelete = isLegacySnapshot ? [] : taskChanges.deletes;
+      const touchedRecords = projectsToUpsert.length + projectsToDelete.length
+        + tasksToUpsert.length + tasksToDelete.length + 1 + (isLegacySnapshot ? 1 : 0);
+      if (touchedRecords > MAX_TRANSACTION_WRITES) {
+        throw new Error(isLegacySnapshot
+          ? "This legacy workspace is too large for automatic migration. No data changed; contact the Forth maintainer."
+          : "This change is too large for one safe cloud save. Split it into smaller edits and try again.");
+      }
+
+      transaction.set(metadataRef, normalizedWorkspaceMetadata(nextState, nextRevision));
+      if (isLegacySnapshot) {
+        // Keep one immutable pre-migration recovery point. It does not grow with
+        // future Proof history and gives a maintainer a deterministic rollback
+        // source if the normalized rollout must be reversed.
+        transaction.set(doc(workspaceRef, "recovery", "legacy-v2"), {
+          state: baseState,
+          sourceStorageVersion: "whole-state-v2",
+          migratedAt: serverTimestamp(),
+        });
+      }
+      projectsToUpsert.forEach((project) => {
+        transaction.set(
+          doc(workspaceRef, "projects", project.id),
+          serializeProject(project, nextRevision, nextState.projects.findIndex((candidate) => candidate.id === project.id)),
+        );
+      });
+      projectsToDelete.forEach((project) => {
+        transaction.delete(doc(workspaceRef, "projects", project.id));
+      });
+      tasksToUpsert.forEach((task) => {
+        transaction.set(doc(workspaceRef, "tasks", task.id), serializeTask(task, nextRevision));
+      });
+      tasksToDelete.forEach((task) => {
+        transaction.delete(doc(workspaceRef, "tasks", task.id));
+      });
+      return nextRevision;
+    });
+  } catch (error) {
+    // A simultaneous transaction may be rejected by Security Rules before the
+    // SDK retries it. Re-read the tiny metadata document: if its revision moved,
+    // this is the same recoverable stale-write conflict, not a generic outage.
+    try {
+      const latest = await getDoc(metadataRef);
+      if (latest.exists()) {
+        const latestData = latest.data();
+        const actualRevision = isNormalizedMetadata(latestData) ? latestData.revision as number : 0;
+        if (actualRevision !== expectedRevision) {
+          throw new WorkspaceConflictError(expectedRevision, actualRevision);
+        }
+      }
+    } catch (classificationError) {
+      if (classificationError instanceof WorkspaceConflictError) throw classificationError;
+    }
+    throw error;
+  }
+
+  return { state: nextState, revision };
+}
+
+export async function saveWorkspace(
+  workspaceId: string,
+  expectedRevision: number,
+  baseState: WorkspaceState,
+  nextState: WorkspaceState,
+) {
+  return saveWorkspaceToDatabase(requireServices().db, workspaceId, expectedRevision, baseState, nextState);
 }

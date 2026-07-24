@@ -5,52 +5,49 @@ This is the durable relay between Codex, Claude Code, and human contributors. Ke
 ## Current checkpoint
 
 - Date: 2026-07-21
-- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket032`
-- Branch: `codex/ticket-032-patch-sharp`
+- Worktree: `C:\Users\calvi\Documents\Codex\forth-ticket001`
+- Branch: `codex/ticket-001-conflict-safe-sync`
 - Base: `origin/staging` at `9ace9c5`
-- Active ticket: TICKET-032, patch the transitive sharp/libvips advisory
-- Parallel active work: draft PR #22 implements TICKET-013/TICKET-030 on `codex/ticket-013-task-first-quest-log`; do not mix or reimplement its UI changes here
-- Draft PR: https://github.com/CodingWCal/forth/pull/23 (targets `staging`)
-- Implementation commit: `793c8d3`
-- Release state: dependency patch is pushed; local QA, GitGuardian, and the Vercel clean preview build pass; maintainer preview smoke and approval remain
-- Stable staging URL: https://forth-git-staging-calvintrinhvan-2763s-projects.vercel.app/
+- Checkpoint commit: `4739d46` (`Prevent concurrent cloud save data loss`), pushed to origin
+- Active ticket: TICKET-001 conflict-safe cloud persistence
+- Draft PR: [#24](https://github.com/CodingWCal/forth/pull/24) into `staging`
+- Release state: isolated implementation only; do not merge, publish Firestore rules, or deploy to production without maintainer approval and the coordinated migration procedure in `docs/PHASE2.md`
+- Related isolated work: draft PR #22 owns the task-first dashboard cleanup; draft PR #23 owns the patched `sharp` dependency. Do not combine their diffs into this ticket.
 
 ## Implemented in this checkpoint
 
-- Confirmed that stable Next.js 16.2.11 and canary 16.3.0-canary.92 still request `sharp ^0.34.5`, so a framework patch alone does not resolve GHSA-f88m-g3jw-g9cj.
-- Added a root pnpm 11 override in `pnpm-workspace.yaml` that resolves Next 16.2.10's optional image dependency to patched `sharp 0.35.0` while preserving the existing postcss override and trusted-build policy.
-- Regenerated `pnpm-lock.yaml`; the resolved production graph contains `next@16.2.10 -> sharp@0.35.0` and no `sharp@0.34.5` lock entry.
-- Loaded the installed runtime directly and confirmed `sharp 0.35.0` with libvips `8.18.3`.
-- Built and started the production server, then requested `/_next/image` for the code-squire sprite; Next returned HTTP 200 and `image/png` through the patched optimizer.
+- Replaced blind whole-board cloud writes with normalized project/ticket records and a small revision metadata document.
+- Added optimistic concurrency control: a save commits only if the cloud revision still matches the revision originally loaded.
+- Added an explicit conflict state that preserves the stale tab's visible edits and asks before discarding them to load the latest cloud version.
+- Added a lazy legacy migration that writes one immutable `recovery/legacy-v2` snapshot before normalizing the first save.
+- Tightened Firestore rules so record mutations must be coupled atomically to exactly one revision advance.
+- Added real adapter-plus-emulator coverage for sequential stale writes, simultaneous saves, uncoupled writes, and legacy migration.
+- Documented the schema, migration, rollback boundary, and remaining TICKET-024 scale work.
 
 ## Validation at handoff
 
-- `pnpm install --frozen-lockfile`: passed.
-- `pnpm audit --prod`: passed; no known vulnerabilities.
-- Resolved dependency check: `next@16.2.10 -> sharp@0.35.0`.
-- Runtime version check: `sharp 0.35.0`, libvips `8.18.3`.
-- `pnpm lint`: passed.
-- `pnpm typecheck`: passed.
-- `pnpm test`: passed, 50/50 unit tests.
-- `pnpm test:e2e`: passed, 7/7 browser tests on the staging baseline.
-- `pnpm build`: passed.
-- Local production image optimizer: HTTP 200, `Content-Type: image/png`, 3,864-byte optimized response.
-- GitGuardian Security Checks: passed on draft PR #23.
-- Vercel clean install/build: passed on draft PR #23.
-- Vercel preview: https://forth-git-codex-ticket-032-c05262-calvintrinhvan-2763s-projects.vercel.app (feature preview protection may require the maintainer's Vercel login; do not add it to Firebase authorized domains).
-- `pnpm test:rules`: not rerun because this branch changes no Firebase adapter, schema, authentication, membership, or Firestore rules behavior; staging baseline is 17/17.
-- `git diff --check`: passed.
-- Added-line credential-pattern scan: passed; zero matches.
+- `pnpm install --frozen-lockfile`: passed; 455 packages reused from the locked store.
+- `pnpm run lint`: passed after the final code/rules edits.
+- `pnpm run typecheck`: passed after the final code/rules edits.
+- `pnpm run test`: passed, 50/50 unit tests.
+- `pnpm run test:rules`: passed, 21/21 Firestore emulator tests after the final field-validation tightening.
+- `pnpm run test:e2e`: passed, 7/7 Playwright tests across 320, 375, 768, and 1440px coverage.
+- `pnpm run build`: passed.
+- `pnpm audit --prod`: baseline advisory remains for `sharp@0.34.5`; isolated draft PR #23 updates to the clean patched path. Do not promote this branch until that patch is integrated or this branch is rebased on it.
+- `git diff --check`: passed before final documentation edits; rerun before commit.
+- Still required: authenticated two-tab staging smoke, a legacy migration dry run, and production backup/rollback rehearsal.
 
 ## Next delivery sequence
 
-1. Open draft PR #23's preview while signed into Vercel and confirm the code-squire sprite renders without a server error.
-2. Merge only after maintainer approval; do not promote to production until draft PR #22 and the remaining release gates are separately accepted.
-3. Remove this override when a supported Next.js release accepts `sharp >=0.35.0`; do not let the temporary compatibility pin become invisible permanent policy.
+1. Review draft PR #24; do not merge it yet.
+2. Integrate or stack the dependency patch from draft PR #23 before any production promotion.
+3. On a stable authenticated staging hostname, run the documented two-tab race and legacy migration checks.
+4. Review the migration/rollback plan with the maintainer before publishing rules or promoting the app.
+5. Keep the dashboard simplification in draft PR #22 separately reviewable.
 
 ## Known next risk
 
-The override crosses Next's declared `^0.34.5` range because upstream has not yet adopted sharp 0.35. Local compatibility is proven for build and image optimization, but the Vercel runtime must still pass. A rollback reintroduces the vulnerability, so rollback means holding release while waiting for an upstream-compatible patch rather than silently shipping `sharp 0.34.5`.
+The new application and new Firestore rules are a matched pair. Deploying only one side can block saves, and rolling back only the frontend after any workspace migrates is unsafe. TICKET-024 still owns 30+ user load testing, granular listeners, pagination, and richer merge UX; TICKET-001 prevents silent overwrites but does not claim Google Docs-style merging.
 
 ## Required end-of-session update
 
