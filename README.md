@@ -204,6 +204,29 @@ The cohort checklist requires:
 
 This README contains each required description section. Creating the cohort-repository branch and pull request is a separate submission action.
 
+## Embedding Forth in other cohort tools
+
+Forth sends no `X-Frame-Options` header and no frame-blocking
+`Content-Security-Policy`, so the production deployment can be embedded in an
+`<iframe>` by other cohort projects:
+
+```html
+<iframe src="https://forth-bice.vercel.app" title="Forth project board"></iframe>
+```
+
+This lets a Week 2 communications platform show the board beside a conversation
+instead of sending people to a separate tab. Two notes for anyone integrating:
+
+- The embed renders the account boundary first. A viewer who is not signed in to
+  Forth sees the sign-in entry page inside the frame, which is the intended
+  behaviour rather than a broken embed.
+- Because sign-in happens inside the frame, integrators should also offer a
+  plain "open in a new tab" link for browsers that block third-party cookies in
+  embedded contexts.
+
+Forth exposes no public REST API or webhooks today, so cross-tool integration is
+currently link-level and embed-level rather than server-to-server.
+
 ## Project documentation
 
 - [Contribution guide](CONTRIBUTING.md)
