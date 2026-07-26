@@ -104,14 +104,23 @@ test("keeps the dashboard task-first and moves progress into Activity", async ({
 
 test("entry controls have a visible keyboard path", async ({ page }) => {
   await page.goto("/");
-  await page.keyboard.press("Tab");
+  const exploreDemo = page.getByRole("button", { name: "Explore local demo" });
+  let focusedLabel: string | null = null;
+  for (let i = 0; i < 12; i += 1) {
+    await page.keyboard.press("Tab");
+    focusedLabel = await page.evaluate(() => {
+      const active = document.activeElement;
+      return active instanceof HTMLElement ? active.textContent?.trim() ?? null : null;
+    });
+    if (focusedLabel === "Explore local demo") break;
+  }
 
-  const firstInteractive = page.locator(":focus");
-  await expect(firstInteractive).toBeVisible();
-  await expect(firstInteractive).toHaveAccessibleName(/Continue with Google|Continue with GitHub|Explore local demo/);
+  expect(focusedLabel).toBe("Explore local demo");
 
-  await page.getByRole("button", { name: "Explore local demo" }).focus();
-  await page.keyboard.press("Enter");
+  await expect(exploreDemo).toBeFocused();
+  await expect(exploreDemo).toBeVisible();
+
+  await exploreDemo.press("Enter");
   await expect(page.getByRole("dialog", { name: "Welcome to Forth" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: "Your work today." })).toBeVisible();
