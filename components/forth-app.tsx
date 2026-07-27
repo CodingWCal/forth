@@ -31,6 +31,14 @@ import { type DragEvent, type KeyboardEvent, FormEvent, useCallback, useEffect, 
 import Image from "next/image";
 import { BrandMark } from "@/components/brand-mark";
 import { readBrowserStorage, writeBrowserStorage } from "@/lib/browser-storage";
+import {
+  resolveCloudSyncPhase,
+  shouldAttemptLocalRetry,
+  syncBadgeLabel,
+  syncFailureCopy,
+  syncStampLabel,
+  type CloudSyncPhase,
+} from "@/lib/sync-state";
 import type { User } from "firebase/auth";
 import {
   acceptGuildInvite,
@@ -72,7 +80,7 @@ type View = "today" | "board" | "proof" | "settings";
 
 const DUE_PANEL_LIMIT = 6;
 
-type SyncState = "demo" | "syncing" | "synced" | "conflict" | "error";
+type SyncState = CloudSyncPhase;
 
 type ForthAppBaseProps = {
   initialState: WorkspaceState;
@@ -160,6 +168,8 @@ export function ForthApp({
   const [hydrated, setHydrated] = useState(false);
   const [toast, setToast] = useState("");
   const [syncState, setSyncState] = useState<SyncState>(mode === "cloud" ? "syncing" : "demo");
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
+  const [localDirty, setLocalDirty] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<PendingGuildInvite[]>([]);
   const [inviteStatus, setInviteStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [sentInvites, setSentInvites] = useState<GuildInviteSummary[]>([]);
@@ -167,6 +177,15 @@ export function ForthApp({
   const [persistentSyncError, setPersistentSyncError] = useState("");
   const [demoStorageWarning, setDemoStorageWarning] = useState(initialDemoStorageWarning);
   const [transitionBusy, setTransitionBusy] = useState(false);
+
+  const displayPhase = resolveCloudSyncPhase({
+    mode,
+    online,
+    syncing: syncState === "syncing",
+    dirty: localDirty,
+    saveFailed: syncState === "retry-required",
+    conflict: syncState === "conflict",
+  });
   const cloudReadyRef = useRef(false);
   const hasValidatedSnapshotRef = useRef(mode === "demo");
   const latestStateRef = useRef(state);
@@ -218,6 +237,7 @@ export function ForthApp({
       await saveAttempt;
       if (savedRevisionRef.current >= revisionRef.current && pendingSaveCountRef.current <= 1) {
         dirtyRef.current = false;
+        setLocalDirty(false);
         setPersistentSyncError("");
         setSyncState("synced");
       }
@@ -233,9 +253,9 @@ export function ForthApp({
           && (error.message.startsWith("This legacy workspace is too large")
             || error.message.startsWith("This change is too large"))
           ? error.message
-          : "Forth could not save your latest changes. Stay in this workspace and retry before switching or signing out.";
+          : syncFailureCopy({ online: typeof navigator === "undefined" ? true : navigator.onLine, kind: "save" });
         setPersistentSyncError(safeSaveMessage);
-        setSyncState("error");
+        setSyncState("retry-required");
       }
       return false;
     } finally {
@@ -254,7 +274,7 @@ export function ForthApp({
       setPersistentSyncError(
         "Forth has not confirmed this cloud workspace yet. No navigation occurred; wait for cloud loading to finish and retry.",
       );
-      setSyncState("error");
+      setSyncState("retry-required");
       return false;
     }
 
@@ -276,6 +296,7 @@ export function ForthApp({
     }
 
     dirtyRef.current = false;
+    setLocalDirty(false);
     setPersistentSyncError("");
     setSyncState("synced");
     return true;
@@ -287,6 +308,17 @@ export function ForthApp({
       setHydrated(true);
     });
     return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -395,16 +427,20 @@ export function ForthApp({
       },
       () => {
         setPersistentSyncError(
-          hasValidatedSnapshotRef.current
-            ? "Live cloud updates were interrupted. Your visible workspace remains in place; retry saving before leaving it."
-            : "Forth could not validate this cloud workspace. No tickets can be edited until the connection succeeds.",
+          syncFailureCopy({
+            online: typeof navigator === "undefined" ? true : navigator.onLine,
+            kind: hasValidatedSnapshotRef.current ? "watch" : "validate",
+          }),
         );
-        setSyncState("error");
+        setSyncState("retry-required");
       },
     ) ?? undefined;
     if (!unsubscribe) {
-      setPersistentSyncError("Forth could not start cloud sync for this workspace. No tickets can be edited.");
-      setSyncState("error");
+      setPersistentSyncError(syncFailureCopy({
+        online: typeof navigator === "undefined" ? true : navigator.onLine,
+        kind: "validate",
+      }));
+      setSyncState("retry-required");
     }
     return () => {
       cloudReadyRef.current = false;
@@ -421,6 +457,7 @@ export function ForthApp({
 
     revisionRef.current += 1;
     dirtyRef.current = true;
+    setLocalDirty(true);
     setSyncState("syncing");
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
@@ -659,7 +696,7 @@ export function ForthApp({
     try {
       await runDurableTransition(() => onOpenWorkspace(workspaceId));
     } catch (error) {
-      setSyncState("error");
+      setSyncState("retry-required");
       announce(safeWorkspaceActionError(error, "The selected guild could not be opened. Your current workspace remains active."));
     }
   }
@@ -668,17 +705,35 @@ export function ForthApp({
     try {
       await runDurableTransition(onExit);
     } catch {
-      setPersistentSyncError("Forth could not finish leaving this workspace. Your saved cloud data was not changed; try again.");
-      setSyncState("error");
+      setPersistentSyncError(syncFailureCopy({
+        online: typeof navigator === "undefined" ? true : navigator.onLine,
+        kind: "leave",
+      }));
+      setSyncState("retry-required");
     }
   }
 
   async function retryCloudSync() {
-    if (dirtyRef.current || pendingSaveCountRef.current > 0) {
-      await flushCloudSave();
+    if (!online) {
+      setPersistentSyncError(syncFailureCopy({ online: false, kind: "save" }));
+      setSyncState("retry-required");
       return;
     }
-    window.location.reload();
+    dirtyRef.current = true;
+    setLocalDirty(true);
+    if (shouldAttemptLocalRetry({
+      dirty: dirtyRef.current,
+      pendingSaves: pendingSaveCountRef.current,
+    })) {
+      const saved = await flushCloudSave();
+      if (saved) return;
+    }
+    if (!shouldAttemptLocalRetry({
+      dirty: dirtyRef.current,
+      pendingSaves: pendingSaveCountRef.current,
+    })) {
+      window.location.reload();
+    }
   }
 
   async function loadLatestAfterConflict() {
@@ -694,6 +749,7 @@ export function ForthApp({
       remoteStateRef.current = latest.state;
       cloudRevisionRef.current = latest.revision;
       dirtyRef.current = false;
+      setLocalDirty(false);
       revisionRef.current = 0;
       savedRevisionRef.current = 0;
       dispatch({ type: "RESET", state: latest.state });
@@ -709,7 +765,7 @@ export function ForthApp({
   }
 
   if (mode === "cloud" && !cloudSnapshotReady) {
-    const failed = syncState === "error";
+    const failed = syncState === "retry-required";
     return (
       <div className="entry-page">
         <main className="entry-status-page" aria-labelledby="cloud-validation-title" aria-busy={!failed}>
@@ -717,17 +773,22 @@ export function ForthApp({
             {failed ? <LockKeyhole aria-hidden="true" size={28} /> : <span aria-hidden="true">Loading</span>}
             <p className="eyebrow">Cloud workspace</p>
             <h1 id="cloud-validation-title">
-              {failed ? "Editing is safely paused." : "Validating your workspaceâ€¦"}
+              {failed ? "Editing is safely paused." : "Validating your workspace…"}
             </h1>
             <p>
               {failed
-                ? persistentSyncError || "Forth could not validate this workspace. No tickets can be edited."
+                ? persistentSyncError || syncFailureCopy({ online, kind: "validate" })
                 : "Forth is waiting for the first verified Firestore snapshot. Tickets stay read-only until it arrives."}
             </p>
             {failed && (
-              <button className="button button--quiet" onClick={() => void exitAfterSave()}>
-                Sign out safely
-              </button>
+              <div className="entry-status-actions">
+                <button className="button button--primary" onClick={() => void retryCloudSync()}>
+                  Retry cloud sync
+                </button>
+                <button className="button button--quiet" onClick={() => void exitAfterSave()}>
+                  Sign out safely
+                </button>
+              </div>
             )}
           </div>
         </main>
@@ -793,7 +854,7 @@ export function ForthApp({
           <BrandMark compact />
           <span className="brand-word">Forth</span>
         </button>
-        <EnvironmentBadge mode={mode} syncState={syncState} />
+        <EnvironmentBadge mode={mode} phase={displayPhase} />
       </header>
 
       <main className="main-canvas">
@@ -809,7 +870,7 @@ export function ForthApp({
             <h1>{title}</h1>
           </div>
           <div className="desktop-actions">
-            <EnvironmentBadge mode={mode} syncState={syncState} />
+            <EnvironmentBadge mode={mode} phase={displayPhase} />
             {mode === "demo" && (
               <button className="button button--quiet demo-exit-button" onClick={() => void exitAfterSave()}>
                 <LogOut size={16} aria-hidden="true" /> Exit demo
@@ -890,7 +951,7 @@ export function ForthApp({
             mode={mode}
             onReset={resetDemo}
             user={cloudUser}
-            syncState={syncState}
+            syncState={displayPhase}
             activeGuild={activeGuild}
             guilds={initialGuilds}
             onSelectGuild={(workspaceId) => void openGuild(workspaceId)}
@@ -1000,18 +1061,10 @@ export function ForthApp({
   );
 }
 
-function EnvironmentBadge({ mode, syncState }: { mode: "demo" | "cloud"; syncState: SyncState }) {
-  const label = mode === "demo"
-    ? "Disposable demo - this device only"
-    : syncState === "synced"
-      ? "Cloud workspace - saved"
-      : syncState === "syncing"
-        ? "Cloud workspace - syncing"
-        : syncState === "conflict"
-          ? "Cloud workspace - newer teammate edit available"
-        : "Cloud workspace - sync error";
+function EnvironmentBadge({ mode, phase }: { mode: "demo" | "cloud"; phase: CloudSyncPhase }) {
+  const label = syncBadgeLabel({ mode, phase });
   return (
-    <span className={mode === "cloud" && syncState === "synced" ? "env-badge is-connected" : "env-badge"}>
+    <span className={mode === "cloud" && phase === "synced" ? "env-badge is-connected" : "env-badge"}>
       <span aria-hidden="true" /> {label}
     </span>
   );
@@ -1702,15 +1755,7 @@ function SettingsView({
   onExit: () => Promise<void>;
   onShowGuide: () => void;
 }) {
-  const syncLabel = syncState === "synced"
-    ? "Saved to cloud"
-    : syncState === "syncing"
-      ? "Syncing with cloud"
-      : syncState === "conflict"
-        ? "Newer cloud version available"
-      : syncState === "error"
-        ? "Cloud sync error"
-        : "Demo on this device";
+  const syncLabel = mode === "demo" ? "Demo on this device" : syncStampLabel(syncState);
 
   return (
     <div className="settings-view">

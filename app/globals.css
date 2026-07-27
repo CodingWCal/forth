@@ -3243,6 +3243,14 @@ body {
   margin-left: auto;
 }
 
+.entry-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 22px;
+}
+
 .entry-spinner {
   animation: entry-spin 850ms steps(8, end) infinite;
 }
