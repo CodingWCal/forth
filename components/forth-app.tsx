@@ -27,7 +27,7 @@ import {
   UserPlus,
   Scroll,
 } from "lucide-react";
-import { type DragEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { type DragEvent, type KeyboardEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Image from "next/image";
 import { BrandMark } from "@/components/brand-mark";
 import { readBrowserStorage, writeBrowserStorage } from "@/lib/browser-storage";
@@ -170,7 +170,13 @@ export function ForthApp({
   const cloudReadyRef = useRef(false);
   const hasValidatedSnapshotRef = useRef(mode === "demo");
   const latestStateRef = useRef(state);
+  // The last state Forth knows Firestore holds. Every save diffs against it, so
+  // it must survive until the next acknowledged write.
   const remoteStateRef = useRef<WorkspaceState | null>(null);
+  // The single state object a cloud snapshot just pushed into the reducer. It
+  // exists only so the save effect can skip that one cloud-originated change
+  // without discarding the save baseline above.
+  const appliedCloudStateRef = useRef<WorkspaceState | null>(null);
   const cloudRevisionRef = useRef(initialCloudRevision);
   const dirtyRef = useRef(false);
   const revisionRef = useRef(0);
@@ -363,6 +369,10 @@ export function ForthApp({
     if (mode !== "cloud" || !cloudUser || !activeWorkspaceId || !hydrated) return;
     cloudReadyRef.current = false;
     hasValidatedSnapshotRef.current = false;
+    // A baseline belongs to one workspace. Drop it so a switch can never diff
+    // the new guild against the previous guild's records.
+    remoteStateRef.current = null;
+    appliedCloudStateRef.current = null;
     dirtyRef.current = false;
     revisionRef.current = 0;
     savedRevisionRef.current = 0;
@@ -377,6 +387,7 @@ export function ForthApp({
           return;
         }
         remoteStateRef.current = cloudSnapshot.state;
+        appliedCloudStateRef.current = cloudSnapshot.state;
         cloudRevisionRef.current = cloudSnapshot.revision;
         dispatch({ type: "RESET", state: cloudSnapshot.state });
         if (!hasValidatedSnapshotRef.current) {
@@ -414,8 +425,12 @@ export function ForthApp({
 
   useEffect(() => {
     if (mode !== "cloud" || !cloudUser || !activeWorkspaceId || !cloudReadyRef.current) return;
-    if (remoteStateRef.current === state) {
-      remoteStateRef.current = null;
+    // This render came from a cloud snapshot or a conflict reload, not from a
+    // person editing. Consume the marker so the next real edit still saves, and
+    // leave remoteStateRef intact -- clearing it here left later saves with no
+    // baseline, which surfaced as a permanent "could not save" state.
+    if (appliedCloudStateRef.current === state) {
+      appliedCloudStateRef.current = null;
       return;
     }
 
@@ -692,6 +707,7 @@ export function ForthApp({
       const latest = await loadWorkspaceState(activeWorkspaceId);
       if (!latest) throw new Error("The latest cloud workspace could not be read.");
       remoteStateRef.current = latest.state;
+      appliedCloudStateRef.current = latest.state;
       cloudRevisionRef.current = latest.revision;
       dirtyRef.current = false;
       revisionRef.current = 0;
@@ -1222,6 +1238,48 @@ function BoardView({
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
   const visibleDueEntries = showAllDue ? dueEntries : dueEntries.slice(0, DUE_PANEL_LIMIT);
   const hiddenDueCount = dueEntries.length - visibleDueEntries.length;
+  const projectTabRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
+
+  const activateProjectTab = useCallback(
+    (projectId: string) => {
+      onSelectProject(projectId);
+      requestAnimationFrame(() => {
+        projectTabRefs.current.get(projectId)?.focus();
+      });
+    },
+    [onSelectProject],
+  );
+
+  const onProjectTabListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const projects = state.projects;
+    if (projects.length === 0) return;
+
+    const currentIndex = Math.max(
+      0,
+      projects.findIndex((project) => project.id === activeProject.id),
+    );
+
+    let nextIndex: number | null = null;
+    switch (event.key) {
+      case "ArrowRight":
+        nextIndex = (currentIndex + 1) % projects.length;
+        break;
+      case "ArrowLeft":
+        nextIndex = (currentIndex - 1 + projects.length) % projects.length;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = projects.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    activateProjectTab(projects[nextIndex].id);
+  };
 
   const startDragging = (event: DragEvent<HTMLElement>, task: Task) => {
     if ((event.target as HTMLElement).closest("button")) {
@@ -1248,21 +1306,39 @@ function BoardView({
     if (task && task.status !== status) onSetStatus(task.id, status);
     stopDragging();
   };
+  const activeProjectPanelId = `project-panel-${activeProject.id}`;
+
   return (
     <div className="board-view">
-      <div className="project-tabs" role="tablist" aria-label="Projects">
-        {state.projects.map((project) => (
-          <button
-            key={project.id}
-            className={activeProject.id === project.id ? "project-tab is-active" : "project-tab"}
-            onClick={() => onSelectProject(project.id)}
-            role="tab"
-            aria-selected={activeProject.id === project.id}
-          >
-            <span className={`project-dot project-dot--${project.color}`} />
-            {project.title}
-          </button>
-        ))}
+      <div
+        className="project-tabs"
+        role="tablist"
+        aria-label="Projects"
+        aria-orientation="horizontal"
+        onKeyDown={onProjectTabListKeyDown}
+      >
+        {state.projects.map((project) => {
+          const selected = activeProject.id === project.id;
+          return (
+            <button
+              key={project.id}
+              id={`project-tab-${project.id}`}
+              ref={(node) => {
+                projectTabRefs.current.set(project.id, node);
+              }}
+              className={selected ? "project-tab is-active" : "project-tab"}
+              onClick={() => activateProjectTab(project.id)}
+              role="tab"
+              type="button"
+              aria-selected={selected}
+              aria-controls={`project-panel-${project.id}`}
+              tabIndex={selected ? 0 : -1}
+            >
+              <span className={`project-dot project-dot--${project.color}`} />
+              {project.title}
+            </button>
+          );
+        })}
       </div>
 
       <section className="board-intro">
@@ -1332,7 +1408,14 @@ function BoardView({
         Drag a ticket between status columns with your cursor. On phone or keyboard, use its move arrows.
       </p>
 
-      <section className="kanban" aria-label={`${activeProject.title} ticket board`} aria-describedby="kanban-drag-help">
+<section
+        className="kanban"
+        id={activeProjectPanelId}
+        role="tabpanel"
+        aria-labelledby={`project-tab-${activeProject.id}`}
+        aria-label={`${activeProject.title} ticket board`}
+        aria-describedby="kanban-drag-help"
+      >
         {statuses.map((status) => {
           const tasks = state.tasks.filter(
             (task) => task.projectId === activeProject.id && task.status === status &&
