@@ -2660,9 +2660,9 @@ body {
 .trail-day:last-child .trail-bar-wrap i { background: #ba682e; }
 
 .adventurer-hud {
-  grid-template-columns: 92px minmax(0, 1fr) auto;
-  min-height: 118px;
-  padding: 14px 18px;
+  grid-template-columns: 116px minmax(0, 1fr) auto;
+  min-height: 130px;
+  padding: 18px 22px;
   border: 3px solid #11170f;
   background:
     repeating-linear-gradient(0deg, transparent 0 15px, rgba(255,255,255,.025) 15px 16px),
@@ -2673,8 +2673,8 @@ body {
 
 .pixel-portrait {
   position: relative;
-  width: 86px;
-  height: 86px;
+  width: 110px;
+  height: 110px;
   overflow: hidden;
   border: 3px solid #c08a38;
   background: #111711;
@@ -2692,8 +2692,8 @@ body {
 }
 
 .pixel-portrait img {
-  width: 80px;
-  height: 80px;
+  width: 104px;
+  height: 104px;
   object-fit: contain;
   image-rendering: pixelated;
   animation: squire-step 1.6s steps(2, end) infinite;
@@ -4090,8 +4090,9 @@ body {
     max-width: none;
   }
 
-  .adventurer-hud { grid-template-columns: 48px minmax(0, 1fr); gap: 12px; padding: 13px; }
-  .pixel-portrait { width: 44px; height: 44px; }
+  .adventurer-hud { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; padding: 13px; }
+  .pixel-portrait { width: 66px; height: 66px; }
+  .pixel-portrait img { width: 60px; height: 60px; }
   .reward-stats { grid-column: 1 / -1; justify-content: space-between; padding-top: 7px; border-top: 1px dashed var(--rule-dark); }
   .quest-tools { flex-wrap: wrap; }
   .quest-tools input { min-width: calc(100% - 32px); }
