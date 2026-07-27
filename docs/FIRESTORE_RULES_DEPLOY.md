@@ -8,25 +8,35 @@ Project: `forth-86e26` (see `.firebaserc`).
 
 ## Why this exists
 
-TICKET-001 changed cloud storage from one whole-state document to normalized
-`workspaces/{id}/projects/*` and `workspaces/{id}/tasks/*` records plus a
-`recovery/legacy-v2` point. The client shipped to production through `main`. The
-matching rules were committed in the same commit but were never published, so
-Firestore kept enforcing a policy that had never heard of those collections.
-Anything a ruleset does not mention is denied by default, which produced:
+Nothing in this repository publishes or verifies rules, so the only way to learn
+what production is enforcing is for a person to open the console and read it. That
+came up during the 2026-07-27 cloud-save investigation, where stale rules were a
+leading hypothesis and checking it took a manual console visit.
+
+**That investigation cleared the rules.** The active ruleset on `forth-86e26`
+contains `isNormalizedTask` and `isOpenCohortGuild` and was published Jul 24 2026,
+four minutes after `4e572e5`. The outage was a client-side bug (TICKET-035), not a
+rules problem. This document exists for the *next* rules change, not that one.
+
+The drift it guards against is real, though. Anything a ruleset does not mention is
+denied by default, so shipping a client that writes a new collection before
+publishing the matching rule produces a distinctive signature:
 
 - reads succeed → the workspace loads and renders its tickets normally
 - every write is denied → "Cloud save needs attention"
 
-Reproduced in the emulator by replaying the real client save path against both
-rulesets:
+Confirmed in the emulator by replaying the real client save path against the
+pre-TICKET-001 ruleset:
 
-| Write | Previous (deployed) rules | Current (committed) rules |
+| Write | Pre-TICKET-001 rules | Current rules |
 |---|---|---|
 | `workspaces/{id}/data/current` | allowed | allowed |
 | `workspaces/{id}/projects/*` | No matching allow statements | allowed |
 | `workspaces/{id}/tasks/*` | No matching allow statements | allowed |
 | `workspaces/{id}/recovery/legacy-v2` | No matching allow statements | allowed |
+
+If you ever see that signature again — everything renders, nothing saves — this
+table tells you where to look first.
 
 ## Before you publish anything
 
@@ -55,9 +65,15 @@ Publishing is effectively instant and global; allow about a minute for propagati
    copy it, and save it locally as `rules-before-<date>.txt`. Do not skip this.
 6. Note the **Last published** timestamp shown above the editor. Write it down — this
    is your evidence of what production was actually enforcing.
-7. Compare that text against the repository's `firestore.rules`. If they already
-   match, stop: the rules are current and the save failure has a different cause.
-8. In your local checkout, open `firestore.rules` and copy the **entire** file.
+7. **Parity check before you change anything.** Search the editor (Ctrl+F) for the
+   function names your committed rules introduce — for the current ruleset that is
+   `isNormalizedTask` and `isOpenCohortGuild`. If they are already present, the
+   rules are current: **discard, publish nothing, and look elsewhere for the cause.**
+   Ten seconds here beats a needless publish.
+8. In your local checkout, open **`firestore.rules`** — the rules file at the
+   repository root, *not* this document — and copy the **entire** file. Pasting the
+   wrong file produces `Error saving rules - Line 1: mismatched input ...`, which is
+   harmless: the editor refuses to save, so click **Discard** and start again.
 9. In the console editor, select all and paste over it. The file must be replaced
    whole — rules are not merged or patched.
 10. Click **Publish**.

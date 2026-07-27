@@ -38,8 +38,8 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-030 | Implemented within draft PR [#22](https://github.com/CodingWCal/forth/pull/22); preview pending | Capacity grid children can shrink, the meter stacks before collision, copy wraps safely, and Playwright compares the energy region bounds with its card at 320/375/768/1440px. |
 | TICKET-031 | Planned quick feature | After authentication, eligible Cursor Boston fellows can join the designated cohort guild from one explicit button without copying a guild code; authorization must be enforced beyond the client UI. |
 | TICKET-032 | Implemented in draft PR [#23](https://github.com/CodingWCal/forth/pull/23); preview build passed | A root pnpm override resolves Next's transitive image dependency to `sharp@0.35.0`; audit, frozen install, runtime load, local image optimization, lint, types, unit, E2E, build, GitGuardian, and Vercel pass. Maintainer preview sprite smoke remains before merge. |
-| TICKET-034 | Diagnosed on `claude/firebase-cloud-save-error-df6g6u`; blocked on a maintainer deploy | The production cloud-save failure reproduces exactly when the current client runs against the pre-TICKET-001 ruleset: `projects/*`, `tasks/*`, and `recovery/legacy-v2` return "No matching allow statements" while `data/current` still reads, so workspaces load and only saves fail. Deploying `firestore.rules` and adding a rule-parity release gate are maintainer actions; agents must not deploy. |
-| TICKET-035 | Fixed on `claude/firebase-cloud-save-error-df6g6u` | `remoteStateRef` doubled as the save baseline and the snapshot-echo marker, so applying any snapshot cleared the baseline and every later edit failed with the generic save error until reload. Baseline and marker are now separate refs, both cleared on workspace switch. Component-level regression coverage is still owed; no such harness exists yet. |
+| TICKET-034 | Investigated and reduced to a process gap | Deployed rules were checked in the Firebase console on 2026-07-27 and are current: the active ruleset contains `isNormalizedTask` and `isOpenCohortGuild`, published four minutes after `4e572e5`. Rules drift was **not** the cause of the outage. What remains is that no automated check compares committed rules with deployed rules, so the drift stays possible in future. No longer P0; fold into CI work. |
+| TICKET-035 | Fixed on `claude/firebase-cloud-save-error-df6g6u`; **sole cause of the production outage** | `remoteStateRef` doubled as the save baseline and the snapshot-echo marker, so applying any snapshot cleared the baseline and every later edit failed with the generic save error until reload. Baseline and marker are now separate refs, both cleared on workspace switch. Component-level regression coverage is still owed; no such harness exists yet. |
 | TICKET-036 | Fixed on `claude/firebase-cloud-save-error-df6g6u` | The Activity seven-day chart had a ~609px hard minimum but only collapsed at a 900px viewport media query, so it overflowed its card and clipped the newest days between 1200 and 1440px. Now wrapping flex items with `min-width: 0`; Playwright bounds assertions fail against the pre-fix stylesheet and pass after it. |
 
 ## External Contribution Intake
@@ -1341,15 +1341,17 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 - Subagent prompt:
   > Implement TICKET-033 as a standalone stdio MCP server in a separate module. Map tools onto the existing WorkspaceAction union, route all writes through the reducer and the TICKET-001 revision-safe adapter under existing firestore.rules with no rules changes, handle the user's local Firebase credential securely, and prove the full gate plus emulator integration tests.
 
-### TICKET-034: Deploy the conflict-safe Firestore rules and gate releases on rule parity
+### TICKET-034: Gate releases on Firestore rule parity
 
-- Priority: P0 Critical
-- Status: Diagnosed on `claude/firebase-cloud-save-error-df6g6u`; the deploy itself is a maintainer action and is deliberately not performed by an agent.
+**Status update:** the deploy half of this ticket is closed. The live ruleset on `forth-86e26` was checked in the Firebase console on 2026-07-27 and is current — it contains `isNormalizedTask` (TICKET-001) and `isOpenCohortGuild` (TICKET-031), published Jul 24 2026 · 5:17 PM, four minutes after `4e572e5`. Rules drift did **not** cause the cloud-save outage; TICKET-035 did. What survives is the process gap: nothing compares committed rules against deployed rules, so this class of drift remains undetectable until a user reports a broken save. Priority drops from P0 to P2 and this ticket folds into the TICKET-015 CI work.
+
+- Priority: P2 Medium
+- Status: Deploy half closed by console verification; the parity gate is unbuilt.
 - Type: Bug/Release/Operations/Security
 - Area: `firestore.rules`, Firebase project `forth-86e26`, release process
 - Effort: S (deploy) + M (release gate)
 - Confidence: High
-- Evidence: TICKET-001 replaced the single whole-state document with normalized `workspaces/{id}/projects/*` and `workspaces/{id}/tasks/*` records plus a `recovery/legacy-v2` point, and shipped that client to production through `main`. `firestore.rules` gained the matching policy in the same commit (`4739d46`), but rules reach Firestore only through a manual `firebase deploy`, and the repository has no workflow that performs or verifies it. Replaying the current `saveWorkspaceToDatabase` against the previous ruleset in the emulator fails every save with `PERMISSION_DENIED`; probing the individual writes shows `projects/*`, `tasks/*`, and `recovery/legacy-v2` return "No matching allow statements" while `data/current` still accepts reads and writes. That asymmetry reproduces the reported production behavior exactly: the workspace loads and renders, and only saving fails.
+- Evidence: rules reach Firestore only through a manual `firebase deploy`, and the repository has no workflow that performs or verifies it. Determining whether production rules matched the deployed client required a maintainer to open the console and read the ruleset by hand — that is the gap. The emulator work done while investigating shows what drift would look like: replaying the current `saveWorkspaceToDatabase` against the pre-TICKET-001 ruleset fails every save with `PERMISSION_DENIED`, because `projects/*`, `tasks/*`, and `recovery/legacy-v2` return "No matching allow statements" while `data/current` still accepts reads and writes. Workspaces would load and render normally, and only saving would fail.
 - Plain English: The app was upgraded to store tickets as separate records, but the cloud's permission list was never updated to know those records exist, so the cloud accepts every read and rejects every save.
 - Learning brief (layman terms):
   - What is happening now: Two halves of one release live in two places. The browser code ships automatically with the site; the database permission file has to be published by hand.
@@ -1358,19 +1360,15 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
   - Concept to learn: A schema/authorization migration has an ordering requirement — permission for the new shape must exist before, or at the same time as, the code that writes it.
 - Engineering framing: Restore rule/application parity on the live project, then encode the ordering in CI so a schema-affecting client change cannot reach production before its rules. Rules are deploy-time state, not repository state; treat committed-and-passing as necessary but not sufficient.
 - Scope:
-  - Maintainer deploys `firestore.rules` to `forth-86e26` (`firebase deploy --only firestore:rules --project forth-86e26`) after reviewing the diff against the console's active version.
-  - Record the deployed rules version and timestamp in `docs/AGENT_HANDOFF.md`. Follow `docs/FIRESTORE_RULES_DEPLOY.md`.
-  - Verify a real authenticated save and a legacy-workspace migration on staging before production promotion.
   - Add a release-gate check (see TICKET-015) that runs `pnpm test:rules` and fails when the committed rules differ from the deployed ruleset.
   - Document the rules-then-app ordering requirement in `CONTRIBUTING.md` and `docs/STAGING.md`.
+  - Keep `docs/FIRESTORE_RULES_DEPLOY.md` current as the manual procedure until the gate exists.
 - Out of scope:
   - Any agent-initiated Firebase deploy, project setting change, or data migration. `AGENTS.md` reserves those for the maintainer.
   - Redesigning the normalized schema itself.
 - Acceptance criteria:
-  - The live project's active rules match `firestore.rules` at the deployed commit, verified in the Firebase console.
-  - An authenticated account can create, edit, and complete a ticket and see the badge return to a synced state.
-  - A workspace still holding a legacy whole-state document migrates on its first save and writes exactly one `recovery/legacy-v2` document.
   - A pull request that changes stored document shape without a corresponding rules change fails a required check.
+  - The check reports the deployed ruleset's identity so drift is visible without opening the console.
   - The rollback path (previous rules version plus the recovery point) is written down.
 - Suggested files:
   - `firestore.rules`
@@ -1381,7 +1379,7 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 - Validation:
   - `pnpm test:rules` against the committed rules; console diff of the active ruleset; authenticated two-tab staging smoke covering save, concurrent edit, and legacy migration.
 - Subagent prompt:
-  > Do not deploy. Prepare TICKET-034 by proving rule/application parity in the emulator, documenting the exact maintainer deploy and verification commands, adding the CI parity gate, and recording the rollback path.
+  > Do not deploy. Implement TICKET-034 as a CI parity gate that fails when committed Firestore rules differ from the deployed ruleset, and record the rollback path. The deploy half of this ticket is already closed.
 
 ### TICKET-035: Keep the cloud-save baseline alive after a snapshot applies
 
