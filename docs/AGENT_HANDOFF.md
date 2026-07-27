@@ -30,7 +30,7 @@ Replayed in the emulator, the current `saveWorkspaceToDatabase` against the prev
 
 Reads still succeed, which is why the reported workspace renders its tickets and only saving fails.
 
-**Not performed by this session, per `AGENTS.md`:** the deploy itself. The maintainer should diff the console's active ruleset against `firestore.rules`, then run `firebase deploy --only firestore:rules --project forth-86e26`, then confirm an authenticated save on staging.
+**Not performed by this session:** the deploy itself. No Firebase credentials exist in the session and `AGENTS.md` reserves cloud deploys for the maintainer. Step-by-step console and CLI instructions, including the rollback copy and the post-deploy verification sequence, are in `docs/FIRESTORE_RULES_DEPLOY.md`.
 
 ### 2. The cloud-save baseline was destroyed by its own success (TICKET-035, fixed here)
 
@@ -44,6 +44,7 @@ Fixed by splitting the one-shot echo marker (`appliedCloudStateRef`) from the pe
 - Replaced the Activity seven-day chart's fixed two-track grid with wrapping flex items (`flex-basis` plus `min-width: 0`) and `minmax(0, 1fr)` day columns, so it stacks on its card's width instead of a viewport breakpoint. Removed the now-inert `@media (max-width: 900px)` override.
 - Added six Playwright element-boundary assertions for the chart at 375, 768, 1200, 1280, 1362, and 1440px.
 - Added TICKET-034, TICKET-035, and TICKET-036 to the backlog with the evidence above.
+- Added `docs/FIRESTORE_RULES_DEPLOY.md`: the console and CLI deploy paths, the rollback copy step, the consequence of fail-closed legacy writes, and the verification sequence that includes several consecutive edits without a reload.
 
 ## Validation at handoff
 
@@ -61,7 +62,7 @@ Fixed by splitting the one-shot echo marker (`appliedCloudStateRef`) from the pe
 
 ## Next delivery sequence
 
-1. Maintainer: diff and deploy `firestore.rules` to `forth-86e26`, then record the deployed version and timestamp (TICKET-034).
+1. Maintainer: diff and deploy `firestore.rules` to `forth-86e26` following `docs/FIRESTORE_RULES_DEPLOY.md`, then record the deployed version and timestamp (TICKET-034).
 2. Maintainer: authenticated staging smoke — create, edit, and complete a ticket; make several consecutive edits without reloading; confirm a legacy workspace migrates and writes exactly one `recovery/legacy-v2` document.
 3. Add the rule-parity release gate and a component-rendering test harness with TICKET-015, so neither of this session's two causes can recur undetected.
 4. Resume the TICKET-013 preview and three-person usability exercise.

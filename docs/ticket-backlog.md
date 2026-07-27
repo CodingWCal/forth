@@ -1359,7 +1359,7 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 - Engineering framing: Restore rule/application parity on the live project, then encode the ordering in CI so a schema-affecting client change cannot reach production before its rules. Rules are deploy-time state, not repository state; treat committed-and-passing as necessary but not sufficient.
 - Scope:
   - Maintainer deploys `firestore.rules` to `forth-86e26` (`firebase deploy --only firestore:rules --project forth-86e26`) after reviewing the diff against the console's active version.
-  - Record the deployed rules version and timestamp in `docs/OPERATIONS.md` or the handoff.
+  - Record the deployed rules version and timestamp in `docs/AGENT_HANDOFF.md`. Follow `docs/FIRESTORE_RULES_DEPLOY.md`.
   - Verify a real authenticated save and a legacy-workspace migration on staging before production promotion.
   - Add a release-gate check (see TICKET-015) that runs `pnpm test:rules` and fails when the committed rules differ from the deployed ruleset.
   - Document the rules-then-app ordering requirement in `CONTRIBUTING.md` and `docs/STAGING.md`.
@@ -1374,7 +1374,7 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
   - The rollback path (previous rules version plus the recovery point) is written down.
 - Suggested files:
   - `firestore.rules`
-  - `docs/OPERATIONS.md`
+  - `docs/FIRESTORE_RULES_DEPLOY.md`
   - `docs/STAGING.md`
   - `CONTRIBUTING.md`
   - `.github/workflows/quality.yml` (with TICKET-015)
