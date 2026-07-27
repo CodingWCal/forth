@@ -170,7 +170,13 @@ export function ForthApp({
   const cloudReadyRef = useRef(false);
   const hasValidatedSnapshotRef = useRef(mode === "demo");
   const latestStateRef = useRef(state);
+  // The last state Forth knows Firestore holds. Every save diffs against it, so
+  // it must survive until the next acknowledged write.
   const remoteStateRef = useRef<WorkspaceState | null>(null);
+  // The single state object a cloud snapshot just pushed into the reducer. It
+  // exists only so the save effect can skip that one cloud-originated change
+  // without discarding the save baseline above.
+  const appliedCloudStateRef = useRef<WorkspaceState | null>(null);
   const cloudRevisionRef = useRef(initialCloudRevision);
   const dirtyRef = useRef(false);
   const revisionRef = useRef(0);
@@ -363,6 +369,10 @@ export function ForthApp({
     if (mode !== "cloud" || !cloudUser || !activeWorkspaceId || !hydrated) return;
     cloudReadyRef.current = false;
     hasValidatedSnapshotRef.current = false;
+    // A baseline belongs to one workspace. Drop it so a switch can never diff
+    // the new guild against the previous guild's records.
+    remoteStateRef.current = null;
+    appliedCloudStateRef.current = null;
     dirtyRef.current = false;
     revisionRef.current = 0;
     savedRevisionRef.current = 0;
@@ -377,6 +387,7 @@ export function ForthApp({
           return;
         }
         remoteStateRef.current = cloudSnapshot.state;
+        appliedCloudStateRef.current = cloudSnapshot.state;
         cloudRevisionRef.current = cloudSnapshot.revision;
         dispatch({ type: "RESET", state: cloudSnapshot.state });
         if (!hasValidatedSnapshotRef.current) {
@@ -414,8 +425,12 @@ export function ForthApp({
 
   useEffect(() => {
     if (mode !== "cloud" || !cloudUser || !activeWorkspaceId || !cloudReadyRef.current) return;
-    if (remoteStateRef.current === state) {
-      remoteStateRef.current = null;
+    // This render came from a cloud snapshot or a conflict reload, not from a
+    // person editing. Consume the marker so the next real edit still saves, and
+    // leave remoteStateRef intact -- clearing it here left later saves with no
+    // baseline, which surfaced as a permanent "could not save" state.
+    if (appliedCloudStateRef.current === state) {
+      appliedCloudStateRef.current = null;
       return;
     }
 
@@ -692,6 +707,7 @@ export function ForthApp({
       const latest = await loadWorkspaceState(activeWorkspaceId);
       if (!latest) throw new Error("The latest cloud workspace could not be read.");
       remoteStateRef.current = latest.state;
+      appliedCloudStateRef.current = latest.state;
       cloudRevisionRef.current = latest.revision;
       dirtyRef.current = false;
       revisionRef.current = 0;

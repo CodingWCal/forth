@@ -38,6 +38,9 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-030 | Implemented within draft PR [#22](https://github.com/CodingWCal/forth/pull/22); preview pending | Capacity grid children can shrink, the meter stacks before collision, copy wraps safely, and Playwright compares the energy region bounds with its card at 320/375/768/1440px. |
 | TICKET-031 | Planned quick feature | After authentication, eligible Cursor Boston fellows can join the designated cohort guild from one explicit button without copying a guild code; authorization must be enforced beyond the client UI. |
 | TICKET-032 | Implemented in draft PR [#23](https://github.com/CodingWCal/forth/pull/23); preview build passed | A root pnpm override resolves Next's transitive image dependency to `sharp@0.35.0`; audit, frozen install, runtime load, local image optimization, lint, types, unit, E2E, build, GitGuardian, and Vercel pass. Maintainer preview sprite smoke remains before merge. |
+| TICKET-034 | Investigated and reduced to a process gap | Deployed rules were checked in the Firebase console on 2026-07-27 and are current: the active ruleset contains `isNormalizedTask` and `isOpenCohortGuild`, published four minutes after `4e572e5`. Rules drift was **not** the cause of the outage. What remains is that no automated check compares committed rules with deployed rules, so the drift stays possible in future. No longer P0; fold into CI work. |
+| TICKET-035 | Fixed on `claude/firebase-cloud-save-error-df6g6u`; **sole cause of the production outage** | `remoteStateRef` doubled as the save baseline and the snapshot-echo marker, so applying any snapshot cleared the baseline and every later edit failed with the generic save error until reload. Baseline and marker are now separate refs, both cleared on workspace switch. Component-level regression coverage is still owed; no such harness exists yet. |
+| TICKET-036 | Fixed on `claude/firebase-cloud-save-error-df6g6u` | The Activity seven-day chart had a ~609px hard minimum but only collapsed at a 900px viewport media query, so it overflowed its card and clipped the newest days between 1200 and 1440px. Now wrapping flex items with `min-width: 0`; Playwright bounds assertions fail against the pre-fix stylesheet and pass after it. |
 
 ## External Contribution Intake
 
@@ -1337,3 +1340,116 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 - Owner: @gge513 (claim against this ticket)
 - Subagent prompt:
   > Implement TICKET-033 as a standalone stdio MCP server in a separate module. Map tools onto the existing WorkspaceAction union, route all writes through the reducer and the TICKET-001 revision-safe adapter under existing firestore.rules with no rules changes, handle the user's local Firebase credential securely, and prove the full gate plus emulator integration tests.
+
+### TICKET-034: Gate releases on Firestore rule parity
+
+**Status update:** the deploy half of this ticket is closed. The live ruleset on `forth-86e26` was checked in the Firebase console on 2026-07-27 and is current — it contains `isNormalizedTask` (TICKET-001) and `isOpenCohortGuild` (TICKET-031), published Jul 24 2026 · 5:17 PM, four minutes after `4e572e5`. Rules drift did **not** cause the cloud-save outage; TICKET-035 did. What survives is the process gap: nothing compares committed rules against deployed rules, so this class of drift remains undetectable until a user reports a broken save. Priority drops from P0 to P2 and this ticket folds into the TICKET-015 CI work.
+
+- Priority: P2 Medium
+- Status: Deploy half closed by console verification; the parity gate is unbuilt.
+- Type: Bug/Release/Operations/Security
+- Area: `firestore.rules`, Firebase project `forth-86e26`, release process
+- Effort: S (deploy) + M (release gate)
+- Confidence: High
+- Evidence: rules reach Firestore only through a manual `firebase deploy`, and the repository has no workflow that performs or verifies it. Determining whether production rules matched the deployed client required a maintainer to open the console and read the ruleset by hand — that is the gap. The emulator work done while investigating shows what drift would look like: replaying the current `saveWorkspaceToDatabase` against the pre-TICKET-001 ruleset fails every save with `PERMISSION_DENIED`, because `projects/*`, `tasks/*`, and `recovery/legacy-v2` return "No matching allow statements" while `data/current` still accepts reads and writes. Workspaces would load and render normally, and only saving would fail.
+- Plain English: The app was upgraded to store tickets as separate records, but the cloud's permission list was never updated to know those records exist, so the cloud accepts every read and rejects every save.
+- Learning brief (layman terms):
+  - What is happening now: Two halves of one release live in two places. The browser code ships automatically with the site; the database permission file has to be published by hand.
+  - Why it matters: Anything the permission file has never heard of is denied by default, so new storage locations fail silently until someone publishes the file.
+  - What changing it means: Publish the rules, then make the release process refuse to ship application code whose storage shape the deployed rules do not already allow.
+  - Concept to learn: A schema/authorization migration has an ordering requirement — permission for the new shape must exist before, or at the same time as, the code that writes it.
+- Engineering framing: Restore rule/application parity on the live project, then encode the ordering in CI so a schema-affecting client change cannot reach production before its rules. Rules are deploy-time state, not repository state; treat committed-and-passing as necessary but not sufficient.
+- Scope:
+  - Add a release-gate check (see TICKET-015) that runs `pnpm test:rules` and fails when the committed rules differ from the deployed ruleset.
+  - Document the rules-then-app ordering requirement in `CONTRIBUTING.md` and `docs/STAGING.md`.
+  - Keep `docs/FIRESTORE_RULES_DEPLOY.md` current as the manual procedure until the gate exists.
+- Out of scope:
+  - Any agent-initiated Firebase deploy, project setting change, or data migration. `AGENTS.md` reserves those for the maintainer.
+  - Redesigning the normalized schema itself.
+- Acceptance criteria:
+  - A pull request that changes stored document shape without a corresponding rules change fails a required check.
+  - The check reports the deployed ruleset's identity so drift is visible without opening the console.
+  - The rollback path (previous rules version plus the recovery point) is written down.
+- Suggested files:
+  - `firestore.rules`
+  - `docs/FIRESTORE_RULES_DEPLOY.md`
+  - `docs/STAGING.md`
+  - `CONTRIBUTING.md`
+  - `.github/workflows/quality.yml` (with TICKET-015)
+- Validation:
+  - `pnpm test:rules` against the committed rules; console diff of the active ruleset; authenticated two-tab staging smoke covering save, concurrent edit, and legacy migration.
+- Subagent prompt:
+  > Do not deploy. Implement TICKET-034 as a CI parity gate that fails when committed Firestore rules differ from the deployed ruleset, and record the rollback path. The deploy half of this ticket is already closed.
+
+### TICKET-035: Keep the cloud-save baseline alive after a snapshot applies
+
+- Priority: P0 Critical
+- Status: Fixed on `claude/firebase-cloud-save-error-df6g6u`; component-level regression coverage is still owed.
+- Type: Bug/Reliability/Data
+- Area: `components/forth-app.tsx` cloud sync effects
+- Effort: S
+- Confidence: High
+- Evidence: `remoteStateRef` served two jobs at once — the baseline every conflict-safe save diffs against, and the marker that says "this render came from Firestore, not from a person." The save effect consumed the marker by setting `remoteStateRef.current = null`. Once the workspace listener applied any snapshot while no save was pending — normally the echo of the user's own committed save, and always after `loadLatestAfterConflict` — the baseline was destroyed. The next edit then reached `queueCloudSave` with `baseState === null`, threw "Forth has not established a safe cloud-save baseline yet," and was reported through the generic branch as "Forth could not save your latest changes." `retryCloudSync` re-entered the same path, so only a page reload cleared it.
+- Plain English: After the cloud confirmed a save, Forth forgot which version the cloud was holding, so the next edit had nothing to compare against and refused to save until the page was reloaded.
+- Learning brief (layman terms):
+  - What is happening now: One variable was asked to remember two different things, and the code that finished with the second meaning erased the first.
+  - Why it matters: Saving looked broken permanently even when the network, sign-in, and permissions were all healthy, and the retry button could not recover it.
+  - What changing it means: Give the "this came from the cloud" marker its own variable so consuming it cannot discard the saved-version record.
+  - Concept to learn: A single piece of state with two owners is an aliasing bug; the fix is separate state per meaning, not more careful ordering.
+- Engineering framing: Split `remoteStateRef` (persistent save baseline) from `appliedCloudStateRef` (one-shot echo suppressor), clear both when the active workspace changes, and set both wherever a snapshot or conflict reload is applied.
+- Scope:
+  - Preserve the existing behavior that a cloud-originated render never queues a save.
+  - Clear both refs on workspace switch so a save can never diff one guild against another.
+  - Add component-level coverage for edit → save → snapshot echo → edit again.
+- Out of scope:
+  - Changing the revision/conflict protocol in `lib/firebase/workspace.ts`.
+- Acceptance criteria:
+  - A second and third consecutive edit save successfully without a reload.
+  - Editing after `loadLatestAfterConflict` saves successfully.
+  - A cloud snapshot still never triggers a redundant save.
+  - Switching guilds never diffs against the previous guild's records.
+  - A regression test fails against the pre-fix component.
+- Suggested files:
+  - `components/forth-app.tsx`
+  - `tests/` (component-level harness; see the note below)
+- Validation:
+  - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:rules`, `pnpm test:e2e`, `pnpm build`, plus an authenticated multi-edit staging smoke once TICKET-034 lands.
+- Note: the repository has no component-rendering test harness, so this class of bug is currently unreachable by automated tests. Adding one (React Testing Library plus a jsdom Vitest environment, or a Playwright run against the Firebase emulators) is the real fix for the coverage gap and should be scoped with TICKET-015.
+- Subagent prompt:
+  > Implement TICKET-035 by separating the cloud-save baseline from the snapshot-echo marker in the Forth app component. Prove that consecutive edits and post-conflict edits save without a reload, and that cloud snapshots still never queue redundant saves.
+
+### TICKET-036: Make the Activity seven-day chart respond to its card, not the viewport
+
+- Priority: P1 High
+- Status: Fixed on `claude/firebase-cloud-save-error-df6g6u` with browser regression coverage.
+- Type: Bug/UI/Responsive
+- Area: Activity view, `.trail-chart` and `.trail-bars` in `app/globals.css`
+- Effort: S
+- Confidence: High
+- Evidence: `.trail-chart` used `grid-template-columns: minmax(185px, 0.5fr) minmax(350px, 1fr)` with a 30px gap and 24px side padding, giving it a hard minimum near 609px. Its only collapse rule lived in a `@media (max-width: 900px)` block, but `.activity-progress` stays a two-column grid down to 1180px, so the panel holding the chart is far narrower than 609px while the viewport is still well above the breakpoint. The bars overflowed the card and clipped the newest days, including the "Now" column. A Playwright bounds check against the pre-fix stylesheet fails at 1200, 1280, 1362, and 1440px and passes at 768 and 375px, which matches the reported screenshots. Document-level `scrollWidth` never detected it because the parent card clips rather than scrolls.
+- Plain English: The chart only knew how wide the browser window was, not how wide its own card was, so it grew past the card edge and cut off the most recent days.
+- Learning brief (layman terms):
+  - What is happening now: The layout rule that stacks the chart is keyed to the whole window, while the space the chart actually gets is decided by a narrow column inside the page.
+  - Why it matters: Today's completed effort — the one column the panel exists to show — was the first thing hidden.
+  - What changing it means: Let the chart wrap based on the room it actually has, so it stacks before it can cross its own border.
+  - Concept to learn: Intrinsic, container-driven sizing responds to available space; viewport media queries only respond to the window and go stale whenever the surrounding layout changes.
+- Engineering framing: Replace the fixed two-track grid with wrapping flex items carrying explicit `flex-basis` and `min-width: 0`, use `minmax(0, 1fr)` for the seven day columns so they can shrink below label width, and delete the now-inert viewport override.
+- Scope:
+  - Keep all seven day columns, their values, labels, and the "Now" marker inside the card at every supported width.
+  - Preserve the side-by-side copy/bars composition where the card is wide enough for it.
+  - Preserve the Iron & Parchment bar styling and the chart's accessible name.
+  - Add element-boundary browser assertions, including the 1200–1440px band the old rule missed.
+- Out of scope:
+  - Changing the momentum calculation, the seven-day window, or the Activity information architecture.
+- Acceptance criteria:
+  - `.trail-bars` and its last `.trail-day` stay within `.trail-chart`, which stays within `.momentum-panel`, at 375, 768, 1200, 1280, 1362, and 1440px.
+  - The chart stacks before it can collide with its own card border.
+  - Wide desktop widths keep the two-column composition.
+  - The regression test fails against the pre-fix stylesheet.
+- Suggested files:
+  - `app/globals.css`
+  - `tests/e2e/auth-entry.spec.ts`
+- Validation:
+  - Playwright responsive matrix, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and visual inspection at 375, 768, 1362, and 1920px.
+- Subagent prompt:
+  > Implement TICKET-036 as a container-driven responsive fix for the Activity seven-day chart. Keep the fantasy bar styling and accessible name, stack before collision based on the card's width rather than the viewport, and add element-boundary assertions covering the 1200–1440px band.

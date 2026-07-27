@@ -1025,9 +1025,13 @@ h3 {
   border-bottom: 0;
 }
 
+/* The chart stacks when its own card runs out of room, not when the viewport
+   crosses a breakpoint. Activity puts this panel in a narrow grid column, so a
+   viewport-only rule left the seven-day bars wider than their card and clipped
+   the newest days. Wrapping flex items collapse on container width instead. */
 .trail-chart {
-  display: grid;
-  grid-template-columns: minmax(185px, 0.5fr) minmax(350px, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 30px;
   min-height: 160px;
   padding: 21px 24px 19px;
@@ -1037,7 +1041,9 @@ h3 {
 }
 
 .trail-copy {
+  flex: 1 1 185px;
   align-self: center;
+  min-width: 0;
 }
 
 .trail-copy p {
@@ -1055,9 +1061,13 @@ h3 {
 
 .trail-bars {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  /* minmax(0, 1fr) lets the seven day columns shrink below their label width
+     instead of forcing the track wider than the card. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  flex: 2 1 340px;
   gap: 11px;
   align-items: stretch;
+  min-width: 0;
 }
 
 .trail-day {
@@ -3615,10 +3625,6 @@ body {
     grid-column: 3;
     width: fit-content;
     margin-top: 3px;
-  }
-
-  .trail-chart {
-    grid-template-columns: 1fr;
   }
 
   .context-rail {
