@@ -153,3 +153,49 @@ test("explains disposable demo data and reopens the guide from Workspace", async
   await page.getByRole("button", { name: "Explore local demo" }).click();
   await expect(guide).not.toBeVisible();
 });
+
+// The Activity chart sits in a narrow grid column, so viewport width alone does
+// not describe the space it actually has. These widths cover the band where the
+// panel is still two columns but each column is well under the chart's old
+// fixed minimum, which used to push the newest days outside the card.
+for (const viewport of [
+  { width: 1200, height: 900 },
+  { width: 1280, height: 900 },
+  { width: 1362, height: 900 },
+  { width: 1440, height: 1000 },
+  { width: 768, height: 1024 },
+  { width: 375, height: 812 },
+]) {
+  test(`keeps the seven-day activity chart inside its card at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Explore local demo" }).click();
+    await page.getByRole("dialog", { name: "Welcome to Forth" }).getByRole("button", { name: "Start planning" }).click();
+    await page.getByRole("button", { name: "Activity" }).click();
+    await expect(page.getByRole("heading", { name: "Recent completed effort" })).toBeVisible();
+
+    const panel = page.locator(".momentum-panel");
+    const chart = page.locator(".trail-chart");
+    const bars = page.locator(".trail-bars");
+    const lastDay = page.locator(".trail-day").last();
+    const [panelBox, chartBox, barsBox, lastDayBox] = await Promise.all([
+      panel.boundingBox(),
+      chart.boundingBox(),
+      bars.boundingBox(),
+      lastDay.boundingBox(),
+    ]);
+
+    const right = (box: { x: number; width: number } | null) => (box ? box.x + box.width : Number.MAX_SAFE_INTEGER);
+    expect(right(chartBox)).toBeLessThanOrEqual(right(panelBox) + 1);
+    expect(right(barsBox)).toBeLessThanOrEqual(right(chartBox) + 1);
+    // The newest day carries the "Now" marker; clipping it hid today's effort.
+    expect(right(lastDayBox)).toBeLessThanOrEqual(right(barsBox) + 1);
+    expect(lastDayBox?.width ?? 0).toBeGreaterThan(0);
+
+    const metrics = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1);
+  });
+}
