@@ -2663,9 +2663,8 @@ body {
 
 .adventurer-hud {
   grid-template-columns: 160px minmax(0, 1fr);
-  min-height: 180px;
   padding: 20px 24px;
-  align-items: start;
+  align-items: center;
   border: 3px solid #11170f;
   background:
     repeating-linear-gradient(0deg, transparent 0 15px, rgba(255,255,255,.025) 15px 16px),
