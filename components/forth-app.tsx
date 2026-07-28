@@ -1653,6 +1653,10 @@ function ProofView({
           <div className="adventurer-copy">
             <p className="eyebrow">Private progress · Rank {level}</p>
             <h2 id="private-progress-title">Code Squire</h2>
+            <span className="pace-badge">
+              <span className="pace-badge-mark"><i /><i /><i /></span>
+              <span>{PACE_COPY[state.pace].label} pace</span>
+            </span>
             <div className="xp-track" role="progressbar" aria-label="Progress to next rank" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
             <small>{100 - levelProgress} craft XP until the next rank</small>
             <dl className="reward-stats">
