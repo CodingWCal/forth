@@ -29,6 +29,8 @@ export function workspaceReducer(
   switch (action.type) {
     case "SET_PACE":
       return { ...state, pace: action.pace };
+    case "SET_SPRITE":
+      return { ...state, sprite: action.sprite };
     case "ADD_PROJECT":
       return { ...state, projects: [...state.projects, action.project] };
     case "ADD_TASK":
@@ -78,7 +80,7 @@ export function parseStoredWorkspace(value: string | null): WorkspaceState | nul
   try {
     const parsed: unknown = JSON.parse(value);
     if (!isWorkspaceShape(parsed)) return null;
-    return { ...parsed, version: 2 };
+    return { ...parsed, sprite: parsed.sprite ?? "code-squire", version: 2 };
   } catch {
     return null;
   }
@@ -87,6 +89,7 @@ export function parseStoredWorkspace(value: string | null): WorkspaceState | nul
 function isWorkspaceShape(value: unknown): value is Omit<WorkspaceState, "version"> & { version: 1 | 2 } {
   if (!value || typeof value !== "object") return false;
   const state = value as Partial<Omit<WorkspaceState, "version">> & { version?: number };
+  if (state.sprite !== undefined && state.sprite !== "code-squire" && state.sprite !== "diverse-squire" && state.sprite !== "girl-squire" && state.sprite !== "asian-squire" && state.sprite !== "ambiguos-squire") return false;
   if (
     (state.version !== 1 && state.version !== 2) ||
     (state.pace !== "light" && state.pace !== "steady" && state.pace !== "full") ||

@@ -64,6 +64,7 @@ export function createCleanWorkspace(
   return {
     version: 2,
     pace: "steady",
+    sprite: "code-squire",
     projects: [project],
     tasks: [],
   };

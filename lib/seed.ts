@@ -198,5 +198,5 @@ export function createSeedWorkspace(referenceDate = new Date()): WorkspaceState 
     },
   ];
 
-  return { version: 2, pace: "steady", projects, tasks };
+  return { version: 2, pace: "steady", sprite: "code-squire", projects, tasks };
 }

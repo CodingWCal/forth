@@ -1919,6 +1919,53 @@ h3 {
   color: #4f6444;
 }
 
+.settings-card--sprite {
+  grid-template-columns: 47px minmax(0, 1fr);
+}
+
+.sprite-picker {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.sprite-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 2px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--slate);
+  transition: border-color .15s, background .15s;
+}
+
+.sprite-option:hover {
+  border-color: var(--moss);
+  background: var(--moss-pale);
+}
+
+.sprite-option.is-selected {
+  border-color: var(--moss);
+  background: var(--moss-pale);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sprite-option img {
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
 .reset-card {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
