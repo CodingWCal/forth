@@ -1,6 +1,6 @@
 # Ticket Backlog
 
-Generated: 2026-07-20
+Generated: 2026-07-28
 Repo/app: Forth  
 Audit scope: Product/design docs, peer review, production desktop/mobile UI, workspace state, Firebase Auth/Firestore persistence, invitation lifecycle branch, security rules, dependencies, tests, build, accessibility heuristics, operations, and contributor readiness.
 
@@ -40,8 +40,8 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-032 | Implemented in draft PR [#23](https://github.com/CodingWCal/forth/pull/23); preview build passed | A root pnpm override resolves Next's transitive image dependency to `sharp@0.35.0`; audit, frozen install, runtime load, local image optimization, lint, types, unit, E2E, build, GitGuardian, and Vercel pass. Maintainer preview sprite smoke remains before merge. |
 | TICKET-034 | Investigated and reduced to a process gap | Deployed rules were checked in the Firebase console on 2026-07-27 and are current: the active ruleset contains `isNormalizedTask` and `isOpenCohortGuild`, published four minutes after `4e572e5`. Rules drift was **not** the cause of the outage. What remains is that no automated check compares committed rules with deployed rules, so the drift stays possible in future. No longer P0; fold into CI work. |
 | TICKET-035 | Fixed on `claude/firebase-cloud-save-error-df6g6u`; **sole cause of the production outage** | `remoteStateRef` doubled as the save baseline and the snapshot-echo marker, so applying any snapshot cleared the baseline and every later edit failed with the generic save error until reload. Baseline and marker are now separate refs, both cleared on workspace switch. Component-level regression coverage is still owed; no such harness exists yet. |
-| TICKET-036 | Fixed on `claude/firebase-cloud-save-error-df6g6u` | The Activity seven-day chart had a ~609px hard minimum but only collapsed at a 900px viewport media query, so it overflowed its card and clipped the newest days between 1200 and 1440px. Now wrapping flex items with `min-width: 0`; Playwright bounds assertions fail against the pre-fix stylesheet and pass after it. |
-
+| TICKET-037 | PR #54 open to main | Sprite selection: 5 avatars in Settings, renders in Activity + rail. All gates pass.
+| TICKET-038 | Planned | Add avatar picker during first-visit onboarding so new users choose their sprite at workspace creation.
 ## External Contribution Intake
 
 | Contribution | Status | Primary backlog mapping | Related quality gates | Recommendation |
