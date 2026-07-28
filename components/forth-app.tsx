@@ -1648,7 +1648,7 @@ function ProofView({
       <section className="activity-progress" aria-labelledby="private-progress-title">
         <section className="adventurer-hud" aria-label="Private rank and rewards">
           <div className="pixel-portrait" aria-hidden="true">
-            <Image src="/sprites/code-squire.png" alt="" width={124} height={124} unoptimized />
+            <Image src="/sprites/code-squire.png" alt="" width={144} height={144} unoptimized />
           </div>
           <div className="adventurer-copy">
             <p className="eyebrow">Private progress · Rank {level}</p>
