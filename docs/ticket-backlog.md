@@ -1452,4 +1452,73 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 - Validation:
   - Playwright responsive matrix, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and visual inspection at 375, 768, 1362, and 1920px.
 - Subagent prompt:
-  > Implement TICKET-036 as a container-driven responsive fix for the Activity seven-day chart. Keep the fantasy bar styling and accessible name, stack before collision based on the card's width rather than the viewport, and add element-boundary assertions covering the 1200–1440px band.
+   > Implement TICKET-036 as a container-driven responsive fix for the Activity seven-day chart. Keep the fantasy bar styling and accessible name, stack before collision based on the card's width rather than the viewport, and add element-boundary assertions covering the 1200–1440px band.
+
+### TICKET-037: Refine the Activity profile panel layout and enlarge the squire sprite
+
+- Priority: P2 Medium
+- Type: UI/UX
+- Area: Activity view profile card (`app/globals.css`, `components/forth-app.tsx`)
+- Effort: S
+- Confidence: High
+- Evidence: The green panel on the Activity page that contains the Code Squire avatar icon, display name, gold amount, and rank/level has uneven internal spacing. The animated squire sprite is smaller than it should be relative to the panel, and the overall composition lacks visual cohesion.
+- Plain English: The profile card at the top of Activity looks cramped and the little animated character is too small to appreciate.
+- Learning brief (layman terms):
+  - What is happening now: The green profile card has awkward gaps and a tiny sprite.
+  - Why it matters: The Activity page is where users see their progress and identity; a cramped layout undermines the sense of progression.
+  - What changing it means: Evenly space the elements inside the card and make the animated character bigger so it feels like a proper avatar.
+  - Concept to learn: Visual rhythm and hierarchy guide the eye through related content; whitespace is not wasted space.
+- Engineering framing: Adjust CSS grid/flex gaps, padding, and the sprite `width`/`height` attributes or `next/image` sizing within the profile card. Ensure the enlarged sprite remains crisp at 2x and respects `prefers-reduced-motion`.
+- Scope:
+  - Increase the squire sprite size (target ~64–80px versus current smaller rendering).
+  - Tune padding, gap, and alignment between avatar, name, gold, and rank elements inside the green panel.
+  - Keep the card responsive at 375px and above with no horizontal overflow.
+  - Preserve all existing accessible labels and the animated sprite's reduced-motion fallback.
+- Out of scope:
+  - Changing the gold/rank calculation, progression model, or Activity information architecture.
+  - Adding new profile elements or redesigning the full Activity page.
+- Acceptance criteria:
+  - The squire sprite is visibly larger and stays sharp at standard desktop and mobile viewports.
+  - Internal spacing is balanced: elements no longer look pushed to one side or oddly gapped.
+  - No horizontal overflow or clipped text at 375, 768, or 1440px.
+  - `prefers-reduced-motion` still shows a static sprite frame.
+  - Keyboard focus and screen-reader labels remain intact.
+- Suggested files:
+  - `app/globals.css`
+  - `components/forth-app.tsx`
+- Validation:
+  - Visual inspection at 375, 768, and 1440px with the profile card in normal and reduced-motion modes.
+  - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `pnpm build`.
+- Subagent prompt:
+   > Implement TICKET-037 by enlarging the Activity profile card's squire sprite and balancing its internal layout spacing. Keep the card responsive, preserve the animated sprite's reduced-motion fallback, and verify at 375/768/1440px.
+
+### TICKET-038: Redesign Activity profile panel with larger portrait and stacked stats
+
+- Priority: P2 Medium
+- Type: UI/UX
+- Area: Activity view profile card (`app/globals.css`, `components/forth-app.tsx`)
+- Effort: S
+- Confidence: High
+- Evidence: The green profile panel on the Activity page has a three-column grid (portrait | copy | stats). The stats column on the right is cramped with tiny icons, and the portrait could better anchor the layout as a larger visual element. Negative space inside the green panel is not well utilized.
+- Plain English: The profile card should feel like a proper character sheet — big portrait on the left, name and progress in the middle, gold and tickets below.
+- Engineering framing: Restructure `.adventurer-hud` from a 3-column to a 2-column grid. Move `.reward-stats` below `.adventurer-copy` inside the second column. Enlarge the portrait and sprite proportionally.
+- Scope:
+  - Change `.adventurer-hud` grid to 2 columns: portrait column + content column.
+  - Move reward stats below the title/XP bar instead of a third column.
+  - Enlarge portrait to 130×130px and sprite to 124×124px.
+  - Update mobile breakpoint to match.
+  - Preserve all accessible labels and reduced-motion fallback.
+- Out of scope:
+  - Changing gold/rank calculations, progression model, or Activity page structure outside the profile card.
+- Acceptance criteria:
+  - Portrait is the dominant visual on the left.
+  - Title, rank, and XP bar sit to the right of the portrait.
+  - Gold and ticket stats sit below the title area, full width.
+  - No overflow at 375, 768, or 1440px.
+  - Keyboard focus and screen-reader labels remain intact.
+- Suggested files:
+  - `app/globals.css`
+  - `components/forth-app.tsx`
+- Validation:
+  - Visual inspection at 375, 768, and 1440px.
+  - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
