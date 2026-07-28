@@ -1648,18 +1648,18 @@ function ProofView({
       <section className="activity-progress" aria-labelledby="private-progress-title">
         <section className="adventurer-hud" aria-label="Private rank and rewards">
           <div className="pixel-portrait" aria-hidden="true">
-            <Image src="/sprites/code-squire.png" alt="" width={104} height={104} unoptimized />
+            <Image src="/sprites/code-squire.png" alt="" width={124} height={124} unoptimized />
           </div>
           <div className="adventurer-copy">
             <p className="eyebrow">Private progress · Rank {level}</p>
             <h2 id="private-progress-title">Code Squire</h2>
             <div className="xp-track" role="progressbar" aria-label="Progress to next rank" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
             <small>{100 - levelProgress} craft XP until the next rank</small>
+            <dl className="reward-stats">
+              <div><dt><Coins size={16} /> Gold</dt><dd>{totalGold}</dd></div>
+              <div><dt><ScrollText size={16} /> Tickets</dt><dd>{completed.length}</dd></div>
+            </dl>
           </div>
-          <dl className="reward-stats">
-            <div><dt><Coins size={14} /> Gold</dt><dd>{totalGold}</dd></div>
-            <div><dt><ScrollText size={14} /> Tickets</dt><dd>{completed.length}</dd></div>
-          </dl>
         </section>
 
         <section className="momentum-panel" aria-labelledby="activity-history-title">
