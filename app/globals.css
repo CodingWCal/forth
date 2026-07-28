@@ -228,7 +228,7 @@ h3 {
   margin-bottom: 7px;
   color: var(--slate);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.12em;
   line-height: 1.35;
@@ -315,7 +315,7 @@ h3 {
   border-radius: 50%;
   background: #526358;
   color: #fff;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -330,7 +330,7 @@ h3 {
 .rail-foot-copy {
   margin-left: 5px;
   color: #91a096;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   line-height: 1.35;
   text-transform: uppercase;
@@ -378,7 +378,7 @@ h3 {
   margin-bottom: 4px;
   color: var(--clay);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -442,7 +442,7 @@ h3 {
   background: transparent;
   color: inherit;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -602,7 +602,7 @@ h3 {
 .nearing-copy small {
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.04em;
 }
 
@@ -618,7 +618,7 @@ h3 {
   background: var(--gold);
   color: var(--night);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -662,7 +662,7 @@ h3 {
 .nearing-view-all small {
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .nearing-view-all:hover strong {
@@ -696,7 +696,7 @@ h3 {
 .quiet-stat {
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
@@ -768,7 +768,7 @@ h3 {
 .pace-option small {
   margin-top: 2px;
   color: inherit;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.2;
   opacity: 0.7;
 }
@@ -815,7 +815,7 @@ h3 {
 .capacity-note {
   margin: 9px 0 0;
   color: var(--slate);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -900,7 +900,7 @@ h3 {
   margin-bottom: 7px;
   color: var(--slate);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -967,7 +967,7 @@ h3 {
   border-radius: 3px;
   background: transparent;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1018,7 +1018,7 @@ h3 {
 
 .empty-focus small {
   margin-top: 2px;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .momentum-panel {
@@ -1056,7 +1056,7 @@ h3 {
 
 .trail-copy span {
   color: var(--slate);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .trail-bars {
@@ -1081,7 +1081,7 @@ h3 {
 .trail-value {
   color: var(--slate);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .trail-bar-wrap {
@@ -1158,7 +1158,7 @@ h3 {
   margin-bottom: 25px;
   color: var(--slate);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1168,7 +1168,7 @@ h3 {
   margin-bottom: 8px;
   color: var(--clay);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -1193,7 +1193,7 @@ h3 {
   display: flex;
   justify-content: space-between;
   margin-bottom: 7px;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1209,7 +1209,7 @@ h3 {
   margin: 12px 0 0;
   color: var(--slate);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .field-note-card {
@@ -1245,14 +1245,14 @@ h3 {
   border-radius: 50%;
   background: var(--ink);
   color: #fff;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .note-author p,
 .ledger-person p {
   margin: 0;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.25;
 }
 
@@ -1451,7 +1451,7 @@ h3 {
   border-bottom: 1px solid var(--rule);
   color: var(--ink-soft);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1464,7 +1464,7 @@ h3 {
   height: 23px;
   border: 1px solid var(--rule);
   border-radius: 50%;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .column-tasks {
@@ -1555,7 +1555,7 @@ h3 {
   margin-bottom: 15px;
   overflow: hidden;
   color: var(--slate);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.4;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -1566,7 +1566,7 @@ h3 {
   align-items: center;
   gap: 7px;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .board-task-assignee > span {
@@ -1596,7 +1596,7 @@ h3 {
   border-radius: 3px;
   background: transparent;
   color: var(--ink-soft);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -1617,7 +1617,7 @@ h3 {
   padding: 10px;
   border: 1px dashed var(--rule-dark);
   color: var(--slate);
-  font-size: 9px;
+  font-size: 11px;
   text-align: center;
 }
 
@@ -1630,7 +1630,7 @@ h3 {
   border: 1px dashed var(--rule-dark);
   background: transparent;
   color: var(--slate);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -1777,7 +1777,7 @@ h3 {
 
 .ledger-date span {
   color: var(--slate);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .ledger-body h3 {
@@ -1790,7 +1790,7 @@ h3 {
 .ledger-body p {
   margin: 0;
   color: var(--slate);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ledger-person {
@@ -2212,7 +2212,7 @@ h3 {
 }
 
 .focus-check strong {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .focus-check small {
@@ -2288,7 +2288,7 @@ h3 {
   font-size: 20px;
 }
 
-.adventurer-copy small { color: var(--ink-soft); font-size: 10px; }
+.adventurer-copy small { color: var(--ink-soft); font-size: 12px; }
 
 .xp-track {
   height: 9px;
@@ -2309,7 +2309,7 @@ h3 {
 }
 
 .reward-stats div { min-width: 54px; }
-.reward-stats dt { display: flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.reward-stats dt { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .reward-stats dd { margin: 1px 0 0; font-family: var(--mono); font-size: 20px; font-weight: 800; }
 
 .quest-tools {
@@ -2332,7 +2332,7 @@ h3 {
 
 .field-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .ticket-description { color: var(--ink-soft) !important; }
-.ticket-facts { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; color: var(--slate); font-size: 9px; }
+.ticket-facts { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; color: var(--slate); font-size: 11px; }
 .priority { padding: 2px 6px; border: 1px solid currentColor; font-family: var(--mono); font-size: 8px; font-weight: 700; text-transform: uppercase; }
 .priority--high { color: #a84230; background: #f4ddd3; }
 .priority--medium { color: #786117; background: #f6edc9; }
@@ -2480,7 +2480,7 @@ body {
 .rail-foot-copy {
   color: #b3bea5;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
@@ -2542,7 +2542,7 @@ body {
   border: 2px solid var(--ink);
   border-radius: 0;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .05em;
   text-transform: uppercase;
   box-shadow: 3px 3px 0 #725537;
@@ -2738,7 +2738,7 @@ body {
   border: 1px solid #c08a38;
   background: #1e2a1e;
   color: #e0c082;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -3887,7 +3887,7 @@ body {
     width: auto;
     min-width: 44px;
     padding: 0 10px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .desktop-actions {
