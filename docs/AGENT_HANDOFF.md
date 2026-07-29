@@ -1,5 +1,13 @@
 # Agent Handoff
 
+## Current integration checkpoint (2026-07-29)
+
+- Scope: TICKET-040 Forth → Cohort Comms sender relay and hash navigation.
+- Branch: `codex/ticket-040-cohort-comms`.
+- Forth owns the authenticated server relay, client delivery timing, and environment/docs handoff. Priyansh owns receiver changes in `priyanshshahh/cohort-comms`; do not edit that repository.
+- Integration is not live until both deployments have matching environment values and a coordinated end-to-end test succeeds.
+- Standalone handoff: `docs/integrations/COHORT_COMMS_HANDOFF.md`.
+
 This is the durable relay between Codex, Claude Code, and human contributors. Keep it current; do not use it as a second backlog.
 
 ## Current checkpoint

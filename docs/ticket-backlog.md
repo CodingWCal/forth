@@ -43,6 +43,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-037 | PR #54 open to main | Sprite selection: 5 avatars in Settings, renders in Activity + rail. All gates pass.
 | TICKET-038 | Planned | Add avatar picker during first-visit onboarding so new users choose their sprite at workspace creation.
 | TICKET-039 | Planned | Let users archive completed tickets so active Kanban views stay focused while Proof/history remains available.
+| TICKET-040 | In progress on `codex/ticket-040-cohort-comms` | Forth-owned sender relay for authenticated shipped-ticket events to Cohort Comms, plus hash navigation and Priyansh handoff.
 ## External Contribution Intake
 
 | Contribution | Status | Primary backlog mapping | Related quality gates | Recommendation |
@@ -1572,3 +1573,24 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
   - Manual smoke: complete → archive → reload → show archived → restore → verify Proof and active-board placement.
 - Subagent prompt:
   > Implement TICKET-039 as a reversible completed-ticket archive lifecycle. Preserve Proof/history, keep the default Kanban board focused, enforce the state transition in the reducer and Firestore rules, add emulator and browser coverage, and explain the behavior in plain English and engineering terms.
+
+### TICKET-040: Send authenticated shipped-ticket events to Cohort Comms
+
+- Priority: P1 High
+- Status: In progress on `codex/ticket-040-cohort-comms`; receiver-side work remains owned by Priyansh in `priyanshshahh/cohort-comms`.
+- Type: Integration/Security/Reliability
+- Area: Next.js server route, Firebase Admin boundary, cloud save acknowledgement, hash navigation, integration documentation
+- Effort: M
+- Plain English: After a real cloud ticket is saved as complete, Forth can safely announce it to Cohort Comms without trusting browser-supplied ticket details or affecting the ticket save if chat is unavailable.
+- Engineering framing: Node route-handler relay verifies Firebase ID tokens and workspace membership, reads canonical normalized Firestore task data, emits a deterministic version-1 `ticket.shipped` event with a server-only shared secret, and uses an explicit bounded retry state machine on the client.
+- Scope: Forth sender route, client delivery timing, stable hash navigation, safe environment placeholders, and standalone receiver handoff.
+- Out of scope: Priyansh’s repository, receiver code, shared authentication, shared databases, deployment, secrets, or claiming the end-to-end integration is live before coordinated QA.
+- Acceptance criteria:
+  - Only authenticated cloud users with workspace access can request delivery.
+  - The server rejects missing, non-done, or incompletely timestamped canonical tasks.
+  - Demo mode never sends; save acknowledgement precedes delivery.
+  - The event ID is stable for the same completion and changes after reopen/reship.
+  - Downstream 200/201 responses count as success; failure leaves the ticket saved and offers one explicit retry without loops.
+  - Hash links support `#today`, `#board`, `#proof`, `#chronicle`, `#settings`, `#guild`, and `#hall` in a tab and iframe.
+  - No secrets are committed and missing configuration does not break Forth.
+- Validation: lint, typecheck, unit, E2E, build; manual coordinated cloud/receiver QA remains required.
