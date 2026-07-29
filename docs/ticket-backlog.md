@@ -42,6 +42,7 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-035 | Fixed on `claude/firebase-cloud-save-error-df6g6u`; **sole cause of the production outage** | `remoteStateRef` doubled as the save baseline and the snapshot-echo marker, so applying any snapshot cleared the baseline and every later edit failed with the generic save error until reload. Baseline and marker are now separate refs, both cleared on workspace switch. Component-level regression coverage is still owed; no such harness exists yet. |
 | TICKET-037 | PR #54 open to main | Sprite selection: 5 avatars in Settings, renders in Activity + rail. All gates pass.
 | TICKET-038 | Planned | Add avatar picker during first-visit onboarding so new users choose their sprite at workspace creation.
+| TICKET-039 | Planned | Let users archive completed tickets so active Kanban views stay focused while Proof/history remains available.
 ## External Contribution Intake
 
 | Contribution | Status | Primary backlog mapping | Related quality gates | Recommendation |
@@ -1522,3 +1523,52 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 - Validation:
   - Visual inspection at 375, 768, and 1440px.
   - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
+
+### TICKET-039: Archive completed tickets without deleting Proof history
+
+- Priority: P1 High
+- Status: Planned
+- Type: Feature/UX/Data lifecycle
+- Area: Ticket board, task state/reducer, Firestore task persistence, Proof/history views
+- Effort: M
+- Confidence: High
+- Evidence: Completed tickets remain visible in active Kanban views indefinitely, causing board bloat as real cohort work accumulates. The product already treats Proof as a durable record, so hiding completed work must not remove its history.
+- Plain English: Let users clear finished tickets from the working board while keeping a recoverable record of what was completed.
+- Learning brief (layman terms):
+  - What is happening now: Every finished ticket keeps taking space in the board, even after the team is done with it.
+  - Why it matters: The active queue becomes harder to scan, especially for larger projects and a 30-person cohort.
+  - What changing it means: Add an explicit archive action or a “hide completed” view filter, with archived work still available in Proof/history and restorable when needed.
+  - Concept to learn: Archiving is a reversible lifecycle state; deletion is destructive removal. A good PM tool separates the two.
+- Engineering framing: Add an explicit archived flag/status and reducer transitions (archive, restore, optional bulk archive) with Firestore schema/rules validation. Keep completed and archived records queryable in Proof/history, exclude archived records from default active Kanban selectors, and preserve backward compatibility for existing tasks.
+- Scope:
+  - Add archive and restore actions for completed tickets only, unless a future policy explicitly permits archiving other states.
+  - Add a clear active-board filter/toggle for showing archived work.
+  - Keep archived tickets in Proof/history with completion date, author/assignee, and existing metadata intact.
+  - Make the action keyboard accessible, confirm its consequence in literal copy, and provide a visible restore path.
+  - Define whether bulk archive is included in v1; if included, make the selection and count explicit.
+- Out of scope:
+  - Permanent deletion or automatic retention purges.
+  - Changing gold, XP, or motivation calculations.
+  - Hiding archived work from authorized exports/backups.
+- Acceptance criteria:
+  - A completed ticket can be archived from the Kanban board without disappearing from Proof/history.
+  - Archived tickets are excluded from the default active board and can be shown/restored intentionally.
+  - Reloading and signing in on another authorized device preserves archive state.
+  - Incomplete tickets cannot be archived accidentally; the UI explains why.
+  - Firestore rules and emulator tests cover the new field/action for owners and members.
+  - Existing tasks without the new field migrate safely as unarchived.
+  - No horizontal overflow or inaccessible controls at 320, 375, 768, and 1440px.
+- Suggested files:
+  - `lib/types.ts`
+  - `lib/workspace.ts`
+  - `lib/firebase/workspace.ts`
+  - `firestore.rules`
+  - `components/forth-app.tsx`
+  - `tests/workspace.test.ts`
+  - `tests/firestore.rules.test.ts`
+  - `tests/e2e/`
+- Validation:
+  - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:rules`, `pnpm test:e2e`, and `pnpm build`.
+  - Manual smoke: complete → archive → reload → show archived → restore → verify Proof and active-board placement.
+- Subagent prompt:
+  > Implement TICKET-039 as a reversible completed-ticket archive lifecycle. Preserve Proof/history, keep the default Kanban board focused, enforce the state transition in the reducer and Firestore rules, add emulator and browser coverage, and explain the behavior in plain English and engineering terms.
