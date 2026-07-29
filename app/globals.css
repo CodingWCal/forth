@@ -2855,6 +2855,27 @@ body {
   font-size: 12px;
 }
 
+.archive-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--rule-dark);
+  background: var(--paper-bright);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.archive-filter:hover,
+.archive-filter.is-active {
+  background: var(--moss-pale);
+}
+
 .kanban {
   gap: 10px;
 }

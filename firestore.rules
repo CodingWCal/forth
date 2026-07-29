@@ -74,7 +74,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           'id', 'title', 'projectId', 'status', 'weight', 'meaning', 'assignee',
           'isFocus', 'createdAt', 'completedAt', 'description', 'priority',
-          'dueDate', 'revision'
+          'dueDate', 'archived', 'revision'
         ])
         && data.keys().hasAll([
           'id', 'title', 'projectId', 'status', 'weight', 'meaning', 'assignee',
@@ -97,6 +97,7 @@ service cloud.firestore {
         && data.get('description', '') is string
         && data.get('priority', '') in ['', 'low', 'medium', 'high']
         && data.get('dueDate', '') is string
+        && data.get('archived', false) is bool
         && (data.status != 'done' || data.get('completedAt', '').size() > 0)
         && data.revision is int;
     }

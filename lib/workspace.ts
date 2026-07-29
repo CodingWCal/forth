@@ -46,6 +46,22 @@ export function workspaceReducer(
       };
     case "DELETE_TASK":
       return { ...state, tasks: state.tasks.filter((task) => task.id !== action.taskId) };
+    case "ARCHIVE_TASK":
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId && task.status === "done"
+            ? { ...task, archived: true, isFocus: false }
+            : task,
+        ),
+      };
+    case "RESTORE_TASK":
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId ? { ...task, archived: false } : task,
+        ),
+      };
     case "SET_STATUS":
       return {
         ...state,
@@ -149,6 +165,7 @@ function isTask(value: unknown): value is Task {
     (task.description === undefined || typeof task.description === "string") &&
     (task.priority === undefined || ["low", "medium", "high"].includes(task.priority)) &&
     (task.dueDate === undefined || isValidDateOnly(task.dueDate))
+    && (task.archived === undefined || typeof task.archived === "boolean")
   );
 }
 
