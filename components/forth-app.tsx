@@ -62,6 +62,7 @@ import {
   watchWorkspace,
 } from "@/lib/firebase/workspace";
 import { createCleanWorkspace, DEMO_STORAGE_KEY } from "@/lib/entry";
+import { hashForView, viewFromHash } from "@/lib/navigation";
 import { createSeedWorkspace } from "@/lib/seed";
 import type { Pace, Project, SpriteId, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
 import {
@@ -186,6 +187,8 @@ export function ForthApp({
   const [sentInvites, setSentInvites] = useState<GuildInviteSummary[]>([]);
   const [cloudSnapshotReady, setCloudSnapshotReady] = useState(mode === "demo");
   const [persistentSyncError, setPersistentSyncError] = useState("");
+  const [cohortCommsError, setCohortCommsError] = useState("");
+  const [cohortCommsSending, setCohortCommsSending] = useState(false);
   const [demoStorageWarning, setDemoStorageWarning] = useState(initialDemoStorageWarning);
   const [transitionBusy, setTransitionBusy] = useState(false);
 
@@ -214,6 +217,8 @@ export function ForthApp({
   const saveTimerRef = useRef<number | null>(null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const pendingSaveCountRef = useRef(0);
+  const pendingShippedRef = useRef<{ workspaceId: string; taskId: string; completedAt: string } | null>(null);
+  const cohortCommsInFlightRef = useRef(false);
   const transitionBusyRef = useRef(false);
   latestStateRef.current = state;
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -224,6 +229,34 @@ export function ForthApp({
   const welcomeSeenKey = mode === "cloud"
     ? `${WELCOME_SEEN_KEY}.cloud.${cloudUser.uid}`
     : `${WELCOME_SEEN_KEY}.demo`;
+
+  const deliverPendingShipped = useCallback(async (snapshot: WorkspaceState) => {
+    const pending = pendingShippedRef.current;
+    if (!pending || mode !== "cloud" || !activeWorkspaceId || pending.workspaceId !== activeWorkspaceId || cohortCommsInFlightRef.current) return;
+    const task = snapshot.tasks.find((candidate) => candidate.id === pending.taskId);
+    if (!task || task.status !== "done" || task.completedAt !== pending.completedAt) {
+      pendingShippedRef.current = null;
+      return;
+    }
+    cohortCommsInFlightRef.current = true;
+    setCohortCommsSending(true);
+    try {
+      const token = await cloudUser.getIdToken();
+      const response = await fetch("/api/integrations/cohort-comms", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ workspaceId: pending.workspaceId, taskId: pending.taskId }),
+      });
+      if (!response.ok) throw new Error("delivery failed");
+      pendingShippedRef.current = null;
+      setCohortCommsError("");
+    } catch {
+      setCohortCommsError("Ticket saved in Forth, but the chat update did not send.");
+    } finally {
+      cohortCommsInFlightRef.current = false;
+      setCohortCommsSending(false);
+    }
+  }, [activeWorkspaceId, cloudUser, mode]);
 
   const queueCloudSave = useCallback(async (
     targetRevision: number,
@@ -247,6 +280,7 @@ export function ForthApp({
         remoteStateRef.current = snapshot;
         cloudRevisionRef.current = saved.revision;
         savedRevisionRef.current = Math.max(savedRevisionRef.current, targetRevision);
+        void deliverPendingShipped(snapshot);
       });
     saveChainRef.current = saveAttempt;
 
@@ -278,7 +312,7 @@ export function ForthApp({
     } finally {
       pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1);
     }
-  }, [activeWorkspaceId, mode]);
+  }, [activeWorkspaceId, deliverPendingShipped, mode]);
 
   const flushCloudSave = useCallback(async (): Promise<boolean> => {
     if (saveTimerRef.current !== null) {
@@ -326,6 +360,25 @@ export function ForthApp({
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    const initialView = viewFromHash(window.location.hash);
+    const frame = initialView ? window.requestAnimationFrame(() => setView(initialView)) : null;
+    const onHashChange = () => {
+      const next = viewFromHash(window.location.hash);
+      if (next) setView(next);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      window.removeEventListener("hashchange", onHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const nextHash = hashForView(view);
+    if (window.location.hash !== nextHash) window.history.replaceState(null, "", nextHash);
+  }, [view]);
 
   useEffect(() => {
     const goOnline = () => setOnline(true);
@@ -416,6 +469,8 @@ export function ForthApp({
     // the new guild against the previous guild's records.
     remoteStateRef.current = null;
     appliedCloudStateRef.current = null;
+    pendingShippedRef.current = null;
+    window.requestAnimationFrame(() => setCohortCommsError(""));
     dirtyRef.current = false;
     revisionRef.current = 0;
     savedRevisionRef.current = 0;
@@ -524,9 +579,14 @@ export function ForthApp({
   }
 
   function setStatus(taskId: string, status: TaskStatus) {
-    dispatch({ type: "SET_STATUS", taskId, status });
     const task = state.tasks.find((item) => item.id === taskId);
     if (!task) return;
+    const at = status === "done" && task.status !== "done" ? new Date().toISOString() : undefined;
+    if (at && mode === "cloud" && activeWorkspaceId) {
+      pendingShippedRef.current = { workspaceId: activeWorkspaceId, taskId, completedAt: at };
+    }
+    if (status !== "done" && pendingShippedRef.current?.taskId === taskId) pendingShippedRef.current = null;
+    dispatch({ type: "SET_STATUS", taskId, status, ...(at ? { at } : {}) });
     announce(
       status === "done"
         ? `Quest shipped: ${task.title} · +${task.weight * 10} gold`
@@ -785,6 +845,7 @@ export function ForthApp({
       if (!latest) throw new Error("The latest cloud workspace could not be read.");
       remoteStateRef.current = latest.state;
       appliedCloudStateRef.current = latest.state;
+      pendingShippedRef.current = null;
       cloudRevisionRef.current = latest.revision;
       dirtyRef.current = false;
       setLocalDirty(false);
@@ -938,6 +999,19 @@ export function ForthApp({
           </div>
         )}
 
+        {cohortCommsError && (
+          <div className="entry-error" role="alert">
+            <Scroll aria-hidden="true" size={20} />
+            <div>
+              <strong>Chat update needs a retry</strong>
+              <p>{cohortCommsError}</p>
+              <button className="entry-text-action" disabled={cohortCommsSending} onClick={() => void deliverPendingShipped(latestStateRef.current)}>
+                {cohortCommsSending ? "Sending…" : "Retry chat update"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {mode === "demo" && demoStorageWarning && (
           <div className="entry-error" role="status">
             <LockKeyhole aria-hidden="true" size={20} />
@@ -1059,7 +1133,7 @@ export function ForthApp({
         onSubmit={(input) => {
           if (!editingTask) return;
           if (input.status !== editingTask.status) {
-            dispatch({ type: "SET_STATUS", taskId: editingTask.id, status: input.status });
+            setStatus(editingTask.id, input.status);
           }
           dispatch({
             type: "UPDATE_TASK",
