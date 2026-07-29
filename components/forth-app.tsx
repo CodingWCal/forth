@@ -25,6 +25,7 @@ import {
   Search,
   GripVertical,
   UserPlus,
+  UserRound,
   Scroll,
 } from "lucide-react";
 import { type DragEvent, type KeyboardEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -60,7 +61,7 @@ import {
 } from "@/lib/firebase/workspace";
 import { createCleanWorkspace, DEMO_STORAGE_KEY } from "@/lib/entry";
 import { createSeedWorkspace } from "@/lib/seed";
-import type { Pace, Project, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
+import type { Pace, Project, SpriteId, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
 import {
   createTask,
   createProject,
@@ -124,6 +125,14 @@ const NAV_ITEMS: Array<{ id: View; label: string; mobileLabel: string; icon: typ
 
 /** Device-local flag: the welcome guide has been seen. Kept out of WorkspaceState (never synced). */
 const WELCOME_SEEN_KEY = "forth.welcome.v2";
+
+const SPRITE_MAP: Record<SpriteId, string> = {
+  "code-squire": "/sprites/code-squire.png",
+  "diverse-squire": "/sprites/diverse-squire-icon.png",
+  "girl-squire": "/sprites/girl-squire-icon.png",
+  "asian-squire": "/sprites/asian-squire-icon.png",
+  "ambiguous-squire": "/sprites/ambiguous-squire-icon.png",
+};
 
 const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
   light: { label: "Light", hint: "Scout pace" },
@@ -859,7 +868,7 @@ export function ForthApp({
 
         <div className="rail-foot">
           <div className="rail-sprite" aria-hidden="true">
-            <Image src="/sprites/code-squire.png" alt="" width={54} height={54} unoptimized />
+            <Image src={SPRITE_MAP[state.sprite]} alt="" width={54} height={54} unoptimized />
           </div>
           <span className="rail-foot-copy">Code guild<br />camp online</span>
         </div>
@@ -987,6 +996,8 @@ export function ForthApp({
             onOpenCampaign={openCampaignDialog}
             onExit={exitAfterSave}
             onShowGuide={openWelcome}
+            sprite={state.sprite}
+            onSetSprite={(s) => dispatch({ type: "SET_SPRITE", sprite: s })}
           />
         )}
       </main>
@@ -1648,7 +1659,7 @@ function ProofView({
       <section className="activity-progress" aria-labelledby="private-progress-title">
         <section className="adventurer-hud" aria-label="Private rank and rewards">
           <div className="pixel-portrait" aria-hidden="true">
-            <Image src="/sprites/code-squire.png" alt="" width={144} height={144} unoptimized />
+            <Image src={SPRITE_MAP[state.sprite]} alt="" width={144} height={144} unoptimized />
           </div>
           <div className="adventurer-copy">
             <p className="eyebrow">Private progress · Rank {level}</p>
@@ -1752,6 +1763,8 @@ function SettingsView({
   onOpenCampaign,
   onExit,
   onShowGuide,
+  sprite,
+  onSetSprite,
 }: {
   mode: "demo" | "cloud";
   onReset: () => void;
@@ -1774,6 +1787,8 @@ function SettingsView({
   onOpenCampaign: () => void;
   onExit: () => Promise<void>;
   onShowGuide: () => void;
+  sprite: SpriteId;
+  onSetSprite: (s: SpriteId) => void;
 }) {
   const syncLabel = mode === "demo" ? "Demo on this device" : syncStampLabel(syncState);
 
@@ -1839,6 +1854,36 @@ function SettingsView({
             <li>The release chronicle preserves the definition of value</li>
             <li>There are no penalties, broken streaks, or public rankings</li>
           </ul>
+        </div>
+      </section>
+
+      <section className="settings-card settings-card--sprite">
+        <div className="settings-icon"><UserRound size={22} /></div>
+        <div>
+          <p className="eyebrow">Appearance</p>
+          <h3>Your squire</h3>
+          <p>Choose the icon that represents you in the activity profile.</p>
+        </div>
+        <div className="sprite-picker">
+          {([
+            { id: "code-squire", label: "Scout" },
+            { id: "diverse-squire", label: "Knight" },
+            { id: "girl-squire", label: "Page" },
+            { id: "asian-squire", label: "Ranger" },
+            { id: "ambiguous-squire", label: "Mystic" },
+          ] as { id: SpriteId; label: string }[]).map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={"sprite-option" + (s.id === sprite ? " is-selected" : "")}
+              onClick={() => onSetSprite(s.id)}
+              aria-label={s.label}
+              aria-pressed={s.id === sprite}
+            >
+              <Image src={SPRITE_MAP[s.id]} alt="" width={40} height={40} unoptimized />
+              <span>{s.label}</span>
+            </button>
+          ))}
         </div>
       </section>
 

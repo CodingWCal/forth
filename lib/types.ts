@@ -1,5 +1,17 @@
 export type Pace = "light" | "steady" | "full";
 
+export const SPRITE_IDS = [
+  "code-squire",
+  "diverse-squire",
+  "girl-squire",
+  "asian-squire",
+  "ambiguous-squire",
+] as const;
+
+export type SpriteId = typeof SPRITE_IDS[number];
+
+export const DEFAULT_SPRITE: SpriteId = "code-squire";
+
 export type TaskStatus = "ready" | "moving" | "paused" | "done";
 export type TaskPriority = "low" | "medium" | "high";
 
@@ -31,12 +43,14 @@ export type Task = {
 export type WorkspaceState = {
   version: 2;
   pace: Pace;
+  sprite: SpriteId;
   projects: Project[];
   tasks: Task[];
 };
 
 export type WorkspaceAction =
   | { type: "SET_PACE"; pace: Pace }
+  | { type: "SET_SPRITE"; sprite: SpriteId }
   | { type: "ADD_PROJECT"; project: Project }
   | { type: "ADD_TASK"; task: Task }
   | { type: "UPDATE_TASK"; taskId: string; changes: Partial<Omit<Task, "id" | "createdAt">> }

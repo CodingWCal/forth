@@ -403,7 +403,8 @@ export async function acceptGuildInvite(user: User, workspaceId: string) {
 function isNormalizedMetadata(data: Record<string, unknown>): boolean {
   return data.storageVersion === NORMALIZED_STORAGE_VERSION
     && Number.isInteger(data.revision)
-    && typeof data.pace === "string";
+    && typeof data.pace === "string"
+    && (data.sprite === undefined || typeof data.sprite === "string");
 }
 
 function normalizedWorkspaceMetadata(state: WorkspaceState, revision: number) {
@@ -412,6 +413,7 @@ function normalizedWorkspaceMetadata(state: WorkspaceState, revision: number) {
     schemaVersion: state.version,
     revision,
     pace: state.pace,
+    sprite: state.sprite,
     updatedAt: serverTimestamp(),
   };
 }
@@ -487,6 +489,7 @@ export async function loadWorkspaceStateFromDatabase(
     const state = parseStoredWorkspace(JSON.stringify({
       version: confirmedData.schemaVersion ?? 2,
       pace: confirmedData.pace,
+      sprite: confirmedData.sprite,
       projects: projects.docs
         .map((snapshot) => snapshot.data())
         .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0))

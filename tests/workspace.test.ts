@@ -55,6 +55,18 @@ describe("workspace state", () => {
     expect(parseStoredWorkspace(JSON.stringify(legacy))?.version).toBe(2);
   });
 
+  it("defaults legacy saves to the code squire and rejects unknown sprites", () => {
+    const seed = createSeedWorkspace();
+    const legacy = { ...seed, sprite: undefined };
+
+    expect(parseStoredWorkspace(JSON.stringify(legacy))?.sprite).toBe("code-squire");
+    expect(parseStoredWorkspace(JSON.stringify({ ...seed, sprite: "ambiguous-squire" }))?.sprite)
+      .toBe("ambiguous-squire");
+    expect(parseStoredWorkspace(JSON.stringify({ ...seed, sprite: "ambiguos-squire" }))?.sprite)
+      .toBe("ambiguous-squire");
+    expect(parseStoredWorkspace(JSON.stringify({ ...seed, sprite: "missing-squire" }))).toBeNull();
+  });
+
   it("keeps the focus list to three moves", () => {
     const seed = createSeedWorkspace();
     const candidate = seed.tasks.find((task) => !task.isFocus && task.status !== "done");
@@ -156,6 +168,8 @@ describe("workspace state", () => {
     const removed = workspaceReducer(added, { type: "TOGGLE_FOCUS", taskId: focusedTask.id });
 
     expect(paced.pace).toBe("light");
+    expect(workspaceReducer(paced, { type: "SET_SPRITE", sprite: "ambiguous-squire" }).sprite)
+      .toBe("ambiguous-squire");
     expect(task.title).toBe("Verify production headers");
     expect(task.meaning).toBe("Keep the deployment observable.");
     expect(added.tasks[0]).toEqual(task);
@@ -324,6 +338,7 @@ describe("due-date timing", () => {
     const state = {
       version: 2 as const,
       pace: "steady" as const,
+      sprite: "code-squire" as const,
       projects: createSeedWorkspace().projects,
       tasks: [
         questWithDue("2026-07-22", { id: "soon" }), // due-soon (+2)
@@ -344,6 +359,7 @@ describe("due-date timing", () => {
     const state = {
       version: 2 as const,
       pace: "steady" as const,
+      sprite: "code-squire" as const,
       projects: createSeedWorkspace().projects,
       tasks: [
         questWithDue("2026-07-22", { id: "light", title: "Amber", weight: 1 }),
@@ -357,6 +373,7 @@ describe("due-date timing", () => {
     const state = {
       version: 2 as const,
       pace: "steady" as const,
+      sprite: "code-squire" as const,
       projects: createSeedWorkspace().projects,
       tasks: Array.from({ length: 9 }, (_, index) =>
         questWithDue("2026-07-21", { id: `due-${index}`, title: `Quest ${index}` }),

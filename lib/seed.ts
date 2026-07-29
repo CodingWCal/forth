@@ -1,4 +1,5 @@
 import type { Project, Task, WorkspaceState } from "@/lib/types";
+import { DEFAULT_SPRITE } from "@/lib/types";
 
 const day = 86_400_000;
 
@@ -198,5 +199,5 @@ export function createSeedWorkspace(referenceDate = new Date()): WorkspaceState 
     },
   ];
 
-  return { version: 2, pace: "steady", projects, tasks };
+  return { version: 2, pace: "steady", sprite: DEFAULT_SPRITE, projects, tasks };
 }
