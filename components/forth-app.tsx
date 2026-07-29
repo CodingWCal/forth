@@ -25,6 +25,7 @@ import {
   Search,
   GripVertical,
   UserPlus,
+  UserRound,
   Scroll,
 } from "lucide-react";
 import { type DragEvent, type KeyboardEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -130,7 +131,7 @@ const SPRITE_MAP: Record<SpriteId, string> = {
   "diverse-squire": "/sprites/diverse-squire-icon.png",
   "girl-squire": "/sprites/girl-squire-icon.png",
   "asian-squire": "/sprites/asian-squire-icon.png",
-  "ambiguos-squire": "/sprites/ambiguos-squire-icon.png",
+  "ambiguous-squire": "/sprites/ambiguous-squire-icon.png",
 };
 
 const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
@@ -1857,7 +1858,7 @@ function SettingsView({
       </section>
 
       <section className="settings-card settings-card--sprite">
-        <div className="settings-icon"><User size={22} /></div>
+        <div className="settings-icon"><UserRound size={22} /></div>
         <div>
           <p className="eyebrow">Appearance</p>
           <h3>Your squire</h3>
@@ -1869,7 +1870,7 @@ function SettingsView({
             { id: "diverse-squire", label: "Knight" },
             { id: "girl-squire", label: "Page" },
             { id: "asian-squire", label: "Ranger" },
-            { id: "ambiguos-squire", label: "Mystic" },
+            { id: "ambiguous-squire", label: "Mystic" },
           ] as { id: SpriteId; label: string }[]).map((s) => (
             <button
               key={s.id}

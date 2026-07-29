@@ -1,5 +1,6 @@
 import { createSeedWorkspace } from "@/lib/seed";
 import type { WorkspaceState } from "@/lib/types";
+import { DEFAULT_SPRITE } from "@/lib/types";
 import { createProject, parseStoredWorkspace } from "@/lib/workspace";
 
 /** Demo persistence is intentionally isolated from legacy/local and cloud data. */
@@ -64,7 +65,7 @@ export function createCleanWorkspace(
   return {
     version: 2,
     pace: "steady",
-    sprite: "code-squire",
+    sprite: DEFAULT_SPRITE,
     projects: [project],
     tasks: [],
   };

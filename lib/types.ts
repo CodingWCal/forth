@@ -1,5 +1,16 @@
 export type Pace = "light" | "steady" | "full";
-export type SpriteId = "code-squire" | "diverse-squire" | "girl-squire" | "asian-squire" | "ambiguos-squire";
+
+export const SPRITE_IDS = [
+  "code-squire",
+  "diverse-squire",
+  "girl-squire",
+  "asian-squire",
+  "ambiguous-squire",
+] as const;
+
+export type SpriteId = typeof SPRITE_IDS[number];
+
+export const DEFAULT_SPRITE: SpriteId = "code-squire";
 
 export type TaskStatus = "ready" | "moving" | "paused" | "done";
 export type TaskPriority = "low" | "medium" | "high";

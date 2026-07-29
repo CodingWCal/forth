@@ -35,7 +35,7 @@ const firstGuildId = "guild-123e4567-e89b-42d3-a456-426614174000";
 let testEnv: RulesTestEnvironment;
 
 function normalizedCurrent(revision = 0, pace: WorkspaceState["pace"] = "steady") {
-  return { storageVersion: 1, schemaVersion: 2, revision, pace };
+  return { storageVersion: 1, schemaVersion: 2, revision, pace, sprite: "code-squire" };
 }
 
 function projectRecord(revision = 0) {
@@ -55,6 +55,7 @@ function workspaceFixture(): WorkspaceState {
   return {
     version: 2,
     pace: "steady",
+    sprite: "code-squire",
     projects: [{
       id: "project-one",
       title: "Cohort platform",
@@ -504,7 +505,12 @@ describe("Firestore workspace rules", () => {
     )).rejects.toBeInstanceOf(WorkspaceConflictError);
 
     const current = await getDoc(doc(memberDb, "workspaces", workspaceId, "data", "current"));
-    expect(current.data()).toMatchObject({ storageVersion: 1, revision: 1, pace: "steady" });
+    expect(current.data()).toMatchObject({
+      storageVersion: 1,
+      revision: 1,
+      pace: "steady",
+      sprite: "code-squire",
+    });
     expect(current.data()).not.toHaveProperty("state");
     expect((await getDoc(doc(memberDb, "workspaces", workspaceId, "tasks", firstTask.id))).exists()).toBe(true);
     expect((await getDoc(doc(memberDb, "workspaces", workspaceId, "tasks", secondTask.id))).exists()).toBe(false);
@@ -513,6 +519,36 @@ describe("Firestore workspace rules", () => {
       state: { ...base, tasks: [firstTask] },
       revision: 1,
     });
+  });
+
+  it("persists the selected sprite in normalized workspace metadata", async () => {
+    const workspaceId = "sprite-workspace";
+    const memberId = "sprite-member";
+    const base = workspaceFixture();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(doc(adminDb, "workspaces", workspaceId), { ownerId, name: "Sprite guild" });
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "members", memberId), {
+        uid: memberId,
+        role: "member",
+      });
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "data", "current"), normalizedCurrent());
+      await setDoc(doc(adminDb, "workspaces", workspaceId, "projects", "project-one"), projectRecord());
+    });
+
+    const memberDb = testEnv.authenticatedContext(memberId).firestore();
+    const nextState: WorkspaceState = { ...base, sprite: "ambiguous-squire" };
+    await expect(saveWorkspaceToDatabase(memberDb, workspaceId, 0, base, nextState))
+      .resolves.toMatchObject({ state: nextState, revision: 1 });
+
+    const current = await getDoc(doc(memberDb, "workspaces", workspaceId, "data", "current"));
+    expect(current.data()).toMatchObject({
+      storageVersion: 1,
+      revision: 1,
+      sprite: "ambiguous-squire",
+    });
+    await expect(loadWorkspaceStateFromDatabase(memberDb, workspaceId))
+      .resolves.toEqual({ state: nextState, revision: 1 });
   });
 
   it("requires entity writes to advance the workspace revision atomically (TICKET-001)", async () => {
@@ -600,7 +636,12 @@ describe("Firestore workspace rules", () => {
     const recovery = await getDoc(doc(memberDb, "workspaces", workspaceId, "recovery", "legacy-v2"));
     expect(recovery.data()).toMatchObject({ sourceStorageVersion: "whole-state-v2", state: base });
     const current = await getDoc(doc(memberDb, "workspaces", workspaceId, "data", "current"));
-    expect(current.data()).toMatchObject({ storageVersion: 1, revision: 1, pace: "full" });
+    expect(current.data()).toMatchObject({
+      storageVersion: 1,
+      revision: 1,
+      pace: "full",
+      sprite: "code-squire",
+    });
     expect(current.data()).not.toHaveProperty("state");
   });
 
