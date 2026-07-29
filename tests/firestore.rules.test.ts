@@ -478,6 +478,7 @@ describe("Firestore workspace rules", () => {
       meaning: "Prove completed work grows as separate records.",
       assignee: "First client",
       isFocus: false,
+      archived: true,
       createdAt: "2026-07-21T12:00:00.000Z",
       completedAt: "2026-07-21T12:05:00.000Z",
     };

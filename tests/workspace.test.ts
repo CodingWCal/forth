@@ -113,6 +113,22 @@ describe("workspace state", () => {
     });
   });
 
+  it("archives completed tickets reversibly without allowing active tickets to disappear", () => {
+    const seed = createSeedWorkspace();
+    const completed = workspaceReducer(seed, {
+      type: "SET_STATUS",
+      taskId: seed.tasks[0].id,
+      status: "done",
+      at: "2026-07-14T18:00:00.000Z",
+    });
+    const archived = workspaceReducer(completed, { type: "ARCHIVE_TASK", taskId: seed.tasks[0].id });
+    const archivedTask = archived.tasks.find((task) => task.id === seed.tasks[0].id);
+    expect(archivedTask).toMatchObject({ status: "done", archived: true, isFocus: false });
+    expect(workspaceReducer(seed, { type: "ARCHIVE_TASK", taskId: seed.tasks[1].id })).toEqual(seed);
+    expect(workspaceReducer(archived, { type: "RESTORE_TASK", taskId: seed.tasks[0].id })
+      .tasks.find((task) => task.id === seed.tasks[0].id)?.archived).toBe(false);
+  });
+
   it("derives planned weight and project progress from task data", () => {
     const seed = createSeedWorkspace();
     expect(getPlannedWeight(seed)).toBe(6);

@@ -38,6 +38,8 @@ export type Task = {
   description?: string;
   priority?: TaskPriority;
   dueDate?: string;
+  /** Completed tickets can be hidden from active boards without deleting Proof history. */
+  archived?: boolean;
 };
 
 export type WorkspaceState = {
@@ -55,6 +57,8 @@ export type WorkspaceAction =
   | { type: "ADD_TASK"; task: Task }
   | { type: "UPDATE_TASK"; taskId: string; changes: Partial<Omit<Task, "id" | "createdAt">> }
   | { type: "DELETE_TASK"; taskId: string }
+  | { type: "ARCHIVE_TASK"; taskId: string }
+  | { type: "RESTORE_TASK"; taskId: string }
   | { type: "SET_STATUS"; taskId: string; status: TaskStatus; at?: string }
   | { type: "TOGGLE_FOCUS"; taskId: string }
   | { type: "RESET"; state: WorkspaceState };

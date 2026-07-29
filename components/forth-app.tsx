@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   ArrowRight,
   Bookmark,
@@ -603,6 +605,17 @@ export function ForthApp({
     }
   }
 
+  function archiveTask(task: Task) {
+    if (task.status !== "done") return;
+    dispatch({ type: "ARCHIVE_TASK", taskId: task.id });
+    announce(`Archived “${task.title}”. It remains in Activity.`);
+  }
+
+  function restoreTask(task: Task) {
+    dispatch({ type: "RESTORE_TASK", taskId: task.id });
+    announce(`Restored “${task.title}” to the active board.`);
+  }
+
   async function createGuild(input: NewGuildInput): Promise<boolean> {
     if (mode !== "cloud" || !cloudUser || !onOpenWorkspace) return false;
     const cleanName = input.name.trim();
@@ -968,6 +981,8 @@ export function ForthApp({
             }}
             onEdit={openEditDialog}
             onDelete={deleteTask}
+            onArchive={archiveTask}
+            onRestore={restoreTask}
           />
         )}
         {view === "proof" && <ProofView state={state} now={displayDate} useUtc={!hydrated} onEdit={openEditDialog} onDelete={deleteTask} />}
@@ -1285,6 +1300,8 @@ function BoardView({
   onToggleFocus,
   onEdit,
   onDelete,
+  onArchive,
+  onRestore,
 }: {
   state: WorkspaceState;
   activeProject: Project;
@@ -1294,10 +1311,13 @@ function BoardView({
   onToggleFocus: (taskId: string) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
+  onArchive: (task: Task) => void;
+  onRestore: (task: Task) => void;
 }) {
   const statuses: TaskStatus[] = ["ready", "moving", "paused", "done"];
   const [query, setQuery] = useState("");
   const [showAllDue, setShowAllDue] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
   const visibleDueEntries = showAllDue ? dueEntries : dueEntries.slice(0, DUE_PANEL_LIMIT);
@@ -1419,6 +1439,15 @@ function BoardView({
       <div className="quest-tools">
         <Search size={16} aria-hidden="true" />
         <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search tickets" placeholder="Search tickets and requirements…" />
+        <button
+          type="button"
+          className={showArchived ? "archive-filter is-active" : "archive-filter"}
+          onClick={() => setShowArchived((current) => !current)}
+          aria-pressed={showArchived}
+        >
+          {showArchived ? <ArchiveRestore size={15} aria-hidden="true" /> : <Archive size={15} aria-hidden="true" />}
+          {showArchived ? "Hide archived" : "Show archived"}
+        </button>
       </div>
 
       {dueEntries.length > 0 && (
@@ -1483,6 +1512,7 @@ function BoardView({
         {statuses.map((status) => {
           const tasks = state.tasks.filter(
             (task) => task.projectId === activeProject.id && task.status === status &&
+              (showArchived || task.archived !== true) &&
               `${task.title} ${task.description ?? ""} ${task.meaning}`.toLowerCase().includes(query.toLowerCase()),
           );
           const draggedTask = state.tasks.find((task) => task.id === draggedTaskId);
@@ -1514,6 +1544,8 @@ function BoardView({
                     onToggleFocus={onToggleFocus}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    onArchive={onArchive}
+                    onRestore={onRestore}
                     isDragging={draggedTaskId === task.id}
                     onDragStart={(event) => startDragging(event, task)}
                     onDragEnd={stopDragging}
@@ -1540,6 +1572,8 @@ function BoardTaskCard({
   onToggleFocus,
   onEdit,
   onDelete,
+  onArchive,
+  onRestore,
   isDragging,
   onDragStart,
   onDragEnd,
@@ -1549,6 +1583,8 @@ function BoardTaskCard({
   onToggleFocus: (taskId: string) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
+  onArchive: (task: Task) => void;
+  onRestore: (task: Task) => void;
   isDragging: boolean;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
@@ -1595,6 +1631,11 @@ function BoardTaskCard({
       <div className="board-task-actions">
         <button onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit ticket"><Pencil size={13} /></button>
         <button onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`}><Trash2 size={13} /></button>
+        {task.status === "done" && (task.archived === true ? (
+          <button onClick={() => onRestore(task)} aria-label={`Restore ${task.title}`} title="Restore to active board"><ArchiveRestore size={13} /></button>
+        ) : (
+          <button onClick={() => onArchive(task)} aria-label={`Archive ${task.title}`} title="Hide completed ticket"><Archive size={13} /></button>
+        ))}
         {previous[task.status] && task.status !== "done" && (
           <button onClick={() => onSetStatus(task.id, previous[task.status]!)} aria-label={`Move ${task.title} backward`}>
             <ArrowLeft size={14} />

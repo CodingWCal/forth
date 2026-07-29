@@ -437,6 +437,7 @@ function serializeTask(task: Task, revision: number) {
     ...(task.description === undefined ? {} : { description: task.description }),
     ...(task.priority === undefined ? {} : { priority: task.priority }),
     ...(task.dueDate === undefined ? {} : { dueDate: task.dueDate }),
+    ...(task.archived === true ? { archived: true } : {}),
     revision,
   };
 }
