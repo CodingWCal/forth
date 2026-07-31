@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   ArrowRight,
   Bookmark,
@@ -25,6 +27,7 @@ import {
   Search,
   GripVertical,
   UserPlus,
+  UserRound,
   Scroll,
 } from "lucide-react";
 import { type DragEvent, type KeyboardEvent, FormEvent, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -60,7 +63,7 @@ import {
 } from "@/lib/firebase/workspace";
 import { createCleanWorkspace, DEMO_STORAGE_KEY } from "@/lib/entry";
 import { createSeedWorkspace } from "@/lib/seed";
-import type { Pace, Project, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
+import type { Pace, Project, SpriteId, Task, TaskPriority, TaskStatus, WorkspaceState } from "@/lib/types";
 import {
   createTask,
   createProject,
@@ -124,6 +127,14 @@ const NAV_ITEMS: Array<{ id: View; label: string; mobileLabel: string; icon: typ
 
 /** Device-local flag: the welcome guide has been seen. Kept out of WorkspaceState (never synced). */
 const WELCOME_SEEN_KEY = "forth.welcome.v2";
+
+const SPRITE_MAP: Record<SpriteId, string> = {
+  "code-squire": "/sprites/code-squire.png",
+  "diverse-squire": "/sprites/diverse-squire-icon.png",
+  "girl-squire": "/sprites/girl-squire-icon.png",
+  "asian-squire": "/sprites/asian-squire-icon.png",
+  "ambiguous-squire": "/sprites/ambiguous-squire-icon.png",
+};
 
 const PACE_COPY: Record<Pace, { label: string; hint: string }> = {
   light: { label: "Light", hint: "Scout pace" },
@@ -594,6 +605,17 @@ export function ForthApp({
     }
   }
 
+  function archiveTask(task: Task) {
+    if (task.status !== "done") return;
+    dispatch({ type: "ARCHIVE_TASK", taskId: task.id });
+    announce(`Archived “${task.title}”. It remains in Activity.`);
+  }
+
+  function restoreTask(task: Task) {
+    dispatch({ type: "RESTORE_TASK", taskId: task.id });
+    announce(`Restored “${task.title}” to the active board.`);
+  }
+
   async function createGuild(input: NewGuildInput): Promise<boolean> {
     if (mode !== "cloud" || !cloudUser || !onOpenWorkspace) return false;
     const cleanName = input.name.trim();
@@ -859,7 +881,7 @@ export function ForthApp({
 
         <div className="rail-foot">
           <div className="rail-sprite" aria-hidden="true">
-            <Image src="/sprites/code-squire.png" alt="" width={54} height={54} unoptimized />
+            <Image src={SPRITE_MAP[state.sprite]} alt="" width={54} height={54} unoptimized />
           </div>
           <span className="rail-foot-copy">Code guild<br />camp online</span>
         </div>
@@ -959,6 +981,8 @@ export function ForthApp({
             }}
             onEdit={openEditDialog}
             onDelete={deleteTask}
+            onArchive={archiveTask}
+            onRestore={restoreTask}
           />
         )}
         {view === "proof" && <ProofView state={state} now={displayDate} useUtc={!hydrated} onEdit={openEditDialog} onDelete={deleteTask} />}
@@ -987,6 +1011,8 @@ export function ForthApp({
             onOpenCampaign={openCampaignDialog}
             onExit={exitAfterSave}
             onShowGuide={openWelcome}
+            sprite={state.sprite}
+            onSetSprite={(s) => dispatch({ type: "SET_SPRITE", sprite: s })}
           />
         )}
       </main>
@@ -1274,6 +1300,8 @@ function BoardView({
   onToggleFocus,
   onEdit,
   onDelete,
+  onArchive,
+  onRestore,
 }: {
   state: WorkspaceState;
   activeProject: Project;
@@ -1283,10 +1311,13 @@ function BoardView({
   onToggleFocus: (taskId: string) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
+  onArchive: (task: Task) => void;
+  onRestore: (task: Task) => void;
 }) {
   const statuses: TaskStatus[] = ["ready", "moving", "paused", "done"];
   const [query, setQuery] = useState("");
   const [showAllDue, setShowAllDue] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
   const visibleDueEntries = showAllDue ? dueEntries : dueEntries.slice(0, DUE_PANEL_LIMIT);
@@ -1408,6 +1439,15 @@ function BoardView({
       <div className="quest-tools">
         <Search size={16} aria-hidden="true" />
         <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search tickets" placeholder="Search tickets and requirements…" />
+        <button
+          type="button"
+          className={showArchived ? "archive-filter is-active" : "archive-filter"}
+          onClick={() => setShowArchived((current) => !current)}
+          aria-pressed={showArchived}
+        >
+          {showArchived ? <ArchiveRestore size={15} aria-hidden="true" /> : <Archive size={15} aria-hidden="true" />}
+          {showArchived ? "Hide archived" : "Show archived"}
+        </button>
       </div>
 
       {dueEntries.length > 0 && (
@@ -1472,6 +1512,7 @@ function BoardView({
         {statuses.map((status) => {
           const tasks = state.tasks.filter(
             (task) => task.projectId === activeProject.id && task.status === status &&
+              (showArchived || task.archived !== true) &&
               `${task.title} ${task.description ?? ""} ${task.meaning}`.toLowerCase().includes(query.toLowerCase()),
           );
           const draggedTask = state.tasks.find((task) => task.id === draggedTaskId);
@@ -1503,6 +1544,8 @@ function BoardView({
                     onToggleFocus={onToggleFocus}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    onArchive={onArchive}
+                    onRestore={onRestore}
                     isDragging={draggedTaskId === task.id}
                     onDragStart={(event) => startDragging(event, task)}
                     onDragEnd={stopDragging}
@@ -1529,6 +1572,8 @@ function BoardTaskCard({
   onToggleFocus,
   onEdit,
   onDelete,
+  onArchive,
+  onRestore,
   isDragging,
   onDragStart,
   onDragEnd,
@@ -1538,6 +1583,8 @@ function BoardTaskCard({
   onToggleFocus: (taskId: string) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
+  onArchive: (task: Task) => void;
+  onRestore: (task: Task) => void;
   isDragging: boolean;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
@@ -1584,6 +1631,11 @@ function BoardTaskCard({
       <div className="board-task-actions">
         <button onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit ticket"><Pencil size={13} /></button>
         <button onClick={() => onDelete(task)} aria-label={`Delete ${task.title}`}><Trash2 size={13} /></button>
+        {task.status === "done" && (task.archived === true ? (
+          <button onClick={() => onRestore(task)} aria-label={`Restore ${task.title}`} title="Restore to active board"><ArchiveRestore size={13} /></button>
+        ) : (
+          <button onClick={() => onArchive(task)} aria-label={`Archive ${task.title}`} title="Hide completed ticket"><Archive size={13} /></button>
+        ))}
         {previous[task.status] && task.status !== "done" && (
           <button onClick={() => onSetStatus(task.id, previous[task.status]!)} aria-label={`Move ${task.title} backward`}>
             <ArrowLeft size={14} />
@@ -1648,11 +1700,15 @@ function ProofView({
       <section className="activity-progress" aria-labelledby="private-progress-title">
         <section className="adventurer-hud" aria-label="Private rank and rewards">
           <div className="pixel-portrait" aria-hidden="true">
-            <Image src="/sprites/code-squire.png" alt="" width={144} height={144} unoptimized />
+            <Image src={SPRITE_MAP[state.sprite]} alt="" width={144} height={144} unoptimized />
           </div>
           <div className="adventurer-copy">
             <p className="eyebrow">Private progress · Rank {level}</p>
             <h2 id="private-progress-title">Code Squire</h2>
+            <span className="pace-badge">
+              <span className="pace-badge-mark"><i /><i /><i /></span>
+              <span>{PACE_COPY[state.pace].label} pace</span>
+            </span>
             <div className="xp-track" role="progressbar" aria-label="Progress to next rank" aria-valuemin={0} aria-valuemax={100} aria-valuenow={levelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
             <small>{100 - levelProgress} craft XP until the next rank</small>
             <dl className="reward-stats">
@@ -1748,6 +1804,8 @@ function SettingsView({
   onOpenCampaign,
   onExit,
   onShowGuide,
+  sprite,
+  onSetSprite,
 }: {
   mode: "demo" | "cloud";
   onReset: () => void;
@@ -1770,6 +1828,8 @@ function SettingsView({
   onOpenCampaign: () => void;
   onExit: () => Promise<void>;
   onShowGuide: () => void;
+  sprite: SpriteId;
+  onSetSprite: (s: SpriteId) => void;
 }) {
   const syncLabel = mode === "demo" ? "Demo on this device" : syncStampLabel(syncState);
 
@@ -1835,6 +1895,36 @@ function SettingsView({
             <li>The release chronicle preserves the definition of value</li>
             <li>There are no penalties, broken streaks, or public rankings</li>
           </ul>
+        </div>
+      </section>
+
+      <section className="settings-card settings-card--sprite">
+        <div className="settings-icon"><UserRound size={22} /></div>
+        <div>
+          <p className="eyebrow">Appearance</p>
+          <h3>Your squire</h3>
+          <p>Choose the icon that represents you in the activity profile.</p>
+        </div>
+        <div className="sprite-picker">
+          {([
+            { id: "code-squire", label: "Scout" },
+            { id: "diverse-squire", label: "Knight" },
+            { id: "girl-squire", label: "Page" },
+            { id: "asian-squire", label: "Ranger" },
+            { id: "ambiguous-squire", label: "Mystic" },
+          ] as { id: SpriteId; label: string }[]).map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={"sprite-option" + (s.id === sprite ? " is-selected" : "")}
+              onClick={() => onSetSprite(s.id)}
+              aria-label={s.label}
+              aria-pressed={s.id === sprite}
+            >
+              <Image src={SPRITE_MAP[s.id]} alt="" width={40} height={40} unoptimized />
+              <span>{s.label}</span>
+            </button>
+          ))}
         </div>
       </section>
 

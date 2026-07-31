@@ -32,7 +32,7 @@ service cloud.firestore {
 
     function isNormalizedWorkspaceData(data) {
       return data.keys().hasOnly([
-          'storageVersion', 'schemaVersion', 'revision', 'pace', 'updatedAt'
+          'storageVersion', 'schemaVersion', 'revision', 'pace', 'sprite', 'updatedAt'
         ])
         && data.keys().hasAll([
           'storageVersion', 'schemaVersion', 'revision', 'pace'
@@ -42,7 +42,14 @@ service cloud.firestore {
         && data.revision is int
         && data.revision >= 0
         && data.get('updatedAt', request.time) is timestamp
-        && (data.pace == 'light' || data.pace == 'steady' || data.pace == 'full');
+        && (data.pace == 'light' || data.pace == 'steady' || data.pace == 'full')
+        && (
+          data.get('sprite', 'code-squire') == 'code-squire'
+          || data.get('sprite', 'code-squire') == 'diverse-squire'
+          || data.get('sprite', 'code-squire') == 'girl-squire'
+          || data.get('sprite', 'code-squire') == 'asian-squire'
+          || data.get('sprite', 'code-squire') == 'ambiguous-squire'
+        );
     }
 
     function isNormalizedProject(data, projectId) {
@@ -67,7 +74,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           'id', 'title', 'projectId', 'status', 'weight', 'meaning', 'assignee',
           'isFocus', 'createdAt', 'completedAt', 'description', 'priority',
-          'dueDate', 'revision'
+          'dueDate', 'archived', 'revision'
         ])
         && data.keys().hasAll([
           'id', 'title', 'projectId', 'status', 'weight', 'meaning', 'assignee',
@@ -90,6 +97,7 @@ service cloud.firestore {
         && data.get('description', '') is string
         && data.get('priority', '') in ['', 'low', 'medium', 'high']
         && data.get('dueDate', '') is string
+        && data.get('archived', false) is bool
         && (data.status != 'done' || data.get('completedAt', '').size() > 0)
         && data.revision is int;
     }

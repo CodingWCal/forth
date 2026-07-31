@@ -1,6 +1,6 @@
 # Ticket Backlog
 
-Generated: 2026-07-20
+Generated: 2026-07-28
 Repo/app: Forth  
 Audit scope: Product/design docs, peer review, production desktop/mobile UI, workspace state, Firebase Auth/Firestore persistence, invitation lifecycle branch, security rules, dependencies, tests, build, accessibility heuristics, operations, and contributor readiness.
 
@@ -40,8 +40,9 @@ Audit scope: Product/design docs, peer review, production desktop/mobile UI, wor
 | TICKET-032 | Implemented in draft PR [#23](https://github.com/CodingWCal/forth/pull/23); preview build passed | A root pnpm override resolves Next's transitive image dependency to `sharp@0.35.0`; audit, frozen install, runtime load, local image optimization, lint, types, unit, E2E, build, GitGuardian, and Vercel pass. Maintainer preview sprite smoke remains before merge. |
 | TICKET-034 | Investigated and reduced to a process gap | Deployed rules were checked in the Firebase console on 2026-07-27 and are current: the active ruleset contains `isNormalizedTask` and `isOpenCohortGuild`, published four minutes after `4e572e5`. Rules drift was **not** the cause of the outage. What remains is that no automated check compares committed rules with deployed rules, so the drift stays possible in future. No longer P0; fold into CI work. |
 | TICKET-035 | Fixed on `claude/firebase-cloud-save-error-df6g6u`; **sole cause of the production outage** | `remoteStateRef` doubled as the save baseline and the snapshot-echo marker, so applying any snapshot cleared the baseline and every later edit failed with the generic save error until reload. Baseline and marker are now separate refs, both cleared on workspace switch. Component-level regression coverage is still owed; no such harness exists yet. |
-| TICKET-036 | Fixed on `claude/firebase-cloud-save-error-df6g6u` | The Activity seven-day chart had a ~609px hard minimum but only collapsed at a 900px viewport media query, so it overflowed its card and clipped the newest days between 1200 and 1440px. Now wrapping flex items with `min-width: 0`; Playwright bounds assertions fail against the pre-fix stylesheet and pass after it. |
-
+| TICKET-037 | PR #54 open to main | Sprite selection: 5 avatars in Settings, renders in Activity + rail. All gates pass.
+| TICKET-038 | Planned | Add avatar picker during first-visit onboarding so new users choose their sprite at workspace creation.
+| TICKET-039 | Planned | Let users archive completed tickets so active Kanban views stay focused while Proof/history remains available.
 ## External Contribution Intake
 
 | Contribution | Status | Primary backlog mapping | Related quality gates | Recommendation |
@@ -1452,4 +1453,122 @@ Active inventory after this audit: **4 P0**, **18 P1**, and **8 P2** tickets, pl
 - Validation:
   - Playwright responsive matrix, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and visual inspection at 375, 768, 1362, and 1920px.
 - Subagent prompt:
-  > Implement TICKET-036 as a container-driven responsive fix for the Activity seven-day chart. Keep the fantasy bar styling and accessible name, stack before collision based on the card's width rather than the viewport, and add element-boundary assertions covering the 1200–1440px band.
+   > Implement TICKET-036 as a container-driven responsive fix for the Activity seven-day chart. Keep the fantasy bar styling and accessible name, stack before collision based on the card's width rather than the viewport, and add element-boundary assertions covering the 1200–1440px band.
+
+### TICKET-037: Refine the Activity profile panel layout and enlarge the squire sprite
+
+- Priority: P2 Medium
+- Type: UI/UX
+- Area: Activity view profile card (`app/globals.css`, `components/forth-app.tsx`)
+- Effort: S
+- Confidence: High
+- Evidence: The green panel on the Activity page that contains the Code Squire avatar icon, display name, gold amount, and rank/level has uneven internal spacing. The animated squire sprite is smaller than it should be relative to the panel, and the overall composition lacks visual cohesion.
+- Plain English: The profile card at the top of Activity looks cramped and the little animated character is too small to appreciate.
+- Learning brief (layman terms):
+  - What is happening now: The green profile card has awkward gaps and a tiny sprite.
+  - Why it matters: The Activity page is where users see their progress and identity; a cramped layout undermines the sense of progression.
+  - What changing it means: Evenly space the elements inside the card and make the animated character bigger so it feels like a proper avatar.
+  - Concept to learn: Visual rhythm and hierarchy guide the eye through related content; whitespace is not wasted space.
+- Engineering framing: Adjust CSS grid/flex gaps, padding, and the sprite `width`/`height` attributes or `next/image` sizing within the profile card. Ensure the enlarged sprite remains crisp at 2x and respects `prefers-reduced-motion`.
+- Scope:
+  - Increase the squire sprite size (target ~64–80px versus current smaller rendering).
+  - Tune padding, gap, and alignment between avatar, name, gold, and rank elements inside the green panel.
+  - Keep the card responsive at 375px and above with no horizontal overflow.
+  - Preserve all existing accessible labels and the animated sprite's reduced-motion fallback.
+- Out of scope:
+  - Changing the gold/rank calculation, progression model, or Activity information architecture.
+  - Adding new profile elements or redesigning the full Activity page.
+- Acceptance criteria:
+  - The squire sprite is visibly larger and stays sharp at standard desktop and mobile viewports.
+  - Internal spacing is balanced: elements no longer look pushed to one side or oddly gapped.
+  - No horizontal overflow or clipped text at 375, 768, or 1440px.
+  - `prefers-reduced-motion` still shows a static sprite frame.
+  - Keyboard focus and screen-reader labels remain intact.
+- Suggested files:
+  - `app/globals.css`
+  - `components/forth-app.tsx`
+- Validation:
+  - Visual inspection at 375, 768, and 1440px with the profile card in normal and reduced-motion modes.
+  - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, and `pnpm build`.
+- Subagent prompt:
+   > Implement TICKET-037 by enlarging the Activity profile card's squire sprite and balancing its internal layout spacing. Keep the card responsive, preserve the animated sprite's reduced-motion fallback, and verify at 375/768/1440px.
+
+### TICKET-038: Redesign Activity profile panel with larger portrait and stacked stats
+
+- Priority: P2 Medium
+- Type: UI/UX
+- Area: Activity view profile card (`app/globals.css`, `components/forth-app.tsx`)
+- Effort: S
+- Confidence: High
+- Evidence: The green profile panel on the Activity page has a three-column grid (portrait | copy | stats). The stats column on the right is cramped with tiny icons, and the portrait could better anchor the layout as a larger visual element. Negative space inside the green panel is not well utilized.
+- Plain English: The profile card should feel like a proper character sheet — big portrait on the left, name and progress in the middle, gold and tickets below.
+- Engineering framing: Restructure `.adventurer-hud` from a 3-column to a 2-column grid. Move `.reward-stats` below `.adventurer-copy` inside the second column. Enlarge the portrait and sprite proportionally.
+- Scope:
+  - Change `.adventurer-hud` grid to 2 columns: portrait column + content column.
+  - Move reward stats below the title/XP bar instead of a third column.
+  - Enlarge portrait to 130×130px and sprite to 124×124px.
+  - Update mobile breakpoint to match.
+  - Preserve all accessible labels and reduced-motion fallback.
+- Out of scope:
+  - Changing gold/rank calculations, progression model, or Activity page structure outside the profile card.
+- Acceptance criteria:
+  - Portrait is the dominant visual on the left.
+  - Title, rank, and XP bar sit to the right of the portrait.
+  - Gold and ticket stats sit below the title area, full width.
+  - No overflow at 375, 768, or 1440px.
+  - Keyboard focus and screen-reader labels remain intact.
+- Suggested files:
+  - `app/globals.css`
+  - `components/forth-app.tsx`
+- Validation:
+  - Visual inspection at 375, 768, and 1440px.
+  - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
+
+### TICKET-039: Archive completed tickets without deleting Proof history
+
+- Priority: P1 High
+- Status: Planned
+- Type: Feature/UX/Data lifecycle
+- Area: Ticket board, task state/reducer, Firestore task persistence, Proof/history views
+- Effort: M
+- Confidence: High
+- Evidence: Completed tickets remain visible in active Kanban views indefinitely, causing board bloat as real cohort work accumulates. The product already treats Proof as a durable record, so hiding completed work must not remove its history.
+- Plain English: Let users clear finished tickets from the working board while keeping a recoverable record of what was completed.
+- Learning brief (layman terms):
+  - What is happening now: Every finished ticket keeps taking space in the board, even after the team is done with it.
+  - Why it matters: The active queue becomes harder to scan, especially for larger projects and a 30-person cohort.
+  - What changing it means: Add an explicit archive action or a “hide completed” view filter, with archived work still available in Proof/history and restorable when needed.
+  - Concept to learn: Archiving is a reversible lifecycle state; deletion is destructive removal. A good PM tool separates the two.
+- Engineering framing: Add an explicit archived flag/status and reducer transitions (archive, restore, optional bulk archive) with Firestore schema/rules validation. Keep completed and archived records queryable in Proof/history, exclude archived records from default active Kanban selectors, and preserve backward compatibility for existing tasks.
+- Scope:
+  - Add archive and restore actions for completed tickets only, unless a future policy explicitly permits archiving other states.
+  - Add a clear active-board filter/toggle for showing archived work.
+  - Keep archived tickets in Proof/history with completion date, author/assignee, and existing metadata intact.
+  - Make the action keyboard accessible, confirm its consequence in literal copy, and provide a visible restore path.
+  - Define whether bulk archive is included in v1; if included, make the selection and count explicit.
+- Out of scope:
+  - Permanent deletion or automatic retention purges.
+  - Changing gold, XP, or motivation calculations.
+  - Hiding archived work from authorized exports/backups.
+- Acceptance criteria:
+  - A completed ticket can be archived from the Kanban board without disappearing from Proof/history.
+  - Archived tickets are excluded from the default active board and can be shown/restored intentionally.
+  - Reloading and signing in on another authorized device preserves archive state.
+  - Incomplete tickets cannot be archived accidentally; the UI explains why.
+  - Firestore rules and emulator tests cover the new field/action for owners and members.
+  - Existing tasks without the new field migrate safely as unarchived.
+  - No horizontal overflow or inaccessible controls at 320, 375, 768, and 1440px.
+- Suggested files:
+  - `lib/types.ts`
+  - `lib/workspace.ts`
+  - `lib/firebase/workspace.ts`
+  - `firestore.rules`
+  - `components/forth-app.tsx`
+  - `tests/workspace.test.ts`
+  - `tests/firestore.rules.test.ts`
+  - `tests/e2e/`
+- Validation:
+  - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:rules`, `pnpm test:e2e`, and `pnpm build`.
+  - Manual smoke: complete → archive → reload → show archived → restore → verify Proof and active-board placement.
+- Subagent prompt:
+  > Implement TICKET-039 as a reversible completed-ticket archive lifecycle. Preserve Proof/history, keep the default Kanban board focused, enforce the state transition in the reducer and Firestore rules, add emulator and browser coverage, and explain the behavior in plain English and engineering terms.
