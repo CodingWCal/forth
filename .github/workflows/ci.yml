@@ -86,26 +86,30 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::warning title=Rules-drift check skipped::FIREBASE_RULES_READER_SA_KEY is absent in this run context; deployed rules were NOT verified."
 
-      - name: Authenticate to Google Cloud (read-only service account)
-        if: env.HAS_RULES_SECRET == 'true'
-        id: gcp-auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_RULES_READER_SA_KEY }}
-
       - name: Compare committed firestore.rules with the deployed ruleset
         if: env.HAS_RULES_SECRET == 'true'
         env:
-          ACCESS_TOKEN: ${{ steps.gcp-auth.outputs.access_token }}
+          SA_KEY: ${{ secrets.FIREBASE_RULES_READER_SA_KEY }}
         run: |
           set -euo pipefail
           api="https://firebaserules.googleapis.com/v1"
 
-          release=$(curl -sf -H "Authorization: Bearer $ACCESS_TOKEN" \
+          # Mint a short-lived access token from the read-only key. The
+          # google-github-actions/auth action only emits an access_token output
+          # for Workload Identity Federation, not for service-account keys, so
+          # authenticate with the preinstalled gcloud instead.
+          echo "$SA_KEY" > /tmp/forth-rules-reader.json
+          gcloud auth activate-service-account \
+            --key-file=/tmp/forth-rules-reader.json \
+            --project="$FIREBASE_PROJECT_ID" >/dev/null 2>&1
+          TOKEN=$(gcloud auth print-access-token)
+          rm -f /tmp/forth-rules-reader.json
+
+          release=$(curl -sf -H "Authorization: Bearer $TOKEN" \
             "$api/projects/$FIREBASE_PROJECT_ID/releases/cloud.firestore")
           ruleset_name=$(echo "$release" | jq -r '.rulesetName')
 
-          ruleset=$(curl -sf -H "Authorization: Bearer $ACCESS_TOKEN" \
+          ruleset=$(curl -sf -H "Authorization: Bearer $TOKEN" \
             "$api/$ruleset_name")
           create_time=$(echo "$ruleset" | jq -r '.createTime')
 
@@ -151,6 +155,13 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      # firebase-tools requires Java 21+ for the emulator; ubuntu-latest ships
+      # an older JDK by default.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
