@@ -1,11 +1,13 @@
 import type {
   Pace,
   Project,
+  SpriteId,
   Task,
   TaskStatus,
   WorkspaceAction,
   WorkspaceState,
 } from "@/lib/types";
+import { DEFAULT_SPRITE, SPRITE_IDS } from "@/lib/types";
 
 export const STORAGE_KEY = "forth.workspace.v1";
 
@@ -29,6 +31,8 @@ export function workspaceReducer(
   switch (action.type) {
     case "SET_PACE":
       return { ...state, pace: action.pace };
+    case "SET_SPRITE":
+      return { ...state, sprite: action.sprite };
     case "ADD_PROJECT":
       return { ...state, projects: [...state.projects, action.project] };
     case "ADD_TASK":
@@ -42,6 +46,22 @@ export function workspaceReducer(
       };
     case "DELETE_TASK":
       return { ...state, tasks: state.tasks.filter((task) => task.id !== action.taskId) };
+    case "ARCHIVE_TASK":
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId && task.status === "done"
+            ? { ...task, archived: true, isFocus: false }
+            : task,
+        ),
+      };
+    case "RESTORE_TASK":
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId ? { ...task, archived: false } : task,
+        ),
+      };
     case "SET_STATUS":
       return {
         ...state,
@@ -78,7 +98,8 @@ export function parseStoredWorkspace(value: string | null): WorkspaceState | nul
   try {
     const parsed: unknown = JSON.parse(value);
     if (!isWorkspaceShape(parsed)) return null;
-    return { ...parsed, version: 2 };
+    const sprite = normalizeSpriteId(parsed.sprite);
+    return { ...parsed, sprite: sprite ?? DEFAULT_SPRITE, version: 2 };
   } catch {
     return null;
   }
@@ -87,6 +108,7 @@ export function parseStoredWorkspace(value: string | null): WorkspaceState | nul
 function isWorkspaceShape(value: unknown): value is Omit<WorkspaceState, "version"> & { version: 1 | 2 } {
   if (!value || typeof value !== "object") return false;
   const state = value as Partial<Omit<WorkspaceState, "version">> & { version?: number };
+  if (state.sprite !== undefined && normalizeSpriteId(state.sprite) === null) return false;
   if (
     (state.version !== 1 && state.version !== 2) ||
     (state.pace !== "light" && state.pace !== "steady" && state.pace !== "full") ||
@@ -101,6 +123,12 @@ function isWorkspaceShape(value: unknown): value is Omit<WorkspaceState, "versio
 
   const projectIds = new Set(state.projects.map((project) => project.id));
   return state.tasks.every((task) => projectIds.has(task.projectId));
+}
+
+function normalizeSpriteId(value: unknown): SpriteId | null {
+  if (value === undefined) return DEFAULT_SPRITE;
+  if (value === "ambiguos-squire") return "ambiguous-squire";
+  return SPRITE_IDS.includes(value as SpriteId) ? value as SpriteId : null;
 }
 
 function isProject(value: unknown): value is Project {
@@ -137,6 +165,7 @@ function isTask(value: unknown): value is Task {
     (task.description === undefined || typeof task.description === "string") &&
     (task.priority === undefined || ["low", "medium", "high"].includes(task.priority)) &&
     (task.dueDate === undefined || isValidDateOnly(task.dueDate))
+    && (task.archived === undefined || typeof task.archived === "boolean")
   );
 }
 
