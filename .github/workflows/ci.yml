@@ -1,0 +1,171 @@
+# TICKET-015 + TICKET-034 (claim: issue #58, scope confirmed by maintainer 2026-07-30).
+#
+# Job 1 (quality-gates): lint, typecheck, unit tests, production build on every PR.
+#   Frozen lockfile, no secrets, read-only. A blank Firebase env is safe by design:
+#   the app builds in local-demo mode (see .env.example).
+# Job 2 (rules-drift): compares committed firestore.rules against the ruleset actually
+#   deployed to the forth-86e26 project via the Firebase Rules REST API, and prints the
+#   deployed ruleset's identity (name + createTime) in the log. Self-skips LOUDLY when
+#   the secret is absent — which includes every PR from a fork, since GitHub does not
+#   expose repository secrets to fork PRs.
+# Job 3 (rules-unit-tests): pnpm test:rules against the Firestore emulator, per the
+#   maintainer's note on the claim: keep it if stable in Actions; if it flakes, it is
+#   isolated here so it cannot stall the required gates in Job 1.
+#
+# Maintainer setup for Job 2 (one-time): create a read-only service account on
+# forth-86e26 with permission to read Firebase Security Rules (Firebase Viewer /
+# firebaserules viewer is sufficient — no write roles), and store its JSON key as the
+# repository secret FIREBASE_RULES_READER_SA_KEY. Nothing in this workflow deploys,
+# mutates, or needs write access to anything.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [staging, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gates:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # version comes from the packageManager field in package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Production build (local-demo mode, no secrets)
+        run: pnpm build
+
+  rules-drift:
+    name: Firestore rules drift check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FIREBASE_PROJECT_ID: forth-86e26
+      HAS_RULES_SECRET: ${{ secrets.FIREBASE_RULES_READER_SA_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip notice when the secret is absent
+        if: env.HAS_RULES_SECRET != 'true'
+        run: |
+          {
+            echo "## Rules-drift check SKIPPED"
+            echo ""
+            echo "The repository secret \`FIREBASE_RULES_READER_SA_KEY\` is not available to"
+            echo "this run (it is never available to PRs from forks). The committed"
+            echo "\`firestore.rules\` was NOT compared against the deployed ruleset."
+            echo "A maintainer push to \`staging\` or \`main\` will run the real check."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=Rules-drift check skipped::FIREBASE_RULES_READER_SA_KEY is absent in this run context; deployed rules were NOT verified."
+
+      # google-github-actions/auth@v2 only emits an access_token output on the
+      # Workload Identity Federation path; with a service-account key it writes a
+      # credentials file and the output stays empty (curl then sends a blank
+      # Bearer → 401). Mint the token with the runner's preinstalled gcloud
+      # instead. Validated by the maintainer: run 30664466218.
+      - name: Compare committed firestore.rules with the deployed ruleset
+        if: env.HAS_RULES_SECRET == 'true'
+        env:
+          SA_KEY: ${{ secrets.FIREBASE_RULES_READER_SA_KEY }}
+        run: |
+          set -euo pipefail
+          api="https://firebaserules.googleapis.com/v1"
+
+          echo "$SA_KEY" > /tmp/forth-rules-reader.json
+          gcloud auth activate-service-account \
+            --key-file=/tmp/forth-rules-reader.json \
+            --project="$FIREBASE_PROJECT_ID" >/dev/null 2>&1
+          TOKEN=$(gcloud auth print-access-token)
+          rm -f /tmp/forth-rules-reader.json
+
+          release=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+            "$api/projects/$FIREBASE_PROJECT_ID/releases/cloud.firestore")
+          ruleset_name=$(echo "$release" | jq -r '.rulesetName')
+
+          ruleset=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+            "$api/$ruleset_name")
+          create_time=$(echo "$ruleset" | jq -r '.createTime')
+
+          echo "Deployed ruleset: $ruleset_name"
+          echo "Published at:     $create_time"
+
+          # The console deploys a single source file; extract it by name with a
+          # fallback to the first file so a console rename cannot null the diff.
+          echo "$ruleset" | jq -r \
+            '(.source.files[] | select(.name == "firestore.rules") | .content)
+             // .source.files[0].content' > /tmp/deployed.rules
+
+          # Normalize trailing whitespace/final newlines so an editor's trailing
+          # newline cannot fail the build; every other character must match.
+          normalize() { stripped=$(sed -e 's/[[:space:]]*$//' "$1"); printf '%s\n' "$stripped"; }
+          normalize firestore.rules   > /tmp/committed.normalized
+          normalize /tmp/deployed.rules > /tmp/deployed.normalized
+
+          if diff -u /tmp/committed.normalized /tmp/deployed.normalized; then
+            echo "✅ No drift: committed firestore.rules matches deployed ruleset $ruleset_name ($create_time)."
+            {
+              echo "## Rules-drift check passed"
+              echo ""
+              echo "Committed \`firestore.rules\` matches the deployed ruleset."
+              echo "- Ruleset: \`$ruleset_name\`"
+              echo "- Published: \`$create_time\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error title=Firestore rules drift::Committed firestore.rules differs from deployed ruleset $ruleset_name (published $create_time). See the diff above; docs/FIRESTORE_RULES_DEPLOY.md has the deploy procedure."
+            exit 1
+          fi
+
+  rules-unit-tests:
+    name: Rules unit tests (Firestore emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # firebase-tools hard-requires JDK 21+ for the emulator; ubuntu-latest
+      # ships an older default. Validated by the maintainer: run 30664466218.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Rules tests against the emulator
+        run: pnpm test:rules
